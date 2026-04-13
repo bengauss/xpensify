@@ -197,10 +197,13 @@ const doImport = db.transaction(() => {
     const subcategoryName = (row["subcategory"] ?? "").toLowerCase();
     const amountRaw = row["amount in EUR"] ?? "0";
     const note = row["note"] ?? null;
-    const username = (row["user"] ?? "").toLowerCase();
+    const username = (row["user"] ?? "alice").toLowerCase();
+
+    // Normalize category aliases
+    const normalizedCategory = categoryName === "baby" ? "charlie" : categoryName;
 
     // Lookup category
-    const categoryId = categoryMap.get(categoryName);
+    const categoryId = categoryMap.get(normalizedCategory);
     if (!categoryId) {
       if (dryRun) {
         console.warn(`  [WARN] Row ${rowId}: unrecognized category "${row["category"]}"`);
@@ -209,8 +212,17 @@ const doImport = db.transaction(() => {
       continue;
     }
 
+    // Normalize subcategory aliases
+    let resolvedSubcategoryName = subcategoryName;
+    if (normalizedCategory === "health" && subcategoryName === "health") {
+      resolvedSubcategoryName = "medical";
+    }
+    if (normalizedCategory === "charlie" && subcategoryName === "charlie") {
+      resolvedSubcategoryName = "charlie";
+    }
+
     // Lookup subcategory
-    const subcategoryId = subcategoryMap.get(`${categoryId}:${subcategoryName}`);
+    const subcategoryId = subcategoryMap.get(`${categoryId}:${resolvedSubcategoryName}`);
     if (!subcategoryId) {
       if (dryRun) {
         console.warn(`  [WARN] Row ${rowId}: unrecognized subcategory "${row["subcategory"]}" for category "${row["category"]}"`);

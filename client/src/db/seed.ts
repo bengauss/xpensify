@@ -24,63 +24,53 @@ const CATEGORIES: Category[] = [
 
 const SUBCATEGORIES: Subcategory[] = [
   // Food
-  { id: 'sub-groceries',           category_id: 'cat-food',           name: 'groceries',         sort_order: 1, created_at: NOW, updated_at: NOW },
-  { id: 'sub-eating-out',          category_id: 'cat-food',           name: 'eating out',        sort_order: 2, created_at: NOW, updated_at: NOW },
-  { id: 'sub-coffee',              category_id: 'cat-food',           name: 'coffee',            sort_order: 3, created_at: NOW, updated_at: NOW },
-  { id: 'sub-snacks',              category_id: 'cat-food',           name: 'snacks',            sort_order: 4, created_at: NOW, updated_at: NOW },
-  { id: 'sub-delivery',            category_id: 'cat-food',           name: 'delivery',          sort_order: 5, created_at: NOW, updated_at: NOW },
+  { id: 'sub-groceries',           category_id: 'cat-food',           name: 'groceries',     sort_order: 1, created_at: NOW, updated_at: NOW },
+  { id: 'sub-delivery',            category_id: 'cat-food',           name: 'delivery',      sort_order: 2, created_at: NOW, updated_at: NOW },
+  { id: 'sub-eating-out',          category_id: 'cat-food',           name: 'eating out',    sort_order: 3, created_at: NOW, updated_at: NOW },
+  { id: 'sub-drinks',              category_id: 'cat-food',           name: 'drinks',        sort_order: 4, created_at: NOW, updated_at: NOW },
   // Living
-  { id: 'sub-rent',                category_id: 'cat-living',         name: 'rent',              sort_order: 1, created_at: NOW, updated_at: NOW },
-  { id: 'sub-utilities',           category_id: 'cat-living',         name: 'utilities',         sort_order: 2, created_at: NOW, updated_at: NOW },
-  { id: 'sub-internet',            category_id: 'cat-living',         name: 'internet',          sort_order: 3, created_at: NOW, updated_at: NOW },
-  { id: 'sub-furniture',           category_id: 'cat-living',         name: 'furniture',         sort_order: 4, created_at: NOW, updated_at: NOW },
+  { id: 'sub-rent',                category_id: 'cat-living',         name: 'rent',          sort_order: 1, created_at: NOW, updated_at: NOW },
+  { id: 'sub-mortgage',            category_id: 'cat-living',         name: 'mortgage',      sort_order: 2, created_at: NOW, updated_at: NOW },
   // Household
-  { id: 'sub-cleaning',            category_id: 'cat-household',      name: 'cleaning',          sort_order: 1, created_at: NOW, updated_at: NOW },
-  { id: 'sub-repairs',             category_id: 'cat-household',      name: 'repairs',           sort_order: 2, created_at: NOW, updated_at: NOW },
-  { id: 'sub-supplies',            category_id: 'cat-household',      name: 'supplies',          sort_order: 3, created_at: NOW, updated_at: NOW },
+  { id: 'sub-cleaning',            category_id: 'cat-household',      name: 'cleaning',      sort_order: 1, created_at: NOW, updated_at: NOW },
+  { id: 'sub-hh-utilities',        category_id: 'cat-household',      name: 'utilities',     sort_order: 2, created_at: NOW, updated_at: NOW },
+  { id: 'sub-hh-furniture',        category_id: 'cat-household',      name: 'furniture',     sort_order: 3, created_at: NOW, updated_at: NOW },
+  { id: 'sub-kitchen',             category_id: 'cat-household',      name: 'kitchen',       sort_order: 4, created_at: NOW, updated_at: NOW },
+  { id: 'sub-toiletries',          category_id: 'cat-household',      name: 'toiletries',    sort_order: 5, created_at: NOW, updated_at: NOW },
+  { id: 'sub-appliances',          category_id: 'cat-household',      name: 'appliances',    sort_order: 6, created_at: NOW, updated_at: NOW },
+  { id: 'sub-hh-other',            category_id: 'cat-household',      name: 'other',         sort_order: 7, created_at: NOW, updated_at: NOW },
   // Transportation
-  { id: 'sub-public-transit',      category_id: 'cat-transportation', name: 'public transit',    sort_order: 1, created_at: NOW, updated_at: NOW },
-  { id: 'sub-taxi',                category_id: 'cat-transportation', name: 'taxi',              sort_order: 2, created_at: NOW, updated_at: NOW },
-  { id: 'sub-fuel',                category_id: 'cat-transportation', name: 'fuel',              sort_order: 3, created_at: NOW, updated_at: NOW },
-  { id: 'sub-parking',             category_id: 'cat-transportation', name: 'parking',           sort_order: 4, created_at: NOW, updated_at: NOW },
+  { id: 'sub-public',              category_id: 'cat-transportation', name: 'public',        sort_order: 1, created_at: NOW, updated_at: NOW },
+  { id: 'sub-taxi',                category_id: 'cat-transportation', name: 'taxi',          sort_order: 2, created_at: NOW, updated_at: NOW },
+  { id: 'sub-car',                 category_id: 'cat-transportation', name: 'car',           sort_order: 3, created_at: NOW, updated_at: NOW },
   // Health
-  { id: 'sub-pharmacy',            category_id: 'cat-health',         name: 'pharmacy',          sort_order: 1, created_at: NOW, updated_at: NOW },
-  { id: 'sub-doctor',              category_id: 'cat-health',         name: 'doctor',            sort_order: 2, created_at: NOW, updated_at: NOW },
-  { id: 'sub-therapy',             category_id: 'cat-health',         name: 'therapy',           sort_order: 3, created_at: NOW, updated_at: NOW },
+  { id: 'sub-medical',             category_id: 'cat-health',         name: 'medical',       sort_order: 1, created_at: NOW, updated_at: NOW },
+  { id: 'sub-working-out',         category_id: 'cat-health',         name: 'working out',   sort_order: 2, created_at: NOW, updated_at: NOW },
+  { id: 'sub-sports-gear',         category_id: 'cat-health',         name: 'sports gear',   sort_order: 3, created_at: NOW, updated_at: NOW },
   // Subscriptions
-  { id: 'sub-streaming',           category_id: 'cat-subscriptions',  name: 'streaming',         sort_order: 1, created_at: NOW, updated_at: NOW },
-  { id: 'sub-software',            category_id: 'cat-subscriptions',  name: 'software',          sort_order: 2, created_at: NOW, updated_at: NOW },
-  { id: 'sub-gym',                 category_id: 'cat-subscriptions',  name: 'gym',               sort_order: 3, created_at: NOW, updated_at: NOW },
-  { id: 'sub-news',                category_id: 'cat-subscriptions',  name: 'news',              sort_order: 4, created_at: NOW, updated_at: NOW },
+  { id: 'sub-subscriptions',       category_id: 'cat-subscriptions',  name: 'subscriptions', sort_order: 1, created_at: NOW, updated_at: NOW },
   // Entertainment
-  { id: 'sub-movies',              category_id: 'cat-entertainment',  name: 'movies',            sort_order: 1, created_at: NOW, updated_at: NOW },
-  { id: 'sub-events',              category_id: 'cat-entertainment',  name: 'events',            sort_order: 2, created_at: NOW, updated_at: NOW },
-  { id: 'sub-hobbies',             category_id: 'cat-entertainment',  name: 'hobbies',           sort_order: 3, created_at: NOW, updated_at: NOW },
-  { id: 'sub-games',               category_id: 'cat-entertainment',  name: 'games',             sort_order: 4, created_at: NOW, updated_at: NOW },
+  { id: 'sub-books',               category_id: 'cat-entertainment',  name: 'books',         sort_order: 1, created_at: NOW, updated_at: NOW },
+  { id: 'sub-movie-show',          category_id: 'cat-entertainment',  name: 'movie/show',    sort_order: 2, created_at: NOW, updated_at: NOW },
+  { id: 'sub-video-games',         category_id: 'cat-entertainment',  name: 'video games',   sort_order: 3, created_at: NOW, updated_at: NOW },
   // Insurance
-  { id: 'sub-health-insurance',    category_id: 'cat-insurance',      name: 'health insurance',  sort_order: 1, created_at: NOW, updated_at: NOW },
-  { id: 'sub-liability',           category_id: 'cat-insurance',      name: 'liability',         sort_order: 2, created_at: NOW, updated_at: NOW },
-  { id: 'sub-household-insurance', category_id: 'cat-insurance',      name: 'household insurance', sort_order: 3, created_at: NOW, updated_at: NOW },
+  { id: 'sub-insurance',           category_id: 'cat-insurance',      name: 'insurance',     sort_order: 1, created_at: NOW, updated_at: NOW },
   // Apparel
-  { id: 'sub-clothing',            category_id: 'cat-apparel',        name: 'clothing',          sort_order: 1, created_at: NOW, updated_at: NOW },
-  { id: 'sub-shoes',               category_id: 'cat-apparel',        name: 'shoes',             sort_order: 2, created_at: NOW, updated_at: NOW },
-  { id: 'sub-accessories',         category_id: 'cat-apparel',        name: 'accessories',       sort_order: 3, created_at: NOW, updated_at: NOW },
+  { id: 'sub-clothes',             category_id: 'cat-apparel',        name: 'clothes',       sort_order: 1, created_at: NOW, updated_at: NOW },
+  { id: 'sub-shoes',               category_id: 'cat-apparel',        name: 'shoes',         sort_order: 2, created_at: NOW, updated_at: NOW },
   // Electronics
-  { id: 'sub-electronics-general', category_id: 'cat-electronics',    name: 'electronics',       sort_order: 1, created_at: NOW, updated_at: NOW },
+  { id: 'sub-electronics-general', category_id: 'cat-electronics',    name: 'electronics',   sort_order: 1, created_at: NOW, updated_at: NOW },
   // Charlie
-  { id: 'sub-charlie-general',        category_id: 'cat-charlie',           name: 'charlie',              sort_order: 1, created_at: NOW, updated_at: NOW },
+  { id: 'sub-charlie-general',        category_id: 'cat-charlie',           name: 'charlie',          sort_order: 1, created_at: NOW, updated_at: NOW },
   // Education
-  { id: 'sub-books',               category_id: 'cat-education',      name: 'books',             sort_order: 1, created_at: NOW, updated_at: NOW },
-  { id: 'sub-courses',             category_id: 'cat-education',      name: 'courses',           sort_order: 2, created_at: NOW, updated_at: NOW },
+  { id: 'sub-education',           category_id: 'cat-education',      name: 'education',     sort_order: 1, created_at: NOW, updated_at: NOW },
   // Travel
-  { id: 'sub-flights',             category_id: 'cat-travel',         name: 'flights',           sort_order: 1, created_at: NOW, updated_at: NOW },
-  { id: 'sub-accommodation',       category_id: 'cat-travel',         name: 'accommodation',     sort_order: 2, created_at: NOW, updated_at: NOW },
-  { id: 'sub-activities',          category_id: 'cat-travel',         name: 'activities',        sort_order: 3, created_at: NOW, updated_at: NOW },
-  { id: 'sub-transport',           category_id: 'cat-travel',         name: 'transport',         sort_order: 4, created_at: NOW, updated_at: NOW },
+  { id: 'sub-travel',              category_id: 'cat-travel',         name: 'travel',        sort_order: 1, created_at: NOW, updated_at: NOW },
   // Gift
-  { id: 'sub-gift-general',        category_id: 'cat-gift',           name: 'gifts',             sort_order: 1, created_at: NOW, updated_at: NOW },
+  { id: 'sub-gift',                category_id: 'cat-gift',           name: 'gift',          sort_order: 1, created_at: NOW, updated_at: NOW },
+  { id: 'sub-donation',            category_id: 'cat-gift',           name: 'donation',      sort_order: 2, created_at: NOW, updated_at: NOW },
   // Other
-  { id: 'sub-other-general',       category_id: 'cat-other',          name: 'other',             sort_order: 1, created_at: NOW, updated_at: NOW },
+  { id: 'sub-other-general',       category_id: 'cat-other',          name: 'other',         sort_order: 1, created_at: NOW, updated_at: NOW },
 ];
 
 // ── Seed function ─────────────────────────────────────────────────────────────
