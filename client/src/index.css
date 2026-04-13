@@ -25,15 +25,15 @@
 
   /* Category colors */
   --color-cat-food: #ff6b6b;
-  --color-cat-living: #ffa94d;
-  --color-cat-household: #ffd43b;
+  --color-cat-living: #74c0fc;
+  --color-cat-household: #ffa94d;
   --color-cat-transportation: #69db7c;
-  --color-cat-health: #ff8787;
-  --color-cat-subscriptions: #9775fa;
+  --color-cat-health: #9775fa;
+  --color-cat-subscriptions: #66d9e8;
   --color-cat-entertainment: #e599f7;
-  --color-cat-insurance: #66d9e8;
+  --color-cat-insurance: #ff8787;
   --color-cat-apparel: #f783ac;
-  --color-cat-electronics: #74c0fc;
+  --color-cat-electronics: #ffd43b;
   --color-cat-charlie: #fcc419;
   --color-cat-education: #63e6be;
   --color-cat-travel: #38d9a9;
@@ -75,4 +75,11 @@ body {
 #app {
   min-height: 100dvh;
   overflow-x: hidden;
+}
+
+/* Screen content is invisible by default via CSS.
+   The transition system is the ONLY thing that sets opacity > 0. */
+.screen-content {
+  opacity: 0;
+  will-change: transform, opacity;
 }

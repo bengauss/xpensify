@@ -25,17 +25,16 @@ function svgWrap(color: string, size: number, children: any[]) {
   );
 }
 
-// 1. Food — coffee mug with steam
+// 1. Food — fork and knife
 export function FoodIcon({ color = defaults.color, size = defaults.size }: IconProps = {}) {
   return svgWrap(color, size, [
-    // mug body
-    h("path", { d: "M6 8h10l-1 9H7L6 8z" }),
-    // handle
-    h("path", { d: "M16 10h2a2 2 0 0 1 0 4h-2" }),
-    // steam left
-    h("path", { d: "M9 5c0-1 1-1 1-2" }),
-    // steam right
-    h("path", { d: "M12 5c0-1 1-1 1-2" }),
+    // fork
+    h("path", { d: "M3 2v7c0 1.1.9 2 2 2h2a2 2 0 0 0 2-2V2" }),
+    h("path", { d: "M5 2v20" }),
+    h("path", { d: "M7 2v6" }),
+    // knife
+    h("path", { d: "M19 2l0 8c0 1.1-.4 2-1.5 2S16 11.1 16 10V2" }),
+    h("path", { d: "M17.5 12v10" }),
   ]);
 }
 
@@ -53,35 +52,50 @@ export function LivingIcon({ color = defaults.color, size = defaults.size }: Ico
   ]);
 }
 
-// 3. Household — wrench
+// 3. Household — couch/sofa
 export function HouseholdIcon({ color = defaults.color, size = defaults.size }: IconProps = {}) {
   return svgWrap(color, size, [
-    h("path", {
-      d: "M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3-3a6 6 0 0 1-7.2 7.2l-6.3 6.3a2.12 2.12 0 0 1-3-3l6.3-6.3a6 6 0 0 1 7.2-7.2l-3 3z",
-    }),
+    // seat back
+    h("path", { d: "M4 11V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4" }),
+    // seat cushion + armrests
+    h("path", { d: "M2 11h20v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5z" }),
+    // legs
+    h("path", { d: "M4 18v2" }),
+    h("path", { d: "M20 18v2" }),
+    // cushion divider
+    h("path", { d: "M12 11v5" }),
   ]);
 }
 
-// 4. Transportation — car/truck side view
+// 4. Transportation — car side view
 export function TransportationIcon({ color = defaults.color, size = defaults.size }: IconProps = {}) {
   return svgWrap(color, size, [
-    // body
-    h("path", { d: "M1 17h22" }),
-    h("path", { d: "M2 17V11l3-5h12l3 5v6" }),
-    // cabin top
-    h("path", { d: "M6 6l1.5-3h9L18 6" }),
+    // car body
+    h("path", { d: "M3 14l2-6h4l3-3h4l2 3h3v6H3z" }),
+    // windshield
+    h("path", { d: "M9 8l-1.5 6" }),
+    // rear window
+    h("path", { d: "M16 8l1 6" }),
     // wheels
-    h("circle", { cx: "6", cy: "17", r: "2" }),
-    h("circle", { cx: "18", cy: "17", r: "2" }),
+    h("circle", { cx: "7", cy: "17", r: "2" }),
+    h("circle", { cx: "17", cy: "17", r: "2" }),
+    // ground line between wheels
+    h("path", { d: "M9 17h6" }),
+    h("path", { d: "M3 14h18" }),
   ]);
 }
 
-// 5. Health — heart
+// 5. Health — stethoscope
 export function HealthIcon({ color = defaults.color, size = defaults.size }: IconProps = {}) {
   return svgWrap(color, size, [
-    h("path", {
-      d: "M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z",
-    }),
+    // earpieces and tube
+    h("path", { d: "M6 2v6a6 6 0 0 0 12 0V2" }),
+    // chest piece
+    h("circle", { cx: "12", cy: "14", r: "2" }),
+    // connecting tube down
+    h("path", { d: "M12 10v2" }),
+    // hose to bell
+    h("path", { d: "M12 16v2a4 4 0 0 0 4 4h1a2 2 0 0 0 2-2v-1" }),
   ]);
 }
 
@@ -134,18 +148,16 @@ export function ElectronicsIcon({ color = defaults.color, size = defaults.size }
   ]);
 }
 
-// 11. Charlie — sun with rays
+// 11. Charlie — baby/child
 export function LilyIcon({ color = defaults.color, size = defaults.size }: IconProps = {}) {
   return svgWrap(color, size, [
-    h("circle", { cx: "12", cy: "12", r: "4" }),
-    h("path", { d: "M12 2v2" }),
-    h("path", { d: "M12 20v2" }),
-    h("path", { d: "M4.93 4.93l1.41 1.41" }),
-    h("path", { d: "M17.66 17.66l1.41 1.41" }),
-    h("path", { d: "M2 12h2" }),
-    h("path", { d: "M20 12h2" }),
-    h("path", { d: "M6.34 17.66l-1.41 1.41" }),
-    h("path", { d: "M19.07 4.93l-1.41 1.41" }),
+    // head
+    h("circle", { cx: "12", cy: "5.5", r: "3.5" }),
+    // body
+    h("path", { d: "M8 22v-6a4 4 0 0 1 8 0v6" }),
+    // arms
+    h("path", { d: "M5 14l3.5-1.5" }),
+    h("path", { d: "M19 14l-3.5-1.5" }),
   ]);
 }
 
