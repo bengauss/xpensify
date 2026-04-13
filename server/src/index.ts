@@ -5,7 +5,9 @@ import cron from "node-cron";
 import auth from "./routes/auth.js";
 import syncRouter from "./routes/sync.js";
 import recurringRouter from "./routes/recurring.js";
+import pushRouter from "./routes/push.js";
 import { processRecurringTemplates } from "./jobs/recurring.js";
+import { sendDailyReminders, sendWeeklySummaries } from "./jobs/notifications.js";
 import type { Variables } from "./middleware/auth.js";
 
 const app = new Hono<{ Variables: Variables }>();
@@ -22,6 +24,9 @@ app.route("/api/sync", syncRouter);
 
 // Recurring templates routes (auth middleware applied inside the router)
 app.route("/api/recurring", recurringRouter);
+
+// Push notification routes (auth middleware applied inside the router)
+app.route("/api/push", pushRouter);
 
 // In production, serve the client build
 if (process.env.NODE_ENV === "production") {
@@ -48,6 +53,24 @@ cron.schedule("5 0 * * *", () => {
     processRecurringTemplates();
   } catch (err) {
     console.error("[recurring] Cron processing failed:", err);
+  }
+});
+
+// Daily reminder push at 9 PM
+cron.schedule("0 21 * * *", () => {
+  try {
+    sendDailyReminders();
+  } catch (err) {
+    console.error("[notifications] Daily reminder cron failed:", err);
+  }
+});
+
+// Weekly summary push at Sunday 9 AM
+cron.schedule("0 9 * * 0", () => {
+  try {
+    sendWeeklySummaries();
+  } catch (err) {
+    console.error("[notifications] Weekly summary cron failed:", err);
   }
 });
 
