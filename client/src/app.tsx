@@ -12,12 +12,14 @@ const HistoryScreen = lazy(() => import("@/screens/History"));
 const RecurringScreen = lazy(() => import("@/screens/Recurring"));
 const RecurringForm = lazy(() => import("@/screens/RecurringForm"));
 const AnalyticsScreen = lazy(() => import("@/screens/Analytics"));
+const SettingsScreen = lazy(() => import("@/screens/Settings"));
 
 /** Wraps a screen component with the shell chrome (Header + BottomNav) */
 function Shell({ children }: { children: preact.ComponentChildren }) {
+  const { route } = useLocation();
   return (
     <div class="flex min-h-dvh flex-col bg-bg-primary">
-      <Header />
+      <Header onSettingsClick={() => route("/settings")} />
       <main class="flex-1 pt-2">{children}</main>
       <BottomNav />
     </div>
@@ -99,6 +101,14 @@ export function App() {
           component={() => (
             <Shell>
               <AnalyticsScreen />
+            </Shell>
+          )}
+        />
+        <Route
+          path="/settings"
+          component={() => (
+            <Shell>
+              <SettingsScreen />
             </Shell>
           )}
         />

@@ -6,6 +6,8 @@ import auth from "./routes/auth.js";
 import syncRouter from "./routes/sync.js";
 import recurringRouter from "./routes/recurring.js";
 import pushRouter from "./routes/push.js";
+import categoriesRouter from "./routes/categories.js";
+import exportRouter from "./routes/export.js";
 import { processRecurringTemplates } from "./jobs/recurring.js";
 import { sendDailyReminders, sendWeeklySummaries } from "./jobs/notifications.js";
 import type { Variables } from "./middleware/auth.js";
@@ -27,6 +29,12 @@ app.route("/api/recurring", recurringRouter);
 
 // Push notification routes (auth middleware applied inside the router)
 app.route("/api/push", pushRouter);
+
+// Categories routes (auth middleware applied inside the router)
+app.route("/api/categories", categoriesRouter);
+
+// Export routes (auth middleware applied inside the router)
+app.route("/api/export", exportRouter);
 
 // In production, serve the client build
 if (process.env.NODE_ENV === "production") {

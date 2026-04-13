@@ -87,4 +87,44 @@ auth.get("/me", authMiddleware, (c) => {
   return c.json(user);
 });
 
+// POST /api/auth/change-password
+auth.post("/change-password", authMiddleware, async (c) => {
+  let body: { current_password?: unknown; new_password?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+
+  const { current_password, new_password } = body;
+  if (typeof current_password !== "string" || typeof new_password !== "string") {
+    return c.json({ error: "current_password and new_password are required" }, 400);
+  }
+
+  if (new_password.length < 1) {
+    return c.json({ error: "new_password must not be empty" }, 400);
+  }
+
+  const userId = c.get("userId");
+  const user = db
+    .prepare(`SELECT id, password_hash FROM users WHERE id = ?`)
+    .get(userId) as { id: string; password_hash: string } | undefined;
+
+  if (!user) {
+    return c.json({ error: "User not found" }, 404);
+  }
+
+  const valid = await bcrypt.compare(current_password, user.password_hash);
+  if (!valid) {
+    return c.json({ error: "Current password is incorrect" }, 401);
+  }
+
+  const newHash = await bcrypt.hash(new_password, 12);
+  db.prepare(
+    `UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`
+  ).run(newHash, userId);
+
+  return c.json({ ok: true });
+});
+
 export default auth;
