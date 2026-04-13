@@ -1,6 +1,7 @@
 import { useRef, useEffect } from "preact/hooks";
 import { useLocation } from "preact-iso";
 import { animate } from "motion";
+import { springs } from "@/lib/animations";
 import { db } from "@/db/local";
 import type { RecurringTemplate } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -49,22 +50,30 @@ interface ToggleProps {
 
 function Toggle({ active, onToggle }: ToggleProps) {
   const knobRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!knobRef.current) return;
     const targetX = active ? 16 : 0;
-    animate(knobRef.current, { x: targetX }, { type: "spring", stiffness: 500, damping: 28 });
+    animate(knobRef.current, { x: targetX }, springs.toggle);
+    if (trackRef.current) {
+      animate(
+        trackRef.current,
+        { backgroundColor: active ? "var(--color-accent)" : "var(--color-text-ghost)" },
+        springs.toggle
+      );
+    }
   }, [active]);
 
   return (
     <button
+      ref={trackRef}
       onClick={(e) => { e.stopPropagation(); onToggle(); }}
       class="relative flex-shrink-0 rounded-full cursor-pointer border-0 p-0"
       style={{
         width: 40,
         height: 24,
         backgroundColor: active ? "var(--color-accent)" : "var(--color-text-ghost)",
-        transition: "background-color 200ms ease",
       }}
       aria-label={active ? "Disable" : "Enable"}
     >

@@ -8,12 +8,12 @@ import { LoginScreen } from "@/screens/Login";
 import { checkAuth, currentUser } from "@/lib/auth";
 import { startSyncScheduler, stopSyncScheduler } from "@/sync/scheduler";
 import { lazy } from "preact-iso";
+import HistoryScreen from "@/screens/History";
+import RecurringScreen from "@/screens/Recurring";
+import RecurringForm from "@/screens/RecurringForm";
+import SettingsScreen from "@/screens/Settings";
 
-const HistoryScreen = lazy(() => import("@/screens/History"));
-const RecurringScreen = lazy(() => import("@/screens/Recurring"));
-const RecurringForm = lazy(() => import("@/screens/RecurringForm"));
 const AnalyticsScreen = lazy(() => import("@/screens/Analytics"));
-const SettingsScreen = lazy(() => import("@/screens/Settings"));
 
 /** True once checkAuth() has resolved (regardless of result) */
 const authChecked = signal(false);

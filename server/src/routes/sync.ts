@@ -9,6 +9,7 @@ interface ClientChange {
   amount: number;
   note?: string | null;
   tags?: string | null;
+  image_url?: string | null;
   timestamp: string;
   source?: string;
   recurring_template_id?: string | null;
@@ -24,6 +25,7 @@ interface ExpenseRow {
   amount: number;
   note: string | null;
   tags: string | null;
+  image_url: string | null;
   timestamp: string;
   source: string;
   recurring_template_id: string | null;
@@ -49,16 +51,17 @@ const sync = new Hono<{ Variables: Variables }>()
 
     // Server is clock authority: updated_at = datetime('now') on every upsert.
     // Last sync to arrive always wins (last-write-wins by arrival order).
-    const upsertStmt = db.prepare<[string, string, string, string, number, string | null, string | null, string, string, string | null, number]>(
+    const upsertStmt = db.prepare<[string, string, string, string, number, string | null, string | null, string | null, string, string, string | null, number]>(
       `INSERT INTO expenses
-         (id, user_id, category_id, subcategory_id, amount, note, tags, timestamp, source, recurring_template_id, deleted, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+         (id, user_id, category_id, subcategory_id, amount, note, tags, image_url, timestamp, source, recurring_template_id, deleted, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT(id) DO UPDATE SET
          category_id           = excluded.category_id,
          subcategory_id        = excluded.subcategory_id,
          amount                = excluded.amount,
          note                  = excluded.note,
          tags                  = excluded.tags,
+         image_url             = excluded.image_url,
          timestamp             = excluded.timestamp,
          source                = excluded.source,
          recurring_template_id = excluded.recurring_template_id,
@@ -78,6 +81,7 @@ const sync = new Hono<{ Variables: Variables }>()
           change.amount,
           change.note ?? null,
           change.tags ?? null,
+          change.image_url ?? null,
           change.timestamp,
           change.source ?? "manual",
           change.recurring_template_id ?? null,

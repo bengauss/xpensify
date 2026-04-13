@@ -10,7 +10,7 @@ const exportRouter = new Hono<{ Variables: Variables }>()
       .prepare(
         `SELECT
            e.id,
-           e.timestamp as date,
+           e.timestamp,
            cat.name as category,
            sub.name as subcategory,
            e.amount as amount_cents,
@@ -26,7 +26,7 @@ const exportRouter = new Hono<{ Variables: Variables }>()
       )
       .all() as {
         id: string;
-        date: string;
+        timestamp: string;
         category: string;
         subcategory: string;
         amount_cents: number;
@@ -44,13 +44,13 @@ const exportRouter = new Hono<{ Variables: Variables }>()
       return str;
     }
 
-    const header = "id,date,category,subcategory,amount_eur,note,source,user\n";
+    const header = "id,timestamp,category,subcategory,amount in EUR,note,source,user\n";
     const body = rows
       .map((row) => {
         const amountEur = (row.amount_cents / 100).toFixed(2);
         return [
           escapeCsvField(row.id),
-          escapeCsvField(row.date),
+          escapeCsvField(row.timestamp),
           escapeCsvField(row.category),
           escapeCsvField(row.subcategory),
           amountEur,

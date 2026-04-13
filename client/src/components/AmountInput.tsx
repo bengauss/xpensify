@@ -31,11 +31,11 @@ export function AmountInput({ value, onAmountChange, inputRef }: AmountInputProp
   }
 
   return (
-    <div class="flex flex-col gap-0 rounded-lg bg-surface px-4 pt-4 pb-0">
+    <div class="flex flex-col gap-0 rounded-lg bg-bg-surface px-4 pt-4 pb-0">
       {/* Input row */}
       <div class="flex items-center gap-3">
         {/* Currency prefix */}
-        <span class="text-[44px] font-light leading-none text-text-secondary select-none">
+        <span class="text-3xl sm:text-[44px] font-light leading-none text-text-secondary select-none">
           EUR
         </span>
 
@@ -50,7 +50,7 @@ export function AmountInput({ value, onAmountChange, inputRef }: AmountInputProp
           class="
             min-w-0 flex-1
             bg-transparent
-            text-[44px] font-light leading-none
+            text-3xl sm:text-[44px] font-light leading-none
             text-text-primary placeholder:text-text-hint
             outline-none border-none
             pb-4

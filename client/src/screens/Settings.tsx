@@ -6,13 +6,14 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { currentUser, logout } from "@/lib/auth";
 import { sync } from "@/sync/engine";
 import { categoryIcons } from "@/icons";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { api } from "@/lib/api";
 
 // ── Section Card ──────────────────────────────────────────────────────────────
 
 function Card({ children }: { children: preact.ComponentChildren }) {
   return (
-    <div class="bg-surface rounded-xl p-4 flex flex-col gap-3">
+    <div class="bg-bg-surface rounded-xl p-4 flex flex-col gap-3">
       {children}
     </div>
   );
@@ -60,7 +61,7 @@ function CategoryRow({
   }
 
   return (
-    <div class="flex items-center gap-2 py-1">
+    <div class="flex items-center gap-3 py-2">
       {/* Icon */}
       <span class="shrink-0" style={{ color: category.color }}>
         <IconComponent color={category.color} size={20} />
@@ -69,7 +70,7 @@ function CategoryRow({
       {/* Name / edit input */}
       {editing ? (
         <input
-          class="flex-1 rounded bg-bg-primary px-2 py-0.5 text-sm text-text-primary outline-none border border-accent/40"
+          class="flex-1 rounded-lg bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none border border-accent/40"
           value={editVal}
           onInput={(e) => setEditVal((e.target as HTMLInputElement).value)}
           onKeyDown={(e) => {
@@ -87,7 +88,7 @@ function CategoryRow({
       <button
         onClick={onMoveUp}
         disabled={isFirst}
-        class="text-text-ghost hover:text-text-primary disabled:opacity-20 px-1 text-base leading-none"
+        class="text-text-secondary hover:text-text-primary disabled:opacity-20 p-1.5 text-base leading-none"
         title="Move up"
       >
         ↑
@@ -95,7 +96,7 @@ function CategoryRow({
       <button
         onClick={onMoveDown}
         disabled={isLast}
-        class="text-text-ghost hover:text-text-primary disabled:opacity-20 px-1 text-base leading-none"
+        class="text-text-secondary hover:text-text-primary disabled:opacity-20 p-1.5 text-base leading-none"
         title="Move down"
       >
         ↓
@@ -104,10 +105,10 @@ function CategoryRow({
       {/* Edit (pencil) */}
       <button
         onClick={() => { setEditVal(category.name); setEditing(true); }}
-        class="text-text-ghost hover:text-accent px-1"
+        class="text-text-secondary hover:text-accent p-1.5"
         title="Edit"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
         </svg>
@@ -116,10 +117,10 @@ function CategoryRow({
       {/* Delete (x) */}
       <button
         onClick={onDelete}
-        class="text-text-ghost hover:text-red-400 px-1"
+        class="text-text-secondary hover:text-red-400 p-1.5"
         title="Delete"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />
         </svg>
@@ -130,12 +131,13 @@ function CategoryRow({
 
 function CategoriesSection() {
   const categories = useLiveQuery(() =>
-    db.categories.orderBy("sort_order").toArray(), []
+    db.categories.toArray().then((cats) => cats.sort((a, b) => a.sort_order - b.sort_order)), []
   ) ?? [];
 
   const [addName, setAddName] = useState("");
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
+  const [deletingCategory, setDeletingCategory] = useState<{ id: string; name: string } | null>(null);
 
   async function patchCategory(id: string, body: Record<string, unknown>) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -170,11 +172,16 @@ function CategoriesSection() {
     await patchCategory(id, { name: newName });
   }
 
-  async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete category "${name}"? This cannot be undone.`)) return;
+  async function handleDeleteConfirmed(id: string) {
     const res = await api.api.categories[":id"].$delete({ param: { id } });
-    if (!res.ok) { setError("Failed to delete category"); return; }
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({})) as { error?: string };
+      setError((data as { error?: string }).error ?? "Failed to delete category");
+      setDeletingCategory(null);
+      return;
+    }
     await db.categories.delete(id);
+    setDeletingCategory(null);
   }
 
   async function handleAdd() {
@@ -215,7 +222,7 @@ function CategoriesSection() {
             onMoveUp={() => handleMoveUp(idx)}
             onMoveDown={() => handleMoveDown(idx)}
             onEdit={(newName) => handleEdit(cat.id, newName)}
-            onDelete={() => handleDelete(cat.id, cat.name)}
+            onDelete={() => setDeletingCategory({ id: cat.id, name: cat.name })}
           />
         ))}
       </div>
@@ -243,6 +250,14 @@ function CategoriesSection() {
             cancel
           </button>
         </div>
+      )}
+
+      {deletingCategory && (
+        <ConfirmDialog
+          message={`Delete category "${deletingCategory.name}"? This cannot be undone.`}
+          onConfirm={() => handleDeleteConfirmed(deletingCategory.id)}
+          onCancel={() => setDeletingCategory(null)}
+        />
       )}
     </Card>
   );
@@ -276,26 +291,26 @@ function PasswordChangeForm() {
   }
 
   return (
-    <div class="mt-2 flex flex-col gap-2 pl-10">
+    <div class="mt-3 flex flex-col gap-3 pl-11">
       <input
         type="password"
         placeholder="Current password"
         value={currentPw}
         onInput={(e) => setCurrentPw((e.target as HTMLInputElement).value)}
-        class="rounded bg-bg-primary px-3 py-1.5 text-sm text-text-primary outline-none border border-text-ghost/20"
+        class="rounded-lg bg-bg-primary px-3 py-2.5 text-sm text-text-primary outline-none border border-text-muted/40"
       />
       <input
         type="password"
         placeholder="New password"
         value={newPw}
         onInput={(e) => setNewPw((e.target as HTMLInputElement).value)}
-        class="rounded bg-bg-primary px-3 py-1.5 text-sm text-text-primary outline-none border border-text-ghost/20"
+        class="rounded-lg bg-bg-primary px-3 py-2.5 text-sm text-text-primary outline-none border border-text-muted/40"
       />
       {error && <p class="text-xs text-red-400">{error}</p>}
       {msg && <p class="text-xs text-green-400">{msg}</p>}
       <button
         onClick={handleSave}
-        class="self-start rounded bg-accent/20 px-3 py-1 text-xs text-accent hover:bg-accent/30"
+        class="self-start rounded-lg bg-accent/20 px-4 py-2 text-xs text-accent hover:bg-accent/30"
       >
         save
       </button>
@@ -430,7 +445,7 @@ function PushNotificationsSection() {
               type="time"
               value={prefs.daily_reminder_time}
               onInput={(e) => savePrefs({ daily_reminder_time: (e.target as HTMLInputElement).value })}
-              class="rounded bg-bg-primary px-2 py-1 text-xs text-text-primary outline-none border border-text-ghost/20 [color-scheme:dark]"
+              class="rounded-lg bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none border border-text-muted/40 [color-scheme:dark]"
             />
           </div>
         )}
@@ -456,7 +471,7 @@ function PushNotificationsSection() {
               <select
                 value={prefs.weekly_summary_day}
                 onChange={(e) => savePrefs({ weekly_summary_day: parseInt((e.target as HTMLSelectElement).value) })}
-                class="rounded bg-bg-primary px-2 py-1 text-xs text-text-primary outline-none border border-text-ghost/20"
+                class="rounded-lg bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none border border-text-muted/40"
               >
                 {DAYS.map((d, i) => (
                   <option key={i} value={i}>{d}</option>
@@ -469,7 +484,7 @@ function PushNotificationsSection() {
                 type="time"
                 value={prefs.weekly_summary_time}
                 onInput={(e) => savePrefs({ weekly_summary_time: (e.target as HTMLInputElement).value })}
-                class="rounded bg-bg-primary px-2 py-1 text-xs text-text-primary outline-none border border-text-ghost/20 [color-scheme:dark]"
+                class="rounded-lg bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none border border-text-muted/40 [color-scheme:dark]"
               />
             </div>
           </div>
@@ -510,6 +525,7 @@ function SyncSection() {
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [msg, setMsg] = useState("");
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   useEffect(() => {
     setLastSync(localStorage.getItem("xpensify_last_sync"));
@@ -531,7 +547,6 @@ function SyncSection() {
   }
 
   async function handleClearCache() {
-    if (!confirm("Clear all local data? The page will reload and re-sync from the server.")) return;
     await db.expenses.clear();
     await db.categories.clear();
     await db.subcategories.clear();
@@ -564,12 +579,20 @@ function SyncSection() {
         >
           {syncing ? "syncing…" : "force full sync"}
         </button>
-        <button
-          onClick={handleClearCache}
-          class="rounded bg-red-500/10 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/20"
-        >
-          clear local cache
-        </button>
+        {showClearConfirm ? (
+          <ConfirmDialog
+            message="Clear all local data? The page will reload and re-sync from the server."
+            onConfirm={handleClearCache}
+            onCancel={() => setShowClearConfirm(false)}
+          />
+        ) : (
+          <button
+            onClick={() => setShowClearConfirm(true)}
+            class="rounded bg-red-500/10 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/20"
+          >
+            clear local cache
+          </button>
+        )}
       </div>
     </Card>
   );
@@ -605,8 +628,8 @@ export default function SettingsScreen() {
   const hasPush = typeof window !== "undefined" && "PushManager" in window;
 
   return (
-    <div class="flex flex-col gap-4 px-4 pb-24 pt-2">
-      <h1 class="text-sm uppercase tracking-wider text-text-ghost px-1">settings</h1>
+    <div class="flex flex-col gap-5 px-4 pb-28 pt-2">
+      <h1 class="text-sm uppercase tracking-wider text-text-secondary px-1">settings</h1>
 
       <CategoriesSection />
       <UsersSection />

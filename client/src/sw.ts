@@ -3,7 +3,13 @@ import { precacheAndRoute, cleanupOutdatedCaches } from "workbox-precaching";
 import { registerRoute } from "workbox-routing";
 import { NetworkFirst } from "workbox-strategies";
 
+import { clientsClaim } from "workbox-core";
+
 declare let self: ServiceWorkerGlobalScope;
+
+// Activate new service worker immediately — don't wait for old tabs to close
+self.skipWaiting();
+clientsClaim();
 
 // Precache the app shell (injected by vite-plugin-pwa at build time)
 precacheAndRoute(self.__WB_MANIFEST);

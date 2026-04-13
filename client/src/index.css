@@ -59,6 +59,7 @@ html {
     Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
 body {
@@ -66,8 +67,12 @@ body {
   background-color: var(--color-bg-primary);
   color: var(--color-text-body);
   min-height: 100dvh;
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
 }
 
 #app {
   min-height: 100dvh;
+  overflow-x: hidden;
 }

@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   amount INTEGER NOT NULL,
   note TEXT,
   tags TEXT,
+  image_url TEXT,
   timestamp TEXT NOT NULL,
   source TEXT NOT NULL DEFAULT 'manual',
   recurring_template_id TEXT REFERENCES recurring_templates(id),

@@ -8,7 +8,7 @@ COPY client/ ./
 COPY server/src/ /app/server/src/
 # Install server deps so tsc can resolve transitive type imports (hono, etc.)
 COPY server/package.json server/package-lock.json* /app/server/
-RUN cd /app/server && npm ci
+RUN apk add --no-cache python3 make g++ && cd /app/server && npm ci
 # VITE_* env vars must be present at build time for import.meta.env
 ARG VITE_VAPID_PUBLIC_KEY
 ENV VITE_VAPID_PUBLIC_KEY=$VITE_VAPID_PUBLIC_KEY

@@ -31,21 +31,20 @@ export function AddScreen() {
   const amountRef = useRef<HTMLInputElement>(null);
 
   const categories = useLiveQuery(() =>
-    db.categories.orderBy("sort_order").toArray()
+    db.categories.toArray().then((cats) => cats.sort((a, b) => a.sort_order - b.sort_order))
   );
   const subcategories = useLiveQuery(() => db.subcategories.toArray());
 
-  if (!categories || !subcategories) return null;
-
   const today = new Date();
   const dateLabel = formatDateLabel(dateStr, today);
+  const dataReady = categories && categories.length > 0 && subcategories && subcategories.length > 0;
 
   async function handleSelect(categoryId: string, subcategoryId: string) {
     if (amountCents <= 0) return;
 
     const now = new Date().toISOString();
-    const cat = categories!.find((c) => c.id === categoryId);
-    const sub = subcategories!.find((s) => s.id === subcategoryId);
+    const cat = categories?.find((c) => c.id === categoryId);
+    const sub = subcategories?.find((s) => s.id === subcategoryId);
 
     if (editing) {
       // Edit mode: update existing expense
@@ -70,6 +69,7 @@ export function AddScreen() {
         amount: amountCents,
         note: note.trim() || null,
         tags: null,
+        image_url: null,
         timestamp: `${dateStr}T12:00:00.000Z`,
         source: "manual",
         recurring_template_id: null,
@@ -120,15 +120,23 @@ export function AddScreen() {
       />
 
       {/* Date label */}
-      <div class="text-sm text-text-ghost px-1">{dateLabel}</div>
+      <div class="text-sm text-text-tertiary px-1">{dateLabel}</div>
 
       {/* Category selector */}
-      <CategorySelector
-        categories={categories}
-        subcategories={subcategories}
-        onSelect={handleSelect}
-        initialCategoryId={editing?.category_id}
-      />
+      {dataReady ? (
+        <CategorySelector
+          categories={categories}
+          subcategories={subcategories}
+          onSelect={handleSelect}
+          initialCategoryId={editing?.category_id}
+        />
+      ) : (
+        <div class="grid grid-cols-3 gap-3">
+          {Array.from({ length: 9 }).map((_, i) => (
+            <div key={i} class="h-16 rounded-xl bg-bg-surface animate-pulse" />
+          ))}
+        </div>
+      )}
 
       {/* Expandable extras */}
       <div class="flex flex-col gap-3 px-1">
@@ -155,7 +163,7 @@ export function AddScreen() {
             type="date"
             value={dateStr}
             onInput={(e) => setDateStr((e.target as HTMLInputElement).value)}
-            class="w-full rounded-lg bg-surface px-4 py-3 text-sm text-text-primary outline-none border border-text-ghost/20 [color-scheme:dark]"
+            class="w-full rounded-lg bg-bg-surface px-4 py-3 text-sm text-text-primary outline-none border border-text-ghost/20 [color-scheme:dark]"
           />
         )}
       </div>

@@ -94,13 +94,24 @@ const categories = new Hono<{ Variables: Variables }>()
     const updated = db.prepare(`SELECT * FROM categories WHERE id = ?`).get(id);
     return c.json(updated);
   })
-  // DELETE /:id — delete category (CASCADE handles subcategories)
+  // DELETE /:id — delete category (only if no expenses reference it)
   .delete("/:id", (c) => {
     const id = c.req.param("id");
 
     const existing = db.prepare(`SELECT id FROM categories WHERE id = ?`).get(id);
     if (!existing) {
       return c.json({ error: "Category not found" }, 404);
+    }
+
+    const expenseCount = db
+      .prepare(`SELECT COUNT(*) as count FROM expenses WHERE category_id = ? AND deleted = 0`)
+      .get(id) as { count: number };
+
+    if (expenseCount.count > 0) {
+      return c.json(
+        { error: `Cannot delete category: ${expenseCount.count} expense(s) still reference it` },
+        409
+      );
     }
 
     db.prepare(`DELETE FROM categories WHERE id = ?`).run(id);

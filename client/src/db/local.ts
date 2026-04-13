@@ -11,6 +11,7 @@ export interface Expense {
   amount: number;
   note: string | null;
   tags: string | null;
+  image_url: string | null;
   /** ISO-8601 date string (YYYY-MM-DD) */
   timestamp: string;
   source: 'manual' | 'import' | 'recurring';

@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "preact/hooks";
 import { useLocation } from "preact-iso";
+import { animate } from "motion";
+import { springs } from "@/lib/animations";
 import { db } from "@/db/local";
 import type { Expense, Category, Subcategory } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -198,7 +200,17 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
   return (
     <button
       onClick={onTap}
-      class="w-full text-left flex items-center gap-3 px-1 py-2.5 rounded-xl transition-transform active:scale-[0.98]"
+      onPointerDown={(e) => {
+        const el = e.currentTarget;
+        el.style.transform = "scale(0.98)";
+      }}
+      onPointerUp={(e) => {
+        animate(e.currentTarget, { scale: 1 }, springs.snappy);
+      }}
+      onPointerLeave={(e) => {
+        animate(e.currentTarget, { scale: 1 }, springs.snappy);
+      }}
+      class="w-full text-left flex items-center gap-3 px-1 py-2.5 rounded-xl"
       style={{ WebkitTapHighlightColor: "transparent" }}
     >
       {/* Category icon container */}

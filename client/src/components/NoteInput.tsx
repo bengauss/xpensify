@@ -55,7 +55,7 @@ export function NoteInput({ value, onChange }: NoteInputProps) {
         value={value}
         onInput={(e) => onChange((e.target as HTMLInputElement).value)}
         placeholder="add a note..."
-        class="w-full rounded-lg bg-surface px-4 py-3 text-sm text-text-primary placeholder:text-text-hint outline-none border border-text-ghost/20"
+        class="w-full rounded-lg bg-bg-surface px-4 py-3 text-sm text-text-primary placeholder:text-text-hint outline-none border border-text-ghost/20"
       />
       {suggestions.length > 0 && (
         <div class="flex flex-wrap gap-2">

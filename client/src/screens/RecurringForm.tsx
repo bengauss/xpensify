@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { useLocation, useRoute } from "preact-iso";
 import { animate } from "motion";
+import { springs } from "@/lib/animations";
 import { db } from "@/db/local";
 import type { RecurringTemplate } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -38,7 +39,7 @@ export default function RecurringForm() {
   // Spring toggle ref
   const knobRef = useRef<HTMLDivElement>(null);
 
-  const categories = useLiveQuery(() => db.categories.orderBy("sort_order").toArray(), []);
+  const categories = useLiveQuery(() => db.categories.toArray().then((cats) => cats.sort((a, b) => a.sort_order - b.sort_order)), []);
   const subcategories = useLiveQuery(() => db.subcategories.toArray(), []);
 
   // Load template data for edit mode
@@ -58,10 +59,20 @@ export default function RecurringForm() {
     });
   }, [id, isEdit]);
 
-  // Spring animation for the toggle knob
+  // Spring toggle ref for the track
+  const trackRef = useRef<HTMLButtonElement>(null);
+
+  // Spring animation for the toggle knob + track
   useEffect(() => {
     if (!knobRef.current) return;
-    animate(knobRef.current, { x: active ? 18 : 0 }, { type: "spring", stiffness: 500, damping: 28 });
+    animate(knobRef.current, { x: active ? 18 : 0 }, springs.toggle);
+    if (trackRef.current) {
+      animate(
+        trackRef.current,
+        { backgroundColor: active ? "var(--color-accent)" : "var(--color-text-ghost)" },
+        springs.toggle
+      );
+    }
   }, [active]);
 
   async function handleSave() {
@@ -120,7 +131,7 @@ export default function RecurringForm() {
     }
   }
 
-  if (!loaded || !categories || !subcategories) {
+  if (!loaded) {
     return (
       <div class="flex flex-1 items-center justify-center px-4">
         <p class="text-text-secondary text-sm">loading...</p>
@@ -146,16 +157,20 @@ export default function RecurringForm() {
       />
 
       {/* Category selector */}
-      <CategorySelector
-        categories={categories}
-        subcategories={subcategories}
-        compact={true}
-        initialCategoryId={categoryId || undefined}
-        onSelect={(catId, subId) => {
-          setCategoryId(catId);
-          setSubcategoryId(subId);
-        }}
-      />
+      {categories && subcategories ? (
+        <CategorySelector
+          categories={categories}
+          subcategories={subcategories}
+          compact={true}
+          initialCategoryId={categoryId || undefined}
+          onSelect={(catId, subId) => {
+            setCategoryId(catId);
+            setSubcategoryId(subId);
+          }}
+        />
+      ) : (
+        <div class="h-32 rounded-xl bg-bg-surface animate-pulse" />
+      )}
 
       {/* Note */}
       <input
@@ -218,13 +233,13 @@ export default function RecurringForm() {
       <div class="flex items-center justify-between">
         <span class="text-sm text-text-body">Active</span>
         <button
+          ref={trackRef}
           onClick={() => setActive(!active)}
           class="relative rounded-full cursor-pointer border-0 p-0"
           style={{
             width: 44,
             height: 26,
             backgroundColor: active ? "var(--color-accent)" : "var(--color-text-ghost)",
-            transition: "background-color 200ms ease",
           }}
         >
           <div

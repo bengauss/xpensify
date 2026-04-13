@@ -41,7 +41,7 @@ export function CategorySelector({
 
   // Animate grid out + pills in when selectedCategoryId changes (non-compact)
   useEffect(() => {
-    if (compact || !gridRef.current || !pillsRef.current) return;
+    if (compact || !gridRef.current) return;
 
     if (selectedCategoryId) {
       // Fade out grid, then show pills
@@ -56,19 +56,21 @@ export function CategorySelector({
         grid.style.display = "none";
 
         // Animate pills cascading in
-        const pills = pillsContainer.querySelectorAll<HTMLElement>("[data-pill]");
-        pills.forEach((pill, i) => {
-          pill.style.opacity = "0";
-          pill.style.transform = "translateY(8px)";
-          animate(
-            pill,
-            { opacity: [0, 1], y: [8, 0] },
-            { ...springs.gentle, delay: i * 0.05 }
-          );
-        });
+        if (pillsContainer) {
+          const pills = pillsContainer.querySelectorAll<HTMLElement>("[data-pill]");
+          pills.forEach((pill, i) => {
+            pill.style.opacity = "0";
+            pill.style.transform = "translateY(8px)";
+            animate(
+              pill,
+              { opacity: [0, 1], y: [8, 0] },
+              { ...springs.gentle, delay: i * 0.05 }
+            );
+          });
+        }
       }, 200);
     } else {
-      // Reverse: show grid, hide pills
+      // Reverse: show grid
       const grid = gridRef.current;
       grid.style.display = "";
       // Force reflow
