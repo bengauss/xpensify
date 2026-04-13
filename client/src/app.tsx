@@ -8,7 +8,7 @@ import { LoginScreen } from "@/screens/Login";
 import { checkAuth, currentUser } from "@/lib/auth";
 import { startSyncScheduler, stopSyncScheduler } from "@/sync/scheduler";
 import { lazy } from "preact-iso";
-import { contentEl, animateIn, pendingDirection } from "@/lib/transitions";
+import { contentEl, animateIn, pendingDirection, revealContent } from "@/lib/transitions";
 import HistoryScreen from "@/screens/History";
 import RecurringScreen from "@/screens/Recurring";
 import RecurringForm from "@/screens/RecurringForm";
@@ -54,9 +54,10 @@ function AuthenticatedShell() {
   const mainRef = useRef<HTMLDivElement>(null);
   const prevPathRef = useRef(path);
 
-  // Register content element for transitions (runs once, ref is stable)
+  // Register content element and reveal on initial load (CSS hides it by default)
   useEffect(() => {
     contentEl.value = mainRef.current;
+    revealContent();
     return () => { contentEl.value = null; };
   }, []);
 
@@ -73,7 +74,7 @@ function AuthenticatedShell() {
   return (
     <div class="flex min-h-dvh flex-col bg-bg-primary">
       <Header onSettingsClick={() => route("/settings")} />
-      <main ref={mainRef} class="flex-1 pt-2">
+      <main ref={mainRef} class="screen-content flex-1 pt-2">
         <Router>
           <Route path="/" component={AddScreen} />
           <Route path="/history" component={HistoryScreen} />

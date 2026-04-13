@@ -1,7 +1,6 @@
 import { useRef, useEffect, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
 import { animate } from "motion";
-import type { DOMKeyframesDefinition, AnimationOptions } from "motion";
 import { springs } from "@/lib/animations";
 
 type SheetState = "closed" | "opening" | "open" | "closing";
@@ -29,15 +28,23 @@ export function DetailSheet({ open, onClose, children }: DetailSheetProps) {
   useEffect(() => {
     if (state === "opening" && sheetRef.current) {
       const el = sheetRef.current;
-      const kf: DOMKeyframesDefinition = { translateY: ["100%", "0%"] };
-      animate(el as Element, kf, springs.gentle).then(() => {
-        setState("open");
-      });
+      el.style.transform = "translateY(100%)";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const anim = (animate as any)(
+        el,
+        { transform: ["translateY(100%)", "translateY(0%)"] },
+        springs.gentle
+      );
+      anim.then(() => setState("open"));
     } else if (state === "closing" && sheetRef.current) {
       const el = sheetRef.current;
-      const kf: DOMKeyframesDefinition = { translateY: ["0%", "100%"] };
-      const opts: AnimationOptions = { duration: 0.2, ease: "easeOut" };
-      animate(el as Element, kf, opts).then(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const anim = (animate as any)(
+        el,
+        { transform: ["translateY(0%)", "translateY(100%)"] },
+        { duration: 0.2, ease: "ease-out" }
+      );
+      anim.then(() => {
         setState("closed");
         onCloseRef.current();
       });
@@ -75,6 +82,7 @@ export function DetailSheet({ open, onClose, children }: DetailSheetProps) {
           maxHeight: "70vh",
           overflowY: "auto",
           willChange: "transform",
+          transform: "translateY(100%)",
         }}
       >
         {/* Drag handle */}

@@ -240,7 +240,7 @@ export function CategorySelector({
                   }}
                 >
                   {IconComponent && (
-                    <IconComponent color={cat.color} size={26} />
+                    <IconComponent color={cat.color} size={30} />
                   )}
                   <span
                     class="text-[13px] leading-none"
@@ -309,7 +309,7 @@ export function CategorySelector({
                 }}
               >
                 {IconComponent && (
-                  <IconComponent color={cat.color} size={26} />
+                  <IconComponent color={cat.color} size={30} />
                 )}
                 <span
                   class="text-[13px] leading-none"

@@ -15,8 +15,8 @@ import { useEntrance, animateRowEntrance } from "@/lib/entrance";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const INITIAL_DAYS = 30;
-const INCREMENT_DAYS = 30;
+const INITIAL_DAYS = 60;
+const INCREMENT_DAYS = 60;
 
 const USER_STYLES: Array<{ match: (id: string) => boolean; bg: string; text: string; label: string; name: string }> = [
   { match: (id) => id === "00000000-0000-0000-0000-000000000001" || id.toLowerCase().includes("alice"), bg: "#1a3066", text: "#6c9cff", label: "B", name: "Alice" },
@@ -532,20 +532,20 @@ export default function HistoryScreen() {
   const visibleGroups = allGroups.slice(0, visibleDays);
   const hasMore = allGroups.length > visibleDays;
 
-  // IntersectionObserver for infinite scroll — re-attach when hasMore changes
+  // IntersectionObserver for infinite scroll — re-attach when visibleDays changes
   useEffect(() => {
-    if (!sentinelRef.current) return;
+    if (!hasMore || !sentinelRef.current) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
           setVisibleDays((d) => d + INCREMENT_DAYS);
         }
       },
-      { rootMargin: "200px" }
+      { rootMargin: "400px" }
     );
     observer.observe(sentinelRef.current);
     return () => observer.disconnect();
-  }, [hasMore]);
+  }, [hasMore, visibleDays]);
 
   const selectedCategory = selectedExpense
     ? categoryMap.get(selectedExpense.category_id)
@@ -628,7 +628,7 @@ export default function HistoryScreen() {
       </div>
 
       {/* Infinite scroll sentinel */}
-      {hasMore && <div ref={sentinelRef} style={{ height: 1 }} />}
+      {hasMore && <div ref={sentinelRef} style={{ height: 20 }} />}
 
       {/* Detail sheet */}
       <DetailSheet

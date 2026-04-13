@@ -12,28 +12,25 @@ export function getTabIndex(path: string): number {
 
 // ── Shared state ─────────────────────────────────────────────────────────────
 
-/** The main content element — set by Shell, read by BottomNav */
 export const contentEl = signal<HTMLElement | null>(null);
-
-/**
- * Direction of the pending transition.
- *  1 = forward (slide left — higher tab index)
- * -1 = backward (slide right — lower tab index)
- *  0 = no pending transition
- */
 export const pendingDirection = signal<number>(0);
-
-/** Resolves when the animate-in completes. Screens can await this. */
 export const transitionDone = signal<Promise<void> | null>(null);
 
-// Track in-flight animations so rapid taps can cancel them
-let outAnim: { stop: () => void } | null = null;
 let inAnim: { stop: () => void } | null = null;
-
-// Resolver for the current transitionDone promise
 let resolveTransitionDone: (() => void) | null = null;
+let pendingRafIds: number[] = [];
+let outTimer: number | null = null;
+
+// ── Reveal (initial page load) ───────────────────────────────────────────────
+
+export function revealContent() {
+  const el = contentEl.value;
+  if (el) el.style.opacity = "1";
+}
 
 // ── Navigate with transition ─────────────────────────────────────────────────
+
+const OUT_DURATION = 180;
 
 export function navigateTab(
   newPath: string,
@@ -49,48 +46,38 @@ export function navigateTab(
     return;
   }
 
-  // Cancel any in-progress transition
-  if (outAnim) { outAnim.stop(); outAnim = null; }
-  if (inAnim) { inAnim.stop(); inAnim = null; }
+  cancelAll(el);
 
   const dir = newIdx > oldIdx ? 1 : -1;
   pendingDirection.value = dir;
 
-  // Create the transitionDone promise NOW (before route change)
-  // so child components that mount after routeFn() can await it
   transitionDone.value = new Promise<void>((resolve) => {
     resolveTransitionDone = resolve;
   });
 
-  // Animate out
-  el.style.willChange = "transform, opacity";
+  // OUT: CSS transition
   const outX = `${dir * -15}%`;
+  el.style.transition = `opacity ${OUT_DURATION}ms ease-out, transform ${OUT_DURATION}ms ease-out`;
+  el.style.opacity = "0";
+  el.style.transform = `translateX(${outX})`;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  outAnim = (animate as any)(
-    el,
-    { opacity: [1, 0], transform: [`translateX(0%)`, `translateX(${outX})`] },
-    { duration: 0.18, easing: "ease-out" }
-  );
-
-  (outAnim as any).then(() => {
-    outAnim = null;
-    const inX = `${dir * 30}%`;
-    el.style.opacity = "0";
-    el.style.transform = `translateX(${inX})`;
+  outTimer = window.setTimeout(() => {
+    outTimer = null;
+    el.style.transition = "";
+    el.style.transform = `translateX(${dir * 30}%)`;
+    // opacity is already "0" inline — matches CSS class
     routeFn(newPath);
-  });
+  }, OUT_DURATION);
 }
 
 /**
- * Called by Shell after route change to animate in the new content.
+ * Called by Shell after route change. Double-rAF before animation.
  */
 export function animateIn(): Promise<void> {
   const dir = pendingDirection.value;
   const el = contentEl.value;
 
   if (dir === 0 || !el) {
-    // Resolve any pending promise
     if (resolveTransitionDone) { resolveTransitionDone(); resolveTransitionDone = null; }
     return Promise.resolve();
   }
@@ -98,26 +85,39 @@ export function animateIn(): Promise<void> {
   pendingDirection.value = 0;
 
   const fromX = `${dir * 30}%`;
-  el.style.willChange = "transform, opacity";
+  el.style.transform = `translateX(${fromX})`;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  inAnim = (animate as any)(
-    el,
-    { opacity: [0, 1], transform: [`translateX(${fromX})`, `translateX(0%)`] },
-    { type: "spring", stiffness: 400, damping: 35 }
-  );
+  const id1 = requestAnimationFrame(() => {
+    const id2 = requestAnimationFrame(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      inAnim = (animate as any)(
+        el,
+        { opacity: [0, 1], transform: [`translateX(${fromX})`, `translateX(0%)`] },
+        { type: "spring", stiffness: 400, damping: 35 }
+      );
 
-  (inAnim as any).then(() => {
-    inAnim = null;
-    if (el) {
-      el.style.willChange = "";
-      el.style.transform = "";
-      el.style.opacity = "";
-    }
-    // Resolve the promise that child screens are awaiting
-    if (resolveTransitionDone) { resolveTransitionDone(); resolveTransitionDone = null; }
+      (inAnim as any).then(() => {
+        inAnim = null;
+        if (el) {
+          el.style.transform = "";
+          el.style.opacity = "1";
+        }
+        if (resolveTransitionDone) { resolveTransitionDone(); resolveTransitionDone = null; }
+      });
+    });
+    pendingRafIds.push(id2);
   });
+  pendingRafIds.push(id1);
 
-  // Return the existing transitionDone promise (screens already have a ref to it)
   return transitionDone.value ?? Promise.resolve();
+}
+
+function cancelAll(el: HTMLElement) {
+  if (outTimer !== null) { clearTimeout(outTimer); outTimer = null; }
+  if (inAnim) { inAnim.stop(); inAnim = null; }
+  for (const id of pendingRafIds) cancelAnimationFrame(id);
+  pendingRafIds = [];
+  el.style.transition = "";
+  el.style.opacity = "1";
+  el.style.transform = "";
 }
