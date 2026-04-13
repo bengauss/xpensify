@@ -263,9 +263,9 @@ export default function RecurringScreen() {
 
     // Persist to server
     try {
-      const res = await api.api.recurring[":id"].$patch({
+      const res = await (api.api.recurring[":id"].$patch as any)({
         param: { id: template.id },
-        json: { active: newActive } as any,
+        json: { active: newActive },
       });
       if (!res.ok) throw new Error("Failed");
     } catch {
