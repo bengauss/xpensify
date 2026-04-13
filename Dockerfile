@@ -5,6 +5,9 @@ COPY client/package.json client/package-lock.json* ./
 RUN npm ci
 COPY client/ ./
 COPY server/src/ /app/server/src/
+# VITE_* env vars must be present at build time for import.meta.env
+ARG VITE_VAPID_PUBLIC_KEY
+ENV VITE_VAPID_PUBLIC_KEY=$VITE_VAPID_PUBLIC_KEY
 RUN npm run build
 
 # Stage 2: Build server
@@ -28,6 +31,7 @@ COPY --from=client-build /app/client/dist ./client/dist
 
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV DB_PATH=/app/data/xpensify.db
 
 EXPOSE 3000
 CMD ["node", "server/dist/index.js"]
