@@ -3,7 +3,7 @@ import { animate } from "motion";
 import { springs } from "@/lib/animations";
 import { transitionDone } from "@/lib/transitions";
 
-const MOUNT_DELAY = 150; // ms after mount/transition before entrance starts
+const MOUNT_DELAY = 80; // ms after mount/transition before entrance starts
 const TEXT_STAGGER = 30; // ms between row text animations
 const AMOUNT_STAGGER = 20; // ms between row amount animations
 const MAX_ANIMATED_ROWS = 15; // only animate above-the-fold

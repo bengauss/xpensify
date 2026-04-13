@@ -5,13 +5,15 @@ import type { CategoryBreakdownItem } from "@/lib/analytics";
 interface CategoryBarsProps {
   breakdown: CategoryBreakdownItem[];
   onCategoryTap?: (categoryId: string) => void;
+  /** When false, bars stay at width 0 and amounts hidden. Set to true to trigger animations. */
+  enabled?: boolean;
 }
 
 function formatAmount(cents: number): string {
   return (cents / 100).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function CategoryBars({ breakdown, onCategoryTap }: CategoryBarsProps) {
+export function CategoryBars({ breakdown, onCategoryTap, enabled = true }: CategoryBarsProps) {
   const barRefs = useRef<(HTMLDivElement | null)[]>([]);
   const amountRefs = useRef<(HTMLSpanElement | null)[]>([]);
   const dataKey = breakdown.map((b) => `${b.category_id}:${b.total}`).join("|");
@@ -22,6 +24,7 @@ export function CategoryBars({ breakdown, onCategoryTap }: CategoryBarsProps) {
   const maxTotal = breakdown.length > 0 ? breakdown[0].total : 1;
 
   useEffect(() => {
+    if (!enabled) return;
     if (dataKey === prevKeyRef.current) return;
     prevKeyRef.current = dataKey;
 
@@ -85,7 +88,7 @@ export function CategoryBars({ breakdown, onCategoryTap }: CategoryBarsProps) {
       for (const t of fadeTimers.current) clearTimeout(t);
       fadeTimers.current = [];
     };
-  }, [dataKey]);
+  }, [dataKey, enabled]);
 
   if (breakdown.length === 0) {
     return (
@@ -119,7 +122,7 @@ export function CategoryBars({ breakdown, onCategoryTap }: CategoryBarsProps) {
           {/* Bar track */}
           <div
             class="flex-1 overflow-hidden"
-            style={{ height: 20, borderRadius: 6, backgroundColor: "var(--color-text-ghost)" }}
+            style={{ height: 20, borderRadius: 6 }}
           >
             <div
               ref={(el) => { barRefs.current[index] = el; }}

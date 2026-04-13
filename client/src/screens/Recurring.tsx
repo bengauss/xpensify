@@ -220,11 +220,9 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
 function TemplateRow({
   template,
   onTap,
-  onToggle,
 }: {
   template: RecurringTemplate;
   onTap: () => void;
-  onToggle: () => void;
 }) {
   const IconComponent = categoryIcons[template.category_icon ?? ""] ?? null;
   const color = template.category_color ?? "var(--color-accent)";
@@ -234,29 +232,29 @@ function TemplateRow({
     <button
       data-row
       onClick={onTap}
-      class="flex items-center gap-3 w-full text-left px-1 py-2 cursor-pointer bg-transparent border-0"
+      class="flex items-center gap-3 w-full text-left px-1 py-2.5 cursor-pointer bg-transparent border-0"
     >
-      {/* Category icon */}
-      <div
-        class="flex-shrink-0 flex items-center justify-center rounded-xl"
-        style={{ width: 34, height: 34, backgroundColor: `${color}1a` }}
-      >
-        {IconComponent && <IconComponent color={color} size={18} />}
-      </div>
+      {/* Icon + text — animated together */}
+      <div data-row-text class="flex items-center gap-3 flex-1 min-w-0" style={{ opacity: 0, transform: "translateX(-20px)" }}>
+        {/* Category icon */}
+        <div
+          class="flex-shrink-0 flex items-center justify-center rounded-xl"
+          style={{ width: 34, height: 34, backgroundColor: `${color}1a` }}
+        >
+          {IconComponent && <IconComponent color={color} size={18} />}
+        </div>
 
-      {/* Labels */}
-      <div data-row-text class="flex-1 min-w-0" style={{ opacity: 0, transform: "translateX(-20px)" }}>
-        <p class="text-sm text-text-primary truncate">{label}</p>
-        <p class="text-xs text-text-secondary">{scheduleText(template)}</p>
+        {/* Labels */}
+        <div class="flex-1 min-w-0">
+          <p class="text-sm text-text-primary truncate">{label}</p>
+          <p class="text-xs text-text-secondary">{scheduleText(template)}</p>
+        </div>
       </div>
 
       {/* Amount */}
-      <span data-row-amount class="text-sm text-text-body tabular-nums mr-3" style={{ opacity: 0 }}>
+      <span data-row-amount class="text-sm text-text-body tabular-nums" style={{ opacity: 0 }}>
         EUR {formatCents(template.amount)}
       </span>
-
-      {/* Toggle */}
-      <Toggle active={template.active === 1} onToggle={onToggle} />
     </button>
   );
 }
@@ -366,7 +364,6 @@ export default function RecurringScreen() {
                   key={t.id}
                   template={t}
                   onTap={() => route(`/recurring/edit/${t.id}`)}
-                  onToggle={() => handleToggle(t)}
                 />
               ))}
             </div>
@@ -374,17 +371,24 @@ export default function RecurringScreen() {
         </div>
       )}
 
-      {/* Add button */}
-      <button
-        onClick={() => route("/recurring/new")}
-        class="w-full rounded-xl py-3 text-sm font-medium cursor-pointer border bg-transparent"
-        style={{
-          borderColor: "var(--color-accent)",
-          color: "var(--color-accent)",
-        }}
-      >
-        + add recurring expense
-      </button>
+      {/* Floating add button — sticky to bottom-right of scroll area */}
+      <div class="sticky z-30 self-end" style={{ bottom: 16, marginTop: -28 }}>
+        <button
+          onClick={() => route("/recurring/new")}
+          class="flex items-center justify-center rounded-full cursor-pointer border-0"
+          style={{
+            width: 44,
+            height: 44,
+            backgroundColor: "var(--color-accent)",
+            color: "var(--color-bg-primary)",
+            boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+          }}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+      </div>
     </div>
   );
 }

@@ -41,27 +41,40 @@ export async function sync(): Promise<void> {
     subcategories?: import("@/db/local").Subcategory[];
   };
 
-  // Mark the records we sent as synced
-  if (pending.length > 0) {
-    const sentIds = pending.map((e) => e.id);
-    await db.expenses.where("id").anyOf(sentIds).modify({ sync_status: "synced" });
-  }
+  // Apply all sync changes in a single transaction so liveQuery fires once
+  await db.transaction(
+    "rw",
+    [db.expenses, db.categories, db.subcategories],
+    async () => {
+      // Mark the records we sent as synced
+      if (pending.length > 0) {
+        const sentIds = pending.map((e) => e.id);
+        await db.expenses.where("id").anyOf(sentIds).modify({ sync_status: "synced" });
+      }
 
-  // Upsert server changes
-  if (data.server_changes && data.server_changes.length > 0) {
-    const withStatus = data.server_changes.map((e) => ({ ...e, sync_status: "synced" as const }));
-    await db.expenses.bulkPut(withStatus);
-  }
+      // Upsert server changes
+      if (data.server_changes && data.server_changes.length > 0) {
+        const withStatus = data.server_changes.map((e) => ({ ...e, sync_status: "synced" as const }));
+        await db.expenses.bulkPut(withStatus);
+      }
 
-  // Replace categories and subcategories from server (clear stale entries)
-  if (data.categories && data.categories.length > 0) {
-    await db.categories.clear();
-    await db.categories.bulkPut(data.categories);
-  }
-  if (data.subcategories && data.subcategories.length > 0) {
-    await db.subcategories.clear();
-    await db.subcategories.bulkPut(data.subcategories);
-  }
+      // Upsert categories/subcategories from server, removing stale entries
+      if (data.categories && data.categories.length > 0) {
+        const serverCatIds = new Set(data.categories.map((c) => c.id));
+        const localCats = await db.categories.toArray();
+        const staleIds = localCats.filter((c) => !serverCatIds.has(c.id)).map((c) => c.id);
+        if (staleIds.length > 0) await db.categories.bulkDelete(staleIds);
+        await db.categories.bulkPut(data.categories);
+      }
+      if (data.subcategories && data.subcategories.length > 0) {
+        const serverSubIds = new Set(data.subcategories.map((s) => s.id));
+        const localSubs = await db.subcategories.toArray();
+        const staleIds = localSubs.filter((s) => !serverSubIds.has(s.id)).map((s) => s.id);
+        if (staleIds.length > 0) await db.subcategories.bulkDelete(staleIds);
+        await db.subcategories.bulkPut(data.subcategories);
+      }
+    }
+  );
 
   // Persist the new watermark
   if (data.sync_timestamp) {

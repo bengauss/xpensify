@@ -219,39 +219,41 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
       class="w-full text-left flex items-center gap-3 px-1 rounded-xl"
       style={{ WebkitTapHighlightColor: "transparent", paddingTop: 10, paddingBottom: 10 }}
     >
-      {/* Category icon + user badge */}
-      <div class="flex-shrink-0 relative" style={{ width: 36, height: 36 }}>
-        <div
-          class="flex items-center justify-center rounded-xl"
-          style={{
-            width: 36,
-            height: 36,
-            backgroundColor: color + "22",
-          }}
-        >
-          <IconComponent color={color} size={18} />
+      {/* Icon + text — animated together */}
+      <div data-row-text class="flex items-center gap-3 flex-1 min-w-0" style={{ opacity: 0, transform: "translateX(-20px)" }}>
+        {/* Category icon + user badge */}
+        <div class="flex-shrink-0 relative" style={{ width: 36, height: 36 }}>
+          <div
+            class="flex items-center justify-center rounded-xl"
+            style={{
+              width: 36,
+              height: 36,
+              backgroundColor: color + "22",
+            }}
+          >
+            <IconComponent color={color} size={18} />
+          </div>
+          {/* User initial badge */}
+          <div
+            class="absolute flex items-center justify-center rounded-full font-bold"
+            style={{
+              width: 16,
+              height: 16,
+              fontSize: 8,
+              lineHeight: 1,
+              bottom: -3,
+              right: -3,
+              backgroundColor: style.bg,
+              color: style.text,
+              border: "1.5px solid #0c0d12",
+            }}
+          >
+            {userLabel}
+          </div>
         </div>
-        {/* User initial badge */}
-        <div
-          class="absolute flex items-center justify-center rounded-full font-bold"
-          style={{
-            width: 16,
-            height: 16,
-            fontSize: 8,
-            lineHeight: 1,
-            bottom: -3,
-            right: -3,
-            backgroundColor: style.bg,
-            color: style.text,
-            border: "1.5px solid #0c0d12",
-          }}
-        >
-          {userLabel}
-        </div>
-      </div>
 
-      {/* Labels: category · subcategory */}
-      <div data-row-text class="flex-1 min-w-0" style={{ opacity: 0, transform: "translateX(-20px)" }}>
+        {/* Labels: category · subcategory */}
+        <div class="flex-1 min-w-0">
         <div class="flex items-center gap-1.5 flex-wrap">
           <span class="text-base">
             <span style={{ color: "var(--color-text-secondary)" }}>{category?.name ?? "other"}</span>
@@ -286,6 +288,7 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
             {expense.note}
           </p>
         )}
+        </div>
       </div>
 
       {/* Amount — no currency prefix */}

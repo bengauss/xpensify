@@ -92,10 +92,10 @@ export default function AnalyticsScreen() {
   const prevTotalRef = useRef<number>(-1);
   const prevAvgRef = useRef<number>(-1);
   const cancelAnims = useRef<(() => void)[]>([]);
-  const readyRef = useRef(false);
+  const [entranceReady, setEntranceReady] = useState(false);
 
   // Wait for entrance delay before starting any animations
-  useEntrance(() => { readyRef.current = true; });
+  useEntrance(() => { setEntranceReady(true); });
 
   const allExpenses = useLiveQuery(
     () => db.expenses.filter((e) => e.deleted === 0).toArray(),
@@ -160,7 +160,7 @@ export default function AnalyticsScreen() {
 
   // Rolling number animation — waits for entrance delay on initial load
   useEffect(() => {
-    if (!analytics || !readyRef.current) return;
+    if (!analytics || !entranceReady) return;
 
     // Cancel previous animations
     for (const cancel of cancelAnims.current) cancel();
@@ -189,7 +189,7 @@ export default function AnalyticsScreen() {
       for (const cancel of cancelAnims.current) cancel();
       cancelAnims.current = [];
     };
-  }, [analytics?.currentTotal, analytics?.dailyAvg]);
+  }, [analytics?.currentTotal, analytics?.dailyAvg, entranceReady]);
 
   function handlePrev() {
     const { year, month } = prevYearMonth(selectedYear, selectedMonth);
@@ -349,6 +349,7 @@ export default function AnalyticsScreen() {
             <CategoryBars
               breakdown={analytics.breakdown}
               onCategoryTap={handleCategoryTap}
+              enabled={entranceReady}
             />
           </div>
 

@@ -23,19 +23,18 @@ export const contentEl = signal<HTMLElement | null>(null);
  */
 export const pendingDirection = signal<number>(0);
 
-/** Resolves when the animate-in completes. CategorySelector can await this. */
+/** Resolves when the animate-in completes. Screens can await this. */
 export const transitionDone = signal<Promise<void> | null>(null);
 
 // Track in-flight animations so rapid taps can cancel them
 let outAnim: { stop: () => void } | null = null;
 let inAnim: { stop: () => void } | null = null;
 
+// Resolver for the current transitionDone promise
+let resolveTransitionDone: (() => void) | null = null;
+
 // ── Navigate with transition ─────────────────────────────────────────────────
 
-/**
- * Called by BottomNav to navigate between tabs with a directional transition.
- * `routeFn` is preact-iso's `route()`.
- */
 export function navigateTab(
   newPath: string,
   currentPath: string,
@@ -45,7 +44,6 @@ export function navigateTab(
   const newIdx = getTabIndex(newPath);
   const el = contentEl.value;
 
-  // No transition for same tab, non-tab routes, or missing element
   if (oldIdx === newIdx || oldIdx < 0 || newIdx < 0 || !el) {
     routeFn(newPath);
     return;
@@ -55,15 +53,19 @@ export function navigateTab(
   if (outAnim) { outAnim.stop(); outAnim = null; }
   if (inAnim) { inAnim.stop(); inAnim = null; }
 
-  // Direction: 1 = forward (slides left), -1 = backward (slides right)
   const dir = newIdx > oldIdx ? 1 : -1;
   pendingDirection.value = dir;
 
-  // Animate out: opacity 1→0, translateX 0→dir*-15%
+  // Create the transitionDone promise NOW (before route change)
+  // so child components that mount after routeFn() can await it
+  transitionDone.value = new Promise<void>((resolve) => {
+    resolveTransitionDone = resolve;
+  });
+
+  // Animate out
   el.style.willChange = "transform, opacity";
   const outX = `${dir * -15}%`;
 
-  // Use animateMini-style call: element, DOMKeyframesDefinition, options
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   outAnim = (animate as any)(
     el,
@@ -73,30 +75,28 @@ export function navigateTab(
 
   (outAnim as any).then(() => {
     outAnim = null;
-    // Pre-position for incoming animation
     const inX = `${dir * 30}%`;
     el.style.opacity = "0";
     el.style.transform = `translateX(${inX})`;
-    // Navigate — triggers re-render with new screen
     routeFn(newPath);
   });
 }
 
 /**
  * Called by Shell after route change to animate in the new content.
- * Returns a promise that resolves when the animation completes.
  */
 export function animateIn(): Promise<void> {
   const dir = pendingDirection.value;
   const el = contentEl.value;
 
   if (dir === 0 || !el) {
+    // Resolve any pending promise
+    if (resolveTransitionDone) { resolveTransitionDone(); resolveTransitionDone = null; }
     return Promise.resolve();
   }
 
   pendingDirection.value = 0;
 
-  // Animate in: from dir*30% → 0, opacity 0→1
   const fromX = `${dir * 30}%`;
   el.style.willChange = "transform, opacity";
 
@@ -107,18 +107,17 @@ export function animateIn(): Promise<void> {
     { type: "spring", stiffness: 400, damping: 35 }
   );
 
-  const done = new Promise<void>((resolve) => {
-    (inAnim as any).then(() => {
-      inAnim = null;
-      if (el) {
-        el.style.willChange = "";
-        el.style.transform = "";
-        el.style.opacity = "";
-      }
-      resolve();
-    });
+  (inAnim as any).then(() => {
+    inAnim = null;
+    if (el) {
+      el.style.willChange = "";
+      el.style.transform = "";
+      el.style.opacity = "";
+    }
+    // Resolve the promise that child screens are awaiting
+    if (resolveTransitionDone) { resolveTransitionDone(); resolveTransitionDone = null; }
   });
 
-  transitionDone.value = done;
-  return done;
+  // Return the existing transitionDone promise (screens already have a ref to it)
+  return transitionDone.value ?? Promise.resolve();
 }

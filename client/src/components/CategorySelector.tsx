@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "preact/hooks";
 import { animate } from "motion";
 import { springs } from "@/lib/animations";
 import { categoryIcons } from "@/icons";
-import { transitionDone } from "@/lib/transitions";
+import { useEntrance } from "@/lib/entrance";
 import type { Category, Subcategory } from "@/db/local";
 
 const GRID_COLS = 3;
@@ -77,32 +77,13 @@ export function CategorySelector({
         .sort((a, b) => a.sort_order - b.sort_order)
     : [];
 
-  // Mount reveal — staggered cascade from top-left, waits for tab transition + 150ms
-  useEffect(() => {
+  // Mount reveal — staggered cascade, uses useEntrance for consistent timing
+  useEntrance(() => {
     if (!compact && needsMountReveal.current && gridRef.current) {
       needsMountReveal.current = false;
-      const grid = gridRef.current;
-      let cancelled = false;
-
-      function doReveal() {
-        if (cancelled) return;
-        const timer = setTimeout(() => {
-          if (!cancelled) revealGrid(grid);
-        }, 150);
-        return () => clearTimeout(timer);
-      }
-
-      const pending = transitionDone.value;
-      let cleanup: (() => void) | undefined;
-      if (pending) {
-        pending.then(() => { cleanup = doReveal(); });
-      } else {
-        cleanup = doReveal();
-      }
-
-      return () => { cancelled = true; cleanup?.(); };
+      revealGrid(gridRef.current);
     }
-  }, [compact]);
+  });
 
   // Animate grid out + pills in when selectedCategoryId changes (non-compact)
   useEffect(() => {
