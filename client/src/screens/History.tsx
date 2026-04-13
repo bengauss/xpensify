@@ -17,13 +17,12 @@ import { historyFilter } from "@/lib/filters";
 const INITIAL_DAYS = 30;
 const INCREMENT_DAYS = 30;
 
-const USER_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  // fallback by username — assign by known names
-  alice: { bg: "#1a3066", text: "#6c9cff", label: "B" },
-  bob: { bg: "#2d1a52", text: "#9775fa", label: "Y" },
-};
+const USER_STYLES: Array<{ match: (id: string) => boolean; bg: string; text: string; label: string; name: string }> = [
+  { match: (id) => id === "00000000-0000-0000-0000-000000000001" || id.toLowerCase().includes("alice"), bg: "#1a3066", text: "#6c9cff", label: "B", name: "Alice" },
+  { match: (id) => id === "00000000-0000-0000-0000-000000000002" || id.toLowerCase().includes("bob"), bg: "#2d1a52", text: "#9775fa", label: "Y", name: "Bob" },
+];
 
-const DEFAULT_USER_COLOR = { bg: "#1a3066", text: "#6c9cff", label: "?" };
+const DEFAULT_USER_COLOR = { bg: "#1a3066", text: "#6c9cff", label: "?", name: "?" };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -33,6 +32,10 @@ function getDateKey(timestamp: string): string {
 
 function formatAmount(cents: number): string {
   return `EUR ${(cents / 100).toFixed(2)}`;
+}
+
+function formatRowAmount(cents: number): string {
+  return (cents / 100).toFixed(2);
 }
 
 const MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
@@ -58,13 +61,12 @@ function formatFullDate(dateKey: string): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-function getUserStyle(userId: string, displayName?: string): { bg: string; text: string; label: string } {
-  const nameLower = (displayName ?? userId ?? "").toLowerCase();
-  for (const key of Object.keys(USER_COLORS)) {
-    if (nameLower.includes(key)) return USER_COLORS[key];
+function getUserStyle(userId: string): { bg: string; text: string; label: string; name: string } {
+  for (const style of USER_STYLES) {
+    if (style.match(userId)) return style;
   }
-  const initial = (displayName ?? userId ?? "?")[0]?.toUpperCase() ?? "?";
-  return { ...DEFAULT_USER_COLOR, label: initial };
+  const initial = (userId ?? "?")[0]?.toUpperCase() ?? "?";
+  return { ...DEFAULT_USER_COLOR, label: initial, name: userId };
 }
 
 interface DayGroup {
@@ -210,30 +212,51 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
       onPointerLeave={(e) => {
         animate(e.currentTarget, { scale: 1 }, springs.snappy);
       }}
-      class="w-full text-left flex items-center gap-3 px-1 py-2.5 rounded-xl"
-      style={{ WebkitTapHighlightColor: "transparent" }}
+      class="w-full text-left flex items-center gap-3 px-1 rounded-xl"
+      style={{ WebkitTapHighlightColor: "transparent", paddingTop: 10, paddingBottom: 10 }}
     >
-      {/* Category icon container */}
-      <div
-        class="flex-shrink-0 flex items-center justify-center rounded-xl"
-        style={{
-          width: 36,
-          height: 36,
-          backgroundColor: color + "22",
-        }}
-      >
-        <IconComponent color={color} size={18} />
+      {/* Category icon + user badge */}
+      <div class="flex-shrink-0 relative" style={{ width: 36, height: 36 }}>
+        <div
+          class="flex items-center justify-center rounded-xl"
+          style={{
+            width: 36,
+            height: 36,
+            backgroundColor: color + "22",
+          }}
+        >
+          <IconComponent color={color} size={18} />
+        </div>
+        {/* User initial badge */}
+        <div
+          class="absolute flex items-center justify-center rounded-full font-bold"
+          style={{
+            width: 16,
+            height: 16,
+            fontSize: 8,
+            lineHeight: 1,
+            bottom: -3,
+            right: -3,
+            backgroundColor: style.bg,
+            color: style.text,
+            border: "1.5px solid #0c0d12",
+          }}
+        >
+          {userLabel}
+        </div>
       </div>
 
-      {/* Labels */}
+      {/* Labels: category · subcategory */}
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-1.5 flex-wrap">
-          <span class="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>
-            {subcategory?.name ?? "expense"}
+          <span class="text-base">
+            <span style={{ color: "var(--color-text-secondary)" }}>{category?.name ?? "other"}</span>
+            <span style={{ color: "var(--color-text-muted)" }}> · </span>
+            <span class="font-medium" style={{ color: "var(--color-text-body)" }}>{subcategory?.name ?? "expense"}</span>
           </span>
           {isRecurring && (
             <span
-              class="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+              class="text-xs px-1.5 py-0.5 rounded-full font-medium"
               style={{
                 backgroundColor: "rgba(94,92,230,0.18)",
                 color: "#9775fa",
@@ -244,7 +267,7 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
           )}
           {isPending && !isRecurring && (
             <span
-              class="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+              class="text-xs px-1.5 py-0.5 rounded-full font-medium"
               style={{
                 backgroundColor: "rgba(255,159,10,0.15)",
                 color: "#ff9f0a",
@@ -255,28 +278,15 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
           )}
         </div>
         {expense.note && (
-          <p class="text-xs truncate mt-0.5" style={{ color: "var(--color-text-secondary)" }}>
+          <p class="text-sm truncate mt-0.5" style={{ color: "var(--color-text-secondary)" }}>
             {expense.note}
           </p>
         )}
       </div>
 
-      {/* User avatar */}
-      <div
-        class="flex-shrink-0 flex items-center justify-center rounded-full text-[10px] font-bold"
-        style={{
-          width: 18,
-          height: 18,
-          backgroundColor: style.bg,
-          color: style.text,
-        }}
-      >
-        {userLabel}
-      </div>
-
-      {/* Amount */}
-      <span class="flex-shrink-0 text-sm font-medium tabular-nums" style={{ color: "var(--color-text-primary)" }}>
-        {formatAmount(expense.amount)}
+      {/* Amount — no currency prefix */}
+      <span class="flex-shrink-0 text-base font-medium tabular-nums" style={{ color: "var(--color-text-primary)" }}>
+        {formatRowAmount(expense.amount)}
       </span>
     </button>
   );
@@ -291,13 +301,16 @@ interface DayHeaderProps {
 
 function DayHeader({ dateKey, total }: DayHeaderProps) {
   return (
-    <div class="flex items-center justify-between px-1 pt-4 pb-1">
-      <span class="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-secondary)" }}>
-        {formatDateLabel(dateKey)}
-      </span>
-      <span class="text-xs tabular-nums" style={{ color: "var(--color-text-tertiary)" }}>
-        {formatAmount(total)}
-      </span>
+    <div class="flex flex-col gap-1 pt-5 pb-1">
+      <div class="flex items-center justify-between px-1">
+        <span class="text-sm font-semibold tracking-wider" style={{ color: "var(--color-text-tertiary)" }}>
+          {formatDateLabel(dateKey)}
+        </span>
+        <span class="text-sm tabular-nums" style={{ color: "var(--color-text-tertiary)" }}>
+          {formatAmount(total)}
+        </span>
+      </div>
+      <div class="h-px w-full bg-accent opacity-30" />
     </div>
   );
 }
@@ -389,7 +402,7 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
               {userStyle.label}
             </div>
             <span class="text-sm" style={{ color: "var(--color-text-primary)" }}>
-              {userStyle.label === "B" ? "Alice" : userStyle.label === "Y" ? "Bob" : expense.user_id}
+              {userStyle.name}
             </span>
           </div>
         </div>

@@ -8,12 +8,11 @@ interface CategoryBarsProps {
 }
 
 function formatAmount(cents: number): string {
-  return `EUR ${(cents / 100).toFixed(2)}`;
+  return (cents / 100).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export function CategoryBars({ breakdown, onCategoryTap }: CategoryBarsProps) {
   const barRefs = useRef<(HTMLDivElement | null)[]>([]);
-  // Track a key representing the current data to re-trigger animations
   const dataKey = breakdown.map((b) => `${b.category_id}:${b.total}`).join("|");
   const prevKeyRef = useRef<string>("");
 
@@ -48,7 +47,7 @@ export function CategoryBars({ breakdown, onCategoryTap }: CategoryBarsProps) {
   }
 
   return (
-    <div class="flex flex-col gap-2">
+    <div class="flex flex-col gap-3">
       {breakdown.map((item, index) => {
         const targetPct = maxTotal > 0 ? (item.total / maxTotal) * 100 : 0;
         return (
@@ -60,9 +59,10 @@ export function CategoryBars({ breakdown, onCategoryTap }: CategoryBarsProps) {
           >
             {/* Category name — fixed width, right-aligned */}
             <span
-              class="flex-shrink-0 text-xs text-right truncate"
+              class="flex-shrink-0 text-right truncate"
               style={{
-                width: 80,
+                width: 100,
+                fontSize: 13,
                 color: "var(--color-text-secondary)",
               }}
             >
@@ -71,25 +71,29 @@ export function CategoryBars({ breakdown, onCategoryTap }: CategoryBarsProps) {
 
             {/* Bar track */}
             <div
-              class="flex-1 rounded-full overflow-hidden"
-              style={{ height: 8, backgroundColor: "var(--color-text-ghost)" }}
+              class="flex-1 overflow-hidden"
+              style={{ height: 20, borderRadius: 6, backgroundColor: "var(--color-text-ghost)" }}
             >
               <div
                 ref={(el) => { barRefs.current[index] = el; }}
-                class="h-full rounded-full"
+                class="h-full"
                 style={{
                   width: `${targetPct}%`,
+                  borderRadius: 6,
                   backgroundColor: item.category_color,
                   willChange: "width",
                 }}
               />
             </div>
 
-            {/* Amount — right-aligned */}
+            {/* Amount — right-aligned, no wrap */}
             <span
-              class="flex-shrink-0 text-xs tabular-nums text-right"
+              class="flex-shrink-0 tabular-nums text-right"
               style={{
-                width: 72,
+                minWidth: 70,
+                whiteSpace: "nowrap",
+                fontSize: 14,
+                fontWeight: 500,
                 color: "var(--color-text-primary)",
               }}
             >

@@ -22,8 +22,8 @@ function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
 
-function formatEur(cents: number): string {
-  return `EUR ${(cents / 100).toFixed(2)}`;
+function formatAmount(cents: number): string {
+  return (cents / 100).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatPct(a: number, b: number): string {
@@ -136,7 +136,7 @@ export default function AnalyticsScreen() {
       const el = totalRef.current;
       animate(
         (progress: number) => {
-          el.textContent = formatEur(Math.round(oldTotal + (newTotal - oldTotal) * progress));
+          el.textContent = formatAmount(Math.round(oldTotal + (newTotal - oldTotal) * progress));
         },
         { duration: 0.4 }
       );
@@ -146,7 +146,7 @@ export default function AnalyticsScreen() {
       const el = avgRef.current;
       animate(
         (progress: number) => {
-          el.textContent = formatEur(Math.round(oldAvg + (newAvg - oldAvg) * progress));
+          el.textContent = formatAmount(Math.round(oldAvg + (newAvg - oldAvg) * progress));
         },
         { duration: 0.4 }
       );
@@ -250,33 +250,32 @@ export default function AnalyticsScreen() {
       {/* Content */}
       {analytics && (
         <>
-          {/* Summary cards — inlined so refs can be applied to spans */}
+          {/* Summary cards */}
           <div class="flex gap-3">
             {/* Total spent */}
             <div
               class="flex-1 rounded-xl p-4 flex flex-col gap-1"
               style={{ backgroundColor: "var(--color-bg-surface)" }}
             >
-              <span class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+              <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
                 total spent
               </span>
               <span
                 ref={totalRef}
-                class="text-xl font-semibold tabular-nums"
-                style={{ color: "var(--color-text-primary)" }}
+                class="tabular-nums"
+                style={{ fontSize: 28, fontWeight: 300, color: "var(--color-text-primary)" }}
               >
-                {formatEur(currentTotal)}
+                {formatAmount(currentTotal)}
               </span>
               {prevTotal > 0 && (
                 <span
-                  class="text-xs"
-                  style={{ color: isLess ? "var(--color-success)" : "var(--color-danger)" }}
+                  style={{ fontSize: 13, color: isLess ? "var(--color-success)" : "var(--color-danger)" }}
                 >
                   {isLess ? "↓" : "↑"} {pct} {isLess ? "less" : "more"}
                 </span>
               )}
               {prevTotal === 0 && (
-                <span class="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+                <span style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>
                   no prev. data
                 </span>
               )}
@@ -287,17 +286,17 @@ export default function AnalyticsScreen() {
               class="flex-1 rounded-xl p-4 flex flex-col gap-1"
               style={{ backgroundColor: "var(--color-bg-surface)" }}
             >
-              <span class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+              <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
                 daily average
               </span>
               <span
                 ref={avgRef}
-                class="text-xl font-semibold tabular-nums"
-                style={{ color: "var(--color-text-primary)" }}
+                class="tabular-nums"
+                style={{ fontSize: 28, fontWeight: 300, color: "var(--color-text-primary)" }}
               >
-                {formatEur(dailyAvg)}
+                {formatAmount(dailyAvg)}
               </span>
-              <span class="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+              <span style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>
                 over {days} days
               </span>
             </div>
@@ -309,8 +308,8 @@ export default function AnalyticsScreen() {
             style={{ backgroundColor: "var(--color-bg-surface)" }}
           >
             <span
-              class="text-xs font-medium uppercase tracking-wider block mb-3"
-              style={{ color: "var(--color-text-secondary)" }}
+              class="tracking-wider block mb-3"
+              style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)" }}
             >
               by category
             </span>
@@ -326,8 +325,8 @@ export default function AnalyticsScreen() {
             style={{ backgroundColor: "var(--color-bg-surface)" }}
           >
             <span
-              class="text-xs font-medium uppercase tracking-wider block mb-3"
-              style={{ color: "var(--color-text-secondary)" }}
+              class="tracking-wider block mb-3"
+              style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)" }}
             >
               monthly trend
             </span>

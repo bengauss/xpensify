@@ -1,5 +1,5 @@
 import { LocationProvider, Router, Route, useLocation } from "preact-iso";
-import { useEffect } from "preact/hooks";
+import { useEffect, useRef } from "preact/hooks";
 import { signal } from "@preact/signals";
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
@@ -8,6 +8,7 @@ import { LoginScreen } from "@/screens/Login";
 import { checkAuth, currentUser } from "@/lib/auth";
 import { startSyncScheduler, stopSyncScheduler } from "@/sync/scheduler";
 import { lazy } from "preact-iso";
+import { contentEl, animateIn, pendingDirection } from "@/lib/transitions";
 import HistoryScreen from "@/screens/History";
 import RecurringScreen from "@/screens/Recurring";
 import RecurringForm from "@/screens/RecurringForm";
@@ -18,18 +19,6 @@ const AnalyticsScreen = lazy(() => import("@/screens/Analytics"));
 /** True once checkAuth() has resolved (regardless of result) */
 const authChecked = signal(false);
 
-/** Wraps a screen component with the shell chrome (Header + BottomNav) */
-function Shell({ children }: { children: preact.ComponentChildren }) {
-  const { route } = useLocation();
-  return (
-    <div class="flex min-h-dvh flex-col bg-bg-primary">
-      <Header onSettingsClick={() => route("/settings")} />
-      <main class="flex-1 pt-2">{children}</main>
-      <BottomNav />
-    </div>
-  );
-}
-
 /** Checks auth on mount, redirects as needed, starts sync scheduler. */
 function AuthGate() {
   const { route } = useLocation();
@@ -37,7 +26,6 @@ function AuthGate() {
   useEffect(() => {
     checkAuth().then(() => {
       authChecked.value = true;
-      // Read path fresh after the async call (not from stale closure)
       const currentPath = window.location.pathname;
       if (!currentUser.value && currentPath !== "/login") {
         route("/login");
@@ -56,71 +44,65 @@ function AuthGate() {
   return null;
 }
 
+/**
+ * Persistent shell that wraps all authenticated routes.
+ * Stays mounted across tab navigation so the main ref is stable
+ * and tab transitions work correctly.
+ */
+function AuthenticatedShell() {
+  const { path, route } = useLocation();
+  const mainRef = useRef<HTMLDivElement>(null);
+  const prevPathRef = useRef(path);
+
+  // Register content element for transitions (runs once, ref is stable)
+  useEffect(() => {
+    contentEl.value = mainRef.current;
+    return () => { contentEl.value = null; };
+  }, []);
+
+  // After route change, animate in if there's a pending tab transition
+  useEffect(() => {
+    if (path !== prevPathRef.current) {
+      prevPathRef.current = path;
+      if (pendingDirection.value !== 0) {
+        animateIn();
+      }
+    }
+  }, [path]);
+
+  return (
+    <div class="flex min-h-dvh flex-col bg-bg-primary">
+      <Header onSettingsClick={() => route("/settings")} />
+      <main ref={mainRef} class="flex-1 pt-2">
+        <Router>
+          <Route path="/" component={AddScreen} />
+          <Route path="/history" component={HistoryScreen} />
+          <Route path="/recurring" component={RecurringScreen} />
+          <Route path="/recurring/new" component={RecurringForm} />
+          <Route path="/recurring/edit/:id" component={RecurringForm} />
+          <Route path="/analytics" component={AnalyticsScreen} />
+          <Route path="/settings" component={SettingsScreen} />
+        </Router>
+      </main>
+      <BottomNav />
+    </div>
+  );
+}
+
+/** Top-level routing: login vs authenticated shell */
+function AppRoutes() {
+  const { path } = useLocation();
+
+  if (!authChecked.value) return null;
+  if (path === "/login") return <LoginScreen />;
+  return <AuthenticatedShell />;
+}
+
 export function App() {
   return (
     <LocationProvider>
       <AuthGate />
-      {authChecked.value ? (
-        <Router>
-          <Route path="/login" component={LoginScreen} />
-          <Route
-            path="/"
-            component={() => (
-              <Shell>
-                <AddScreen />
-              </Shell>
-            )}
-          />
-          <Route
-            path="/history"
-            component={() => (
-              <Shell>
-                <HistoryScreen />
-              </Shell>
-            )}
-          />
-          <Route
-            path="/recurring"
-            component={() => (
-              <Shell>
-                <RecurringScreen />
-              </Shell>
-            )}
-          />
-          <Route
-            path="/recurring/new"
-            component={() => (
-              <Shell>
-                <RecurringForm />
-              </Shell>
-            )}
-          />
-          <Route
-            path="/recurring/edit/:id"
-            component={() => (
-              <Shell>
-                <RecurringForm />
-              </Shell>
-            )}
-          />
-          <Route
-            path="/analytics"
-            component={() => (
-              <Shell>
-                <AnalyticsScreen />
-              </Shell>
-            )}
-          />
-          <Route
-            path="/settings"
-            component={() => (
-              <Shell>
-                <SettingsScreen />
-              </Shell>
-            )}
-          />
-        </Router>
-      ) : null}
+      <AppRoutes />
     </LocationProvider>
   );
 }

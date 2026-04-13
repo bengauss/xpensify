@@ -2,7 +2,33 @@ import { useState, useRef, useEffect } from "preact/hooks";
 import { animate } from "motion";
 import { springs } from "@/lib/animations";
 import { categoryIcons } from "@/icons";
+import { transitionDone } from "@/lib/transitions";
 import type { Category, Subcategory } from "@/db/local";
+
+const GRID_COLS = 3;
+const STAGGER_MS = 30;
+
+/** Staggered reveal: fade in + scale up cards from an origin position in the grid */
+function revealGrid(gridEl: HTMLDivElement, originIndex?: number) {
+  const cards = gridEl.querySelectorAll<HTMLButtonElement>("[data-card]");
+  cards.forEach((card, i) => {
+    const row = Math.floor(i / GRID_COLS);
+    const col = i % GRID_COLS;
+
+    let delay: number;
+    if (originIndex !== undefined) {
+      const oRow = Math.floor(originIndex / GRID_COLS);
+      const oCol = originIndex % GRID_COLS;
+      delay = (Math.abs(row - oRow) + Math.abs(col - oCol)) * STAGGER_MS;
+    } else {
+      delay = (row + col) * STAGGER_MS;
+    }
+
+    card.style.opacity = "0";
+    card.style.transform = "scale(0.85)";
+    animate(card, { opacity: 1, scale: 1 }, { ...springs.snappy, delay: delay / 1000 });
+  });
+}
 
 interface CategorySelectorProps {
   categories: Category[];
@@ -28,6 +54,9 @@ export function CategorySelector({
   const cardRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const gridRef = useRef<HTMLDivElement>(null);
   const pillsRef = useRef<HTMLDivElement>(null);
+  const needsMountReveal = useRef(!initialCategoryId);
+  const lastSelectedIndex = useRef<number | undefined>(undefined);
+  const pendingBackReveal = useRef(false);
 
   const selectedCategory = selectedCategoryId
     ? categories.find((c) => c.id === selectedCategoryId) ?? null
@@ -38,6 +67,20 @@ export function CategorySelector({
         .filter((s) => s.category_id === selectedCategory.id)
         .sort((a, b) => a.sort_order - b.sort_order)
     : [];
+
+  // Mount reveal — staggered cascade from top-left, waits for tab transition
+  useEffect(() => {
+    if (!compact && needsMountReveal.current && gridRef.current) {
+      needsMountReveal.current = false;
+      const grid = gridRef.current;
+      const pending = transitionDone.value;
+      if (pending) {
+        pending.then(() => revealGrid(grid));
+      } else {
+        revealGrid(grid);
+      }
+    }
+  }, [compact]);
 
   // Animate grid out + pills in when selectedCategoryId changes (non-compact)
   useEffect(() => {
@@ -73,11 +116,16 @@ export function CategorySelector({
       // Reverse: show grid
       const grid = gridRef.current;
       grid.style.display = "";
-      // Force reflow
-      void grid.offsetHeight;
-      grid.style.transition = "opacity 150ms ease";
+      grid.style.transition = "";
       grid.style.opacity = "1";
       grid.style.pointerEvents = "";
+      // Force reflow so display change takes effect
+      void grid.offsetHeight;
+
+      if (pendingBackReveal.current) {
+        pendingBackReveal.current = false;
+        revealGrid(grid, lastSelectedIndex.current);
+      }
     }
   }, [selectedCategoryId, compact]);
 
@@ -90,6 +138,9 @@ export function CategorySelector({
     el.style.transition = "";
     animate(el, { scale: 1 }, springs.snappy);
   }
+
+  // Sorted categories (stable reference for index lookups)
+  const sortedCategories = categories.slice().sort((a, b) => a.sort_order - b.sort_order);
 
   function handleCategoryTap(category: Category) {
     const subs = subcategories.filter((s) => s.category_id === category.id);
@@ -105,6 +156,9 @@ export function CategorySelector({
       );
       return;
     }
+
+    // Store this category's grid index for the return reveal
+    lastSelectedIndex.current = sortedCategories.findIndex((c) => c.id === category.id);
 
     // Staggered fade-out of other cards by visual distance
     const tappedEl = cardRefs.current.get(category.id);
@@ -136,14 +190,8 @@ export function CategorySelector({
         pill.style.opacity = "0";
       });
     }
-    // Reset all card opacities before showing grid
-    if (gridRef.current) {
-      const allCards = gridRef.current.querySelectorAll<HTMLButtonElement>("[data-card]");
-      allCards.forEach((card) => {
-        card.style.transition = "";
-        card.style.opacity = "1";
-      });
-    }
+    // Flag triggers invisible cards via JSX style; useEffect runs the reveal
+    pendingBackReveal.current = true;
     setSelectedCategoryId(null);
   }
 
@@ -167,7 +215,7 @@ export function CategorySelector({
                   onMouseUp={(e) => handleCardRelease(e.currentTarget as HTMLButtonElement)}
                   onTouchStart={(e) => handleCardPress(e.currentTarget as HTMLButtonElement)}
                   onTouchEnd={(e) => handleCardRelease(e.currentTarget as HTMLButtonElement)}
-                  class="flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl cursor-pointer border"
+                  class="flex flex-col items-center justify-center gap-2 py-4 rounded-xl cursor-pointer border"
                   style={{
                     backgroundColor: `${cat.color}0d`,
                     borderColor: isSelected ? cat.color : `${cat.color}18`,
@@ -175,10 +223,10 @@ export function CategorySelector({
                   }}
                 >
                   {IconComponent && (
-                    <IconComponent color={cat.color} size={20} />
+                    <IconComponent color={cat.color} size={26} />
                   )}
                   <span
-                    class="text-[11px] leading-none"
+                    class="text-[13px] leading-none"
                     style={{ color: cat.color }}
                   >
                     {cat.name}
@@ -215,9 +263,7 @@ export function CategorySelector({
     <div class="flex flex-col gap-4">
       {/* Grid */}
       <div ref={gridRef} class="grid grid-cols-3 gap-3">
-        {categories
-          .sort((a, b) => a.sort_order - b.sort_order)
-          .map((cat) => {
+        {sortedCategories.map((cat) => {
             const IconComponent = categoryIcons[cat.icon];
             return (
               <button
@@ -229,17 +275,19 @@ export function CategorySelector({
                 onMouseUp={(e) => handleCardRelease(e.currentTarget as HTMLButtonElement)}
                 onTouchStart={(e) => handleCardPress(e.currentTarget as HTMLButtonElement)}
                 onTouchEnd={(e) => handleCardRelease(e.currentTarget as HTMLButtonElement)}
-                class="flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl cursor-pointer border"
+                class="flex flex-col items-center justify-center gap-2 py-4 rounded-xl cursor-pointer border"
                 style={{
                   backgroundColor: `${cat.color}0d`,
                   borderColor: `${cat.color}18`,
+                  opacity: (needsMountReveal.current || pendingBackReveal.current) ? 0 : undefined,
+                  transform: (needsMountReveal.current || pendingBackReveal.current) ? "scale(0.85)" : undefined,
                 }}
               >
                 {IconComponent && (
-                  <IconComponent color={cat.color} size={20} />
+                  <IconComponent color={cat.color} size={26} />
                 )}
                 <span
-                  class="text-[11px] leading-none"
+                  class="text-[13px] leading-none"
                   style={{ color: cat.color }}
                 >
                   {cat.name}

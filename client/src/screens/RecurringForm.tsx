@@ -5,7 +5,7 @@ import { springs } from "@/lib/animations";
 import { db } from "@/db/local";
 import type { RecurringTemplate } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { AmountInput } from "@/components/AmountInput";
+import { AmountInput, parseCents } from "@/components/AmountInput";
 import { CategorySelector } from "@/components/CategorySelector";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { api } from "@/lib/api";
@@ -24,7 +24,6 @@ export default function RecurringForm() {
 
   // Form state
   const [amountStr, setAmountStr] = useState("");
-  const [amountCents, setAmountCents] = useState(0);
   const [categoryId, setCategoryId] = useState("");
   const [subcategoryId, setSubcategoryId] = useState("");
   const [note, setNote] = useState("");
@@ -47,7 +46,6 @@ export default function RecurringForm() {
     if (!isEdit || !id) return;
     db.recurring_templates.get(id).then((t: RecurringTemplate | undefined) => {
       if (!t) { route("/recurring"); return; }
-      setAmountCents(t.amount);
       setAmountStr((t.amount / 100).toFixed(2));
       setCategoryId(t.category_id);
       setSubcategoryId(t.subcategory_id);
@@ -76,6 +74,7 @@ export default function RecurringForm() {
   }, [active]);
 
   async function handleSave() {
+    const amountCents = parseCents(amountStr);
     if (amountCents <= 0) { setError("Please enter an amount."); return; }
     if (!categoryId || !subcategoryId) { setError("Please select a category."); return; }
 
@@ -150,10 +149,7 @@ export default function RecurringForm() {
       {/* Amount */}
       <AmountInput
         value={amountStr}
-        onAmountChange={(cents) => {
-          setAmountCents(cents);
-          setAmountStr(cents > 0 ? (cents / 100).toFixed(2) : "");
-        }}
+        onChange={setAmountStr}
       />
 
       {/* Category selector */}

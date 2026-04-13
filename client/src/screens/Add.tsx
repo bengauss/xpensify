@@ -1,25 +1,26 @@
-import { useState, useRef } from "preact/hooks";
+import { useState, useRef, useEffect } from "preact/hooks";
 import { signal } from "@preact/signals";
 import { animate } from "motion";
 import { springs } from "@/lib/animations";
 import { db } from "@/db/local";
 import type { Expense } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { AmountInput } from "@/components/AmountInput";
+import { AmountInput, parseCents } from "@/components/AmountInput";
 import { CategorySelector } from "@/components/CategorySelector";
 import { NoteInput } from "@/components/NoteInput";
 import { Toast } from "@/components/Toast";
 import { currentUser } from "@/lib/auth";
 import { sync } from "@/sync/engine";
+import { useLocation } from "preact-iso";
 
 /** Signal used by History detail sheet to put Add screen into edit mode */
 export const editingExpense = signal<Expense | null>(null);
 
 export function AddScreen() {
   const editing = editingExpense.value;
+  const { path } = useLocation();
 
   const [amount, setAmount] = useState(editing ? (editing.amount / 100).toFixed(2) : "");
-  const [amountCents, setAmountCents] = useState(editing?.amount ?? 0);
   const [note, setNote] = useState(editing?.note ?? "");
   const [showNote, setShowNote] = useState(!!editing?.note);
   const [dateStr, setDateStr] = useState(
@@ -29,6 +30,13 @@ export function AddScreen() {
   const [toast, setToast] = useState({ visible: false, message: "" });
 
   const amountRef = useRef<HTMLInputElement>(null);
+
+  // Re-focus input when navigating back to Add tab
+  useEffect(() => {
+    if (path === "/") {
+      setTimeout(() => amountRef.current?.focus(), 50);
+    }
+  }, [path]);
 
   const categories = useLiveQuery(() =>
     db.categories.toArray().then((cats) => cats.sort((a, b) => a.sort_order - b.sort_order))
@@ -40,14 +48,13 @@ export function AddScreen() {
   const dataReady = categories && categories.length > 0 && subcategories && subcategories.length > 0;
 
   async function handleSelect(categoryId: string, subcategoryId: string) {
+    const amountCents = parseCents(amount);
     if (amountCents <= 0) return;
 
     const now = new Date().toISOString();
-    const cat = categories?.find((c) => c.id === categoryId);
     const sub = subcategories?.find((s) => s.id === subcategoryId);
 
     if (editing) {
-      // Edit mode: update existing expense
       await db.expenses.update(editing.id, {
         amount: amountCents,
         category_id: categoryId,
@@ -60,7 +67,6 @@ export function AddScreen() {
       setToast({ visible: true, message: `✓ EUR ${(amountCents / 100).toFixed(2)} → ${sub?.name ?? "expense"} updated` });
       editingExpense.value = null;
     } else {
-      // New expense
       await db.expenses.add({
         id: crypto.randomUUID(),
         user_id: currentUser.value?.id ?? "",
@@ -79,7 +85,6 @@ export function AddScreen() {
         updated_at: now,
       });
 
-      // Save pulse animation
       if (amountRef.current) {
         animate(amountRef.current, { scale: [1, 0.97, 1] }, springs.bouncy);
       }
@@ -87,18 +92,15 @@ export function AddScreen() {
       setToast({ visible: true, message: `✓ EUR ${(amountCents / 100).toFixed(2)} → ${sub?.name ?? "expense"} saved` });
     }
 
-    // Trigger background sync
     sync().catch(console.error);
 
     // Reset form
     setAmount("");
-    setAmountCents(0);
     setNote("");
     setShowNote(false);
     setShowDate(false);
     setDateStr(new Date().toISOString().split("T")[0]);
 
-    // Re-focus amount input
     setTimeout(() => amountRef.current?.focus(), 100);
   }
 
@@ -112,15 +114,12 @@ export function AddScreen() {
 
       <AmountInput
         value={amount}
-        onAmountChange={(cents) => {
-          setAmountCents(cents);
-          setAmount(cents > 0 ? (cents / 100).toFixed(2) : "");
-        }}
+        onChange={setAmount}
         inputRef={amountRef}
       />
 
       {/* Date label */}
-      <div class="text-sm text-text-tertiary px-1">{dateLabel}</div>
+      <div class="text-base text-text-tertiary px-1">{dateLabel}</div>
 
       {/* Category selector */}
       {dataReady ? (
@@ -143,7 +142,7 @@ export function AddScreen() {
         {!showNote && (
           <button
             onClick={() => setShowNote(true)}
-            class="text-sm text-text-secondary self-start"
+            class="text-base text-text-secondary self-start"
           >
             + note
           </button>
@@ -153,7 +152,7 @@ export function AddScreen() {
         {!showDate && (
           <button
             onClick={() => setShowDate(true)}
-            class="text-sm text-text-secondary self-start"
+            class="text-base text-text-secondary self-start"
           >
             + date
           </button>
