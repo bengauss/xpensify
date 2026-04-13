@@ -24,12 +24,12 @@ const app = new Hono<{ Variables: Variables }>()
 
 // In production, serve the client build (not part of the API chain)
 if (process.env.NODE_ENV === "production") {
-  app.use("/*", serveStatic({ root: "../client/dist" }));
+  app.use("/*", serveStatic({ root: "./client/dist" }));
   // SPA fallback: serve index.html for any non-API route
   app.get("*", async (c) => {
     const { readFileSync } = await import("fs");
     const { resolve } = await import("path");
-    const html = readFileSync(resolve("../client/dist/index.html"), "utf-8");
+    const html = readFileSync(resolve("./client/dist/index.html"), "utf-8");
     return c.html(html);
   });
 }
