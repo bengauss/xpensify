@@ -1,9 +1,9 @@
 import { useState, useMemo, useRef, useEffect } from "preact/hooks";
 import { useLocation } from "preact-iso";
-import { animate } from "motion";
 import { db } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { historyFilter } from "@/lib/filters";
+import { useEntrance } from "@/lib/entrance";
 import {
   type CategoryBreakdownItem,
   type MonthlyTrendItem,
@@ -42,6 +42,43 @@ function nextYearMonth(year: number, month: number): { year: number; month: numb
   return { year, month: month + 1 };
 }
 
+// ── Number rolling animation via rAF ─────────────────────────────────────────
+
+function rollNumber(
+  el: HTMLElement,
+  from: number,
+  to: number,
+  duration: number,
+  delay: number,
+): () => void {
+  let cancelled = false;
+  let rafId: number;
+
+  const timer = setTimeout(() => {
+    if (cancelled) return;
+    const start = performance.now();
+    function tick(now: number) {
+      if (cancelled) return;
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = Math.round(from + (to - from) * eased);
+      el.textContent = formatAmount(current);
+      if (progress < 1) {
+        rafId = requestAnimationFrame(tick);
+      }
+    }
+    rafId = requestAnimationFrame(tick);
+  }, delay);
+
+  return () => {
+    cancelled = true;
+    clearTimeout(timer);
+    cancelAnimationFrame(rafId);
+  };
+}
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function AnalyticsScreen() {
@@ -50,20 +87,22 @@ export default function AnalyticsScreen() {
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
 
-  // Refs for rolling number animation
   const totalRef = useRef<HTMLSpanElement>(null);
   const avgRef = useRef<HTMLSpanElement>(null);
-  const prevTotalRef = useRef<number>(0);
-  const prevAvgRef = useRef<number>(0);
+  const prevTotalRef = useRef<number>(-1);
+  const prevAvgRef = useRef<number>(-1);
+  const cancelAnims = useRef<(() => void)[]>([]);
+  const readyRef = useRef(false);
 
-  // Reactively load all expenses + categories so analytics recompute on change
+  // Wait for entrance delay before starting any animations
+  useEntrance(() => { readyRef.current = true; });
+
   const allExpenses = useLiveQuery(
     () => db.expenses.filter((e) => e.deleted === 0).toArray(),
     []
   );
   const allCategories = useLiveQuery(() => db.categories.toArray(), []);
 
-  // Compute analytics from raw data using useMemo
   const analytics = useMemo(() => {
     if (!allExpenses || !allCategories) return null;
 
@@ -72,17 +111,14 @@ export default function AnalyticsScreen() {
     const { year: prevYear, month: prevMonth } = prevYearMonth(selectedYear, selectedMonth);
     const ymPrev = `${prevYear}-${String(prevMonth).padStart(2, "0")}`;
 
-    // Current month total
     const currentTotal = allExpenses
       .filter((e) => e.timestamp.startsWith(ym))
       .reduce((s, e) => s + e.amount, 0);
 
-    // Prev month total
     const prevTotal = allExpenses
       .filter((e) => e.timestamp.startsWith(ymPrev))
       .reduce((s, e) => s + e.amount, 0);
 
-    // Category breakdown for current month
     const catTotals = new Map<string, number>();
     for (const e of allExpenses) {
       if (!e.timestamp.startsWith(ym)) continue;
@@ -100,7 +136,6 @@ export default function AnalyticsScreen() {
     }
     breakdown.sort((a, b) => b.total - a.total);
 
-    // Monthly trend — all months
     const trendTotals = new Map<string, number>();
     for (const e of allExpenses) {
       const key = e.timestamp.slice(0, 7);
@@ -123,37 +158,37 @@ export default function AnalyticsScreen() {
     return { currentTotal, prevTotal, breakdown, trend, dailyAvg };
   }, [allExpenses, allCategories, selectedYear, selectedMonth]);
 
-  // Rolling number animation for total and daily average
+  // Rolling number animation — waits for entrance delay on initial load
   useEffect(() => {
-    if (!analytics) return;
+    if (!analytics || !readyRef.current) return;
+
+    // Cancel previous animations
+    for (const cancel of cancelAnims.current) cancel();
+    cancelAnims.current = [];
 
     const newTotal = analytics.currentTotal;
     const newAvg = analytics.dailyAvg;
-    const oldTotal = prevTotalRef.current;
-    const oldAvg = prevAvgRef.current;
+    const oldTotal = prevTotalRef.current < 0 ? 0 : prevTotalRef.current;
+    const oldAvg = prevAvgRef.current < 0 ? 0 : prevAvgRef.current;
 
-    if (totalRef.current && newTotal !== oldTotal) {
-      const el = totalRef.current;
-      animate(
-        (progress: number) => {
-          el.textContent = formatAmount(Math.round(oldTotal + (newTotal - oldTotal) * progress));
-        },
-        { duration: 0.4 }
+    if (totalRef.current) {
+      cancelAnims.current.push(
+        rollNumber(totalRef.current, oldTotal, newTotal, 400, 0)
       );
     }
-
-    if (avgRef.current && newAvg !== oldAvg) {
-      const el = avgRef.current;
-      animate(
-        (progress: number) => {
-          el.textContent = formatAmount(Math.round(oldAvg + (newAvg - oldAvg) * progress));
-        },
-        { duration: 0.4 }
+    if (avgRef.current) {
+      cancelAnims.current.push(
+        rollNumber(avgRef.current, oldAvg, newAvg, 400, 100)
       );
     }
 
     prevTotalRef.current = newTotal;
     prevAvgRef.current = newAvg;
+
+    return () => {
+      for (const cancel of cancelAnims.current) cancel();
+      cancelAnims.current = [];
+    };
   }, [analytics?.currentTotal, analytics?.dailyAvg]);
 
   function handlePrev() {
@@ -188,11 +223,9 @@ export default function AnalyticsScreen() {
 
   const monthLabel = `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
 
-  // Derived summary values for display
   const days = daysInMonth(selectedYear, selectedMonth);
   const currentTotal = analytics?.currentTotal ?? 0;
   const prevTotal = analytics?.prevTotal ?? 0;
-  const dailyAvg = analytics?.dailyAvg ?? 0;
   const diff = currentTotal - prevTotal;
   const pct = formatPct(currentTotal, prevTotal);
   const isLess = diff <= 0;
@@ -265,7 +298,7 @@ export default function AnalyticsScreen() {
                 class="tabular-nums"
                 style={{ fontSize: 28, fontWeight: 300, color: "var(--color-text-primary)" }}
               >
-                {formatAmount(currentTotal)}
+                {formatAmount(0)}
               </span>
               {prevTotal > 0 && (
                 <span
@@ -294,7 +327,7 @@ export default function AnalyticsScreen() {
                 class="tabular-nums"
                 style={{ fontSize: 28, fontWeight: 300, color: "var(--color-text-primary)" }}
               >
-                {formatAmount(dailyAvg)}
+                {formatAmount(0)}
               </span>
               <span style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>
                 over {days} days

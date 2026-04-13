@@ -141,11 +141,7 @@ export default function RecurringForm() {
   const frequencies: Frequency[] = ["monthly", "weekly", "yearly"];
 
   return (
-    <div class="flex flex-col gap-5 px-4 pb-28 pt-2">
-      <h2 class="text-lg font-semibold text-text-primary">
-        {isEdit ? "Edit recurring expense" : "New recurring expense"}
-      </h2>
-
+    <div class="flex flex-col gap-5 px-4 pb-28">
       {/* Amount */}
       <AmountInput
         value={amountStr}
@@ -157,8 +153,8 @@ export default function RecurringForm() {
         <CategorySelector
           categories={categories}
           subcategories={subcategories}
-          compact={true}
           initialCategoryId={categoryId || undefined}
+          confirmedSubcategoryId={subcategoryId || undefined}
           onSelect={(catId, subId) => {
             setCategoryId(catId);
             setSubcategoryId(subId);

@@ -53,11 +53,13 @@ export async function sync(): Promise<void> {
     await db.expenses.bulkPut(withStatus);
   }
 
-  // Upsert categories and subcategories from server
+  // Replace categories and subcategories from server (clear stale entries)
   if (data.categories && data.categories.length > 0) {
+    await db.categories.clear();
     await db.categories.bulkPut(data.categories);
   }
   if (data.subcategories && data.subcategories.length > 0) {
+    await db.subcategories.clear();
     await db.subcategories.bulkPut(data.subcategories);
   }
 

@@ -54,13 +54,17 @@ export function AddScreen() {
     const now = new Date().toISOString();
     const sub = subcategories?.find((s) => s.id === subcategoryId);
 
+    // Use real time for today, noon for backdated entries
+    const todayStr = new Date().toISOString().split("T")[0];
+    const timestamp = dateStr === todayStr ? now : `${dateStr}T12:00:00.000Z`;
+
     if (editing) {
       await db.expenses.update(editing.id, {
         amount: amountCents,
         category_id: categoryId,
         subcategory_id: subcategoryId,
         note: note.trim() || null,
-        timestamp: `${dateStr}T12:00:00.000Z`,
+        timestamp,
         updated_at: now,
         sync_status: "pending",
       });
@@ -76,7 +80,7 @@ export function AddScreen() {
         note: note.trim() || null,
         tags: null,
         image_url: null,
-        timestamp: `${dateStr}T12:00:00.000Z`,
+        timestamp,
         source: "manual",
         recurring_template_id: null,
         deleted: 0,

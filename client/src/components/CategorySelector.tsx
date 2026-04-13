@@ -26,7 +26,12 @@ function revealGrid(gridEl: HTMLDivElement, originIndex?: number) {
 
     card.style.opacity = "0";
     card.style.transform = "scale(0.85)";
-    animate(card, { opacity: 1, scale: 1 }, { ...springs.snappy, delay: delay / 1000 });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anim = animate(card, { opacity: 1, scale: 1 }, { ...springs.snappy, delay: delay / 1000 }) as any;
+    anim.then(() => {
+      card.style.opacity = "1";
+      card.style.transform = "";
+    });
   });
 }
 
@@ -38,6 +43,8 @@ interface CategorySelectorProps {
   initialCategoryId?: string;
   /** Compact mode: grid + pills only, no zoom animation (for recurring template form) */
   compact?: boolean;
+  /** Currently confirmed subcategory — shows highlight on the card/pill (used by RecurringForm) */
+  confirmedSubcategoryId?: string;
 }
 
 export function CategorySelector({
@@ -46,6 +53,7 @@ export function CategorySelector({
   onSelect,
   initialCategoryId,
   compact = false,
+  confirmedSubcategoryId,
 }: CategorySelectorProps) {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     initialCategoryId ?? null
@@ -57,6 +65,7 @@ export function CategorySelector({
   const needsMountReveal = useRef(!initialCategoryId);
   const lastSelectedIndex = useRef<number | undefined>(undefined);
   const pendingBackReveal = useRef(false);
+  const hideTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selectedCategory = selectedCategoryId
     ? categories.find((c) => c.id === selectedCategoryId) ?? null
@@ -68,17 +77,30 @@ export function CategorySelector({
         .sort((a, b) => a.sort_order - b.sort_order)
     : [];
 
-  // Mount reveal — staggered cascade from top-left, waits for tab transition
+  // Mount reveal — staggered cascade from top-left, waits for tab transition + 150ms
   useEffect(() => {
     if (!compact && needsMountReveal.current && gridRef.current) {
       needsMountReveal.current = false;
       const grid = gridRef.current;
-      const pending = transitionDone.value;
-      if (pending) {
-        pending.then(() => revealGrid(grid));
-      } else {
-        revealGrid(grid);
+      let cancelled = false;
+
+      function doReveal() {
+        if (cancelled) return;
+        const timer = setTimeout(() => {
+          if (!cancelled) revealGrid(grid);
+        }, 150);
+        return () => clearTimeout(timer);
       }
+
+      const pending = transitionDone.value;
+      let cleanup: (() => void) | undefined;
+      if (pending) {
+        pending.then(() => { cleanup = doReveal(); });
+      } else {
+        cleanup = doReveal();
+      }
+
+      return () => { cancelled = true; cleanup?.(); };
     }
   }, [compact]);
 
@@ -91,11 +113,13 @@ export function CategorySelector({
       const grid = gridRef.current;
       const pillsContainer = pillsRef.current;
 
-      grid.style.transition = "opacity 150ms ease, height 150ms ease";
+      grid.style.transition = "opacity 150ms ease";
       grid.style.opacity = "0";
       grid.style.pointerEvents = "none";
 
-      setTimeout(() => {
+      if (hideTimeout.current) clearTimeout(hideTimeout.current);
+      hideTimeout.current = setTimeout(() => {
+        hideTimeout.current = null;
         grid.style.display = "none";
 
         // Animate pills cascading in
@@ -114,6 +138,10 @@ export function CategorySelector({
       }, 200);
     } else {
       // Reverse: show grid
+      if (hideTimeout.current) {
+        clearTimeout(hideTimeout.current);
+        hideTimeout.current = null;
+      }
       const grid = gridRef.current;
       grid.style.display = "";
       grid.style.transition = "";
@@ -124,6 +152,14 @@ export function CategorySelector({
 
       if (pendingBackReveal.current) {
         pendingBackReveal.current = false;
+        // Reset card styles before animating — the JSX render set opacity:0 via
+        // the pendingBackReveal ref, and motion's animate may not override inline
+        // styles reliably. Explicitly clear them so revealGrid can take over.
+        const cards = grid.querySelectorAll<HTMLButtonElement>("[data-card]");
+        cards.forEach((card) => {
+          card.style.opacity = "0";
+          card.style.transform = "scale(0.85)";
+        });
         revealGrid(grid, lastSelectedIndex.current);
       }
     }
@@ -258,6 +294,11 @@ export function CategorySelector({
     );
   }
 
+  // Derive which category is confirmed (for single-sub categories)
+  const confirmedCategoryId = confirmedSubcategoryId
+    ? subcategories.find((s) => s.id === confirmedSubcategoryId)?.category_id ?? null
+    : null;
+
   // ── Full mode render ───────────────────────────────────────────────────────
   return (
     <div class="flex flex-col gap-4">
@@ -265,6 +306,8 @@ export function CategorySelector({
       <div ref={gridRef} class="grid grid-cols-3 gap-3">
         {sortedCategories.map((cat) => {
             const IconComponent = categoryIcons[cat.icon];
+            const subs = subcategories.filter((s) => s.category_id === cat.id);
+            const isConfirmed = subs.length === 1 && confirmedCategoryId === cat.id;
             return (
               <button
                 key={cat.id}
@@ -277,8 +320,9 @@ export function CategorySelector({
                 onTouchEnd={(e) => handleCardRelease(e.currentTarget as HTMLButtonElement)}
                 class="flex flex-col items-center justify-center gap-2 py-4 rounded-xl cursor-pointer border"
                 style={{
-                  backgroundColor: `${cat.color}0d`,
-                  borderColor: `${cat.color}18`,
+                  backgroundColor: isConfirmed ? `${cat.color}25` : `${cat.color}0d`,
+                  borderColor: isConfirmed ? cat.color : `${cat.color}18`,
+                  borderWidth: isConfirmed ? "1.5px" : "1px",
                   opacity: (needsMountReveal.current || pendingBackReveal.current) ? 0 : undefined,
                   transform: (needsMountReveal.current || pendingBackReveal.current) ? "scale(0.85)" : undefined,
                 }}
@@ -326,22 +370,26 @@ export function CategorySelector({
 
           {/* Pills */}
           <div ref={pillsRef} class="flex flex-wrap justify-center gap-2">
-            {visibleSubcategories.map((sub) => (
-              <button
-                key={sub.id}
-                data-pill
-                onClick={() => onSelect(selectedCategory.id, sub.id)}
-                class="rounded-full px-4 py-2 text-sm border cursor-pointer"
-                style={{
-                  backgroundColor: `${selectedCategory.color}0d`,
-                  borderColor: `${selectedCategory.color}18`,
-                  color: selectedCategory.color,
-                  opacity: 0,
-                }}
-              >
-                {sub.name}
-              </button>
-            ))}
+            {visibleSubcategories.map((sub) => {
+              const isConfirmedPill = confirmedSubcategoryId === sub.id;
+              return (
+                <button
+                  key={sub.id}
+                  data-pill
+                  onClick={() => onSelect(selectedCategory.id, sub.id)}
+                  class="rounded-full px-4 py-2 text-sm border cursor-pointer"
+                  style={{
+                    backgroundColor: isConfirmedPill ? `${selectedCategory.color}25` : `${selectedCategory.color}0d`,
+                    borderColor: isConfirmedPill ? selectedCategory.color : `${selectedCategory.color}18`,
+                    borderWidth: isConfirmedPill ? "1.5px" : "1px",
+                    color: selectedCategory.color,
+                    opacity: 0,
+                  }}
+                >
+                  {sub.name}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

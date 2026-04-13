@@ -7,6 +7,7 @@ import type { RecurringTemplate } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { categoryIcons } from "@/icons";
 import { api } from "@/lib/api";
+import { useEntrance, animateRowEntrance } from "@/lib/entrance";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -169,10 +170,13 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
 
   return (
     <div
+      data-forecast
       class="rounded-2xl px-5 py-4 border"
       style={{
         backgroundColor: "color-mix(in srgb, var(--color-accent) 10%, transparent)",
         borderColor: "color-mix(in srgb, var(--color-accent) 20%, transparent)",
+        opacity: 0,
+        transform: "translateY(10px)",
       }}
     >
       <p class="text-sm text-text-secondary mb-1">remaining this month</p>
@@ -228,6 +232,7 @@ function TemplateRow({
 
   return (
     <button
+      data-row
       onClick={onTap}
       class="flex items-center gap-3 w-full text-left px-1 py-2 cursor-pointer bg-transparent border-0"
     >
@@ -240,13 +245,13 @@ function TemplateRow({
       </div>
 
       {/* Labels */}
-      <div class="flex-1 min-w-0">
+      <div data-row-text class="flex-1 min-w-0" style={{ opacity: 0, transform: "translateX(-20px)" }}>
         <p class="text-sm text-text-primary truncate">{label}</p>
         <p class="text-xs text-text-secondary">{scheduleText(template)}</p>
       </div>
 
       {/* Amount */}
-      <span class="text-sm text-text-body tabular-nums mr-3">
+      <span data-row-amount class="text-sm text-text-body tabular-nums mr-3" style={{ opacity: 0 }}>
         EUR {formatCents(template.amount)}
       </span>
 
@@ -261,8 +266,32 @@ function TemplateRow({
 export default function RecurringScreen() {
   const { route } = useLocation();
   const forecast = useForecast();
+  const screenRef = useRef<HTMLDivElement>(null);
 
   const allTemplates = useLiveQuery(() => db.recurring_templates.toArray(), []);
+
+  // Entrance animation: forecast card slides up, then template rows animate
+  useEntrance(() => {
+    if (!screenRef.current) return;
+    const cleanups: (() => void)[] = [];
+
+    // Phase 1: forecast card fades in + slides up
+    const forecastEl = screenRef.current.querySelector<HTMLElement>("[data-forecast]");
+    if (forecastEl) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const a = (animate as any)(
+        forecastEl,
+        { opacity: [0, 1], y: [10, 0] },
+        { ...springs.gentle }
+      );
+      cleanups.push(() => a.stop());
+    }
+
+    // Phase 2: template rows
+    cleanups.push(animateRowEntrance(screenRef.current));
+
+    return () => { for (const c of cleanups) c(); };
+  });
 
   async function handleToggle(template: RecurringTemplate) {
     const newActive = template.active === 1 ? 0 : 1;
@@ -314,7 +343,7 @@ export default function RecurringScreen() {
   );
 
   return (
-    <div class="flex flex-col gap-5 px-4 pb-28">
+    <div ref={screenRef} class="flex flex-col gap-5 px-4 pb-28">
       {/* Forecast card */}
       {forecast && forecast !== "error" && (
         <ForecastCard forecast={forecast} />

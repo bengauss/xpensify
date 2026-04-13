@@ -11,6 +11,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { editingExpense } from "@/screens/Add";
 import { sync } from "@/sync/engine";
 import { historyFilter } from "@/lib/filters";
+import { useEntrance, animateRowEntrance } from "@/lib/entrance";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -87,6 +88,8 @@ function groupByDay(expenses: Expense[]): DayGroup[] {
   const keys = Array.from(map.keys()).sort((a, b) => b.localeCompare(a));
   return keys.map((dateKey) => {
     const items = map.get(dateKey)!;
+    // Sort within day by full timestamp descending (most recent first)
+    items.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
     const total = items.reduce((s, e) => s + e.amount, 0);
     return { dateKey, expenses: items, total };
   });
@@ -201,6 +204,7 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
 
   return (
     <button
+      data-row
       onClick={onTap}
       onPointerDown={(e) => {
         const el = e.currentTarget;
@@ -247,7 +251,7 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
       </div>
 
       {/* Labels: category · subcategory */}
-      <div class="flex-1 min-w-0">
+      <div data-row-text class="flex-1 min-w-0" style={{ opacity: 0, transform: "translateX(-20px)" }}>
         <div class="flex items-center gap-1.5 flex-wrap">
           <span class="text-base">
             <span style={{ color: "var(--color-text-secondary)" }}>{category?.name ?? "other"}</span>
@@ -285,7 +289,7 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
       </div>
 
       {/* Amount — no currency prefix */}
-      <span class="flex-shrink-0 text-base font-medium tabular-nums" style={{ color: "var(--color-text-primary)" }}>
+      <span data-row-amount class="flex-shrink-0 text-base font-medium tabular-nums" style={{ color: "var(--color-text-primary)", opacity: 0 }}>
         {formatRowAmount(expense.amount)}
       </span>
     </button>
@@ -301,12 +305,12 @@ interface DayHeaderProps {
 
 function DayHeader({ dateKey, total }: DayHeaderProps) {
   return (
-    <div class="flex flex-col gap-1 pt-5 pb-1">
-      <div class="flex items-center justify-between px-1">
+    <div data-row class="flex flex-col gap-1 pt-5 pb-1">
+      <div data-row-text class="flex items-center justify-between px-1" style={{ opacity: 0, transform: "translateX(-20px)" }}>
         <span class="text-sm font-semibold tracking-wider" style={{ color: "var(--color-text-tertiary)" }}>
           {formatDateLabel(dateKey)}
         </span>
-        <span class="text-sm tabular-nums" style={{ color: "var(--color-text-tertiary)" }}>
+        <span data-row-amount class="text-sm tabular-nums" style={{ color: "var(--color-text-tertiary)", opacity: 0 }}>
           {formatAmount(total)}
         </span>
       </div>
@@ -467,6 +471,13 @@ export default function HistoryScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Entrance animation: text slides in, then amounts fade in
+  useEntrance(() => {
+    if (!listRef.current) return;
+    return animateRowEntrance(listRef.current);
+  });
 
   // On mount: if a filter is set from Analytics drill-down, pre-populate search
   useEffect(() => {
@@ -594,22 +605,24 @@ export default function HistoryScreen() {
       )}
 
       {/* Day groups */}
-      {visibleGroups.map((group) => (
-        <div key={group.dateKey}>
-          <DayHeader dateKey={group.dateKey} total={group.total} />
-          <div class="flex flex-col">
-            {group.expenses.map((expense) => (
-              <ExpenseRow
-                key={expense.id}
-                expense={expense}
-                category={categoryMap.get(expense.category_id)}
-                subcategory={subcategoryMap.get(expense.subcategory_id)}
-                onTap={() => setSelectedExpense(expense)}
-              />
-            ))}
+      <div ref={listRef}>
+        {visibleGroups.map((group) => (
+          <div key={group.dateKey}>
+            <DayHeader dateKey={group.dateKey} total={group.total} />
+            <div class="flex flex-col">
+              {group.expenses.map((expense) => (
+                <ExpenseRow
+                  key={expense.id}
+                  expense={expense}
+                  category={categoryMap.get(expense.category_id)}
+                  subcategory={subcategoryMap.get(expense.subcategory_id)}
+                  onTap={() => setSelectedExpense(expense)}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
 
       {/* Infinite scroll sentinel */}
       {hasMore && <div ref={sentinelRef} style={{ height: 1 }} />}
