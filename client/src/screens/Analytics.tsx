@@ -1,11 +1,10 @@
-import { useState, useMemo } from "preact/hooks";
+import { useState, useMemo, useRef, useEffect } from "preact/hooks";
 import { useLocation } from "preact-iso";
+import { animate } from "motion";
 import { db } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { historyFilter } from "@/lib/filters";
 import {
-  getMonthlyTotal,
-  getCategoryBreakdown,
-  getMonthlyTrend,
   type CategoryBreakdownItem,
   type MonthlyTrendItem,
 } from "@/lib/analytics";
@@ -43,77 +42,6 @@ function nextYearMonth(year: number, month: number): { year: number; month: numb
   return { year, month: month + 1 };
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-interface SummaryCardsProps {
-  currentTotal: number;
-  prevTotal: number;
-  year: number;
-  month: number;
-}
-
-function SummaryCards({ currentTotal, prevTotal, year, month }: SummaryCardsProps) {
-  const days = daysInMonth(year, month);
-  const dailyAvg = days > 0 ? Math.round(currentTotal / days) : 0;
-
-  // vs previous month
-  const diff = currentTotal - prevTotal;
-  const pct = formatPct(currentTotal, prevTotal);
-  const isLess = diff <= 0;
-
-  return (
-    <div class="flex gap-3">
-      {/* Total spent */}
-      <div
-        class="flex-1 rounded-xl p-4 flex flex-col gap-1"
-        style={{ backgroundColor: "var(--color-bg-surface)" }}
-      >
-        <span class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-          total spent
-        </span>
-        <span
-          class="text-xl font-semibold tabular-nums"
-          style={{ color: "var(--color-text-primary)" }}
-        >
-          {formatEur(currentTotal)}
-        </span>
-        {prevTotal > 0 && (
-          <span
-            class="text-xs"
-            style={{ color: isLess ? "var(--color-success)" : "var(--color-danger)" }}
-          >
-            {isLess ? "↓" : "↑"} {pct} {isLess ? "less" : "more"}
-          </span>
-        )}
-        {prevTotal === 0 && (
-          <span class="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
-            no prev. data
-          </span>
-        )}
-      </div>
-
-      {/* Daily average */}
-      <div
-        class="flex-1 rounded-xl p-4 flex flex-col gap-1"
-        style={{ backgroundColor: "var(--color-bg-surface)" }}
-      >
-        <span class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-          daily average
-        </span>
-        <span
-          class="text-xl font-semibold tabular-nums"
-          style={{ color: "var(--color-text-primary)" }}
-        >
-          {formatEur(dailyAvg)}
-        </span>
-        <span class="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
-          over {days} days
-        </span>
-      </div>
-    </div>
-  );
-}
-
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function AnalyticsScreen() {
@@ -121,6 +49,12 @@ export default function AnalyticsScreen() {
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+
+  // Refs for rolling number animation
+  const totalRef = useRef<HTMLSpanElement>(null);
+  const avgRef = useRef<HTMLSpanElement>(null);
+  const prevTotalRef = useRef<number>(0);
+  const prevAvgRef = useRef<number>(0);
 
   // Reactively load all expenses + categories so analytics recompute on change
   const allExpenses = useLiveQuery(
@@ -183,8 +117,44 @@ export default function AnalyticsScreen() {
     }
     trend.sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
 
-    return { currentTotal, prevTotal, breakdown, trend };
+    const days = daysInMonth(selectedYear, selectedMonth);
+    const dailyAvg = days > 0 ? Math.round(currentTotal / days) : 0;
+
+    return { currentTotal, prevTotal, breakdown, trend, dailyAvg };
   }, [allExpenses, allCategories, selectedYear, selectedMonth]);
+
+  // Rolling number animation for total and daily average
+  useEffect(() => {
+    if (!analytics) return;
+
+    const newTotal = analytics.currentTotal;
+    const newAvg = analytics.dailyAvg;
+    const oldTotal = prevTotalRef.current;
+    const oldAvg = prevAvgRef.current;
+
+    if (totalRef.current && newTotal !== oldTotal) {
+      const el = totalRef.current;
+      animate(
+        (progress: number) => {
+          el.textContent = formatEur(Math.round(oldTotal + (newTotal - oldTotal) * progress));
+        },
+        { duration: 0.4 }
+      );
+    }
+
+    if (avgRef.current && newAvg !== oldAvg) {
+      const el = avgRef.current;
+      animate(
+        (progress: number) => {
+          el.textContent = formatEur(Math.round(oldAvg + (newAvg - oldAvg) * progress));
+        },
+        { duration: 0.4 }
+      );
+    }
+
+    prevTotalRef.current = newTotal;
+    prevAvgRef.current = newAvg;
+  }, [analytics?.currentTotal, analytics?.dailyAvg]);
 
   function handlePrev() {
     const { year, month } = prevYearMonth(selectedYear, selectedMonth);
@@ -203,11 +173,29 @@ export default function AnalyticsScreen() {
     setSelectedMonth(month);
   }
 
-  function handleCategoryTap(_categoryId: string) {
+  function handleCategoryTap(categoryId: string) {
+    if (allCategories) {
+      const cat = allCategories.find((c) => c.id === categoryId);
+      if (cat) {
+        historyFilter.value = {
+          category: cat.name,
+          month: `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`,
+        };
+      }
+    }
     route("/history");
   }
 
   const monthLabel = `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
+
+  // Derived summary values for display
+  const days = daysInMonth(selectedYear, selectedMonth);
+  const currentTotal = analytics?.currentTotal ?? 0;
+  const prevTotal = analytics?.prevTotal ?? 0;
+  const dailyAvg = analytics?.dailyAvg ?? 0;
+  const diff = currentTotal - prevTotal;
+  const pct = formatPct(currentTotal, prevTotal);
+  const isLess = diff <= 0;
 
   return (
     <div class="flex flex-col gap-4 px-4 pb-24 pt-2">
@@ -262,13 +250,58 @@ export default function AnalyticsScreen() {
       {/* Content */}
       {analytics && (
         <>
-          {/* Summary cards */}
-          <SummaryCards
-            currentTotal={analytics.currentTotal}
-            prevTotal={analytics.prevTotal}
-            year={selectedYear}
-            month={selectedMonth}
-          />
+          {/* Summary cards — inlined so refs can be applied to spans */}
+          <div class="flex gap-3">
+            {/* Total spent */}
+            <div
+              class="flex-1 rounded-xl p-4 flex flex-col gap-1"
+              style={{ backgroundColor: "var(--color-bg-surface)" }}
+            >
+              <span class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+                total spent
+              </span>
+              <span
+                ref={totalRef}
+                class="text-xl font-semibold tabular-nums"
+                style={{ color: "var(--color-text-primary)" }}
+              >
+                {formatEur(currentTotal)}
+              </span>
+              {prevTotal > 0 && (
+                <span
+                  class="text-xs"
+                  style={{ color: isLess ? "var(--color-success)" : "var(--color-danger)" }}
+                >
+                  {isLess ? "↓" : "↑"} {pct} {isLess ? "less" : "more"}
+                </span>
+              )}
+              {prevTotal === 0 && (
+                <span class="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+                  no prev. data
+                </span>
+              )}
+            </div>
+
+            {/* Daily average */}
+            <div
+              class="flex-1 rounded-xl p-4 flex flex-col gap-1"
+              style={{ backgroundColor: "var(--color-bg-surface)" }}
+            >
+              <span class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+                daily average
+              </span>
+              <span
+                ref={avgRef}
+                class="text-xl font-semibold tabular-nums"
+                style={{ color: "var(--color-text-primary)" }}
+              >
+                {formatEur(dailyAvg)}
+              </span>
+              <span class="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+                over {days} days
+              </span>
+            </div>
+          </div>
 
           {/* Category breakdown */}
           <div

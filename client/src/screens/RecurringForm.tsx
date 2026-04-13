@@ -1,10 +1,13 @@
-import { useState, useEffect } from "preact/hooks";
+import { useState, useEffect, useRef } from "preact/hooks";
 import { useLocation, useRoute } from "preact-iso";
+import { animate } from "motion";
 import { db } from "@/db/local";
 import type { RecurringTemplate } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { AmountInput } from "@/components/AmountInput";
 import { CategorySelector } from "@/components/CategorySelector";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { api } from "@/lib/api";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -30,6 +33,10 @@ export default function RecurringForm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(!isEdit);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Spring toggle ref
+  const knobRef = useRef<HTMLDivElement>(null);
 
   const categories = useLiveQuery(() => db.categories.orderBy("sort_order").toArray(), []);
   const subcategories = useLiveQuery(() => db.subcategories.toArray(), []);
@@ -51,6 +58,12 @@ export default function RecurringForm() {
     });
   }, [id, isEdit]);
 
+  // Spring animation for the toggle knob
+  useEffect(() => {
+    if (!knobRef.current) return;
+    animate(knobRef.current, { x: active ? 18 : 0 }, { type: "spring", stiffness: 500, damping: 28 });
+  }, [active]);
+
   async function handleSave() {
     if (amountCents <= 0) { setError("Please enter an amount."); return; }
     if (!categoryId || !subcategoryId) { setError("Please select a category."); return; }
@@ -71,17 +84,10 @@ export default function RecurringForm() {
     try {
       let res: Response;
       if (isEdit && id) {
-        res = await fetch(`/api/recurring/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        res = await api.api.recurring[":id"].$patch({ param: { id }, json: body } as any);
       } else {
-        res = await fetch("/api/recurring", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
+        res = await api.api.recurring.$post({ json: body });
       }
 
       if (!res.ok) {
@@ -103,12 +109,10 @@ export default function RecurringForm() {
     }
   }
 
-  async function handleDelete() {
+  async function handleDeleteConfirmed() {
     if (!isEdit || !id) return;
-    if (!confirm("Delete this recurring expense?")) return;
-
     try {
-      await fetch(`/api/recurring/${id}`, { method: "DELETE" });
+      await api.api.recurring[":id"].$delete({ param: { id } });
       await db.recurring_templates.delete(id);
       route("/recurring");
     } catch {
@@ -224,15 +228,15 @@ export default function RecurringForm() {
           }}
         >
           <div
+            ref={knobRef}
             style={{
               position: "absolute",
               top: 3,
-              left: active ? 21 : 3,
+              left: 3,
               width: 20,
               height: 20,
               borderRadius: "50%",
               backgroundColor: "white",
-              transition: "left 200ms ease",
             }}
           />
         </button>
@@ -255,13 +259,21 @@ export default function RecurringForm() {
 
       {/* Delete (edit mode only) */}
       {isEdit && (
-        <button
-          onClick={handleDelete}
-          class="w-full rounded-xl py-3 text-sm font-medium cursor-pointer border-0 bg-transparent"
-          style={{ color: "var(--color-danger)" }}
-        >
-          delete
-        </button>
+        showDeleteConfirm ? (
+          <ConfirmDialog
+            message="Delete this recurring expense?"
+            onConfirm={handleDeleteConfirmed}
+            onCancel={() => setShowDeleteConfirm(false)}
+          />
+        ) : (
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            class="w-full rounded-xl py-3 text-sm font-medium cursor-pointer border-0 bg-transparent"
+            style={{ color: "var(--color-danger)" }}
+          >
+            delete
+          </button>
+        )
       )}
 
       {/* Cancel */}

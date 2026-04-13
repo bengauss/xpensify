@@ -1,6 +1,7 @@
 import { db } from "@/db/local";
 import type { RecurringTemplate } from "@/db/local";
 import { syncStatus } from "@/sync/status";
+import { api } from "@/lib/api";
 
 export async function sync(): Promise<void> {
   // Don't stack syncs
@@ -14,11 +15,7 @@ export async function sync(): Promise<void> {
 
   let res: Response;
   try {
-    res = await fetch("/api/sync", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ changes: pending, last_sync: lastSync }),
-    });
+    res = await api.api.sync.$post({ json: { changes: pending, last_sync: lastSync } });
   } catch {
     // Network error — go offline
     const stillPending = await db.expenses.where("sync_status").equals("pending").count();
@@ -37,14 +34,12 @@ export async function sync(): Promise<void> {
     return;
   }
 
-  interface SyncResponse {
+  const data = await res.json() as {
     server_changes: import("@/db/local").Expense[];
     sync_timestamp: string;
     categories?: import("@/db/local").Category[];
     subcategories?: import("@/db/local").Subcategory[];
-  }
-
-  const data = await res.json() as SyncResponse;
+  };
 
   // Mark the records we sent as synced
   if (pending.length > 0) {
@@ -76,7 +71,7 @@ export async function sync(): Promise<void> {
 
   // Separately fetch recurring templates and upsert into local DB
   try {
-    const templatesRes = await fetch("/api/recurring");
+    const templatesRes = await api.api.recurring.$get();
     if (templatesRes.ok) {
       const templates = await templatesRes.json() as RecurringTemplate[];
       if (Array.isArray(templates) && templates.length > 0) {

@@ -12,31 +12,17 @@ import { processRecurringTemplates } from "./jobs/recurring.js";
 import { sendDailyReminders, sendWeeklySummaries } from "./jobs/notifications.js";
 import type { Variables } from "./middleware/auth.js";
 
-const app = new Hono<{ Variables: Variables }>();
+// Chain .route() calls so Hono RPC can infer the full route tree from AppType
+const app = new Hono<{ Variables: Variables }>()
+  .get("/api/health", (c) => c.json({ ok: true }))
+  .route("/api/auth", auth)
+  .route("/api/sync", syncRouter)
+  .route("/api/recurring", recurringRouter)
+  .route("/api/push", pushRouter)
+  .route("/api/categories", categoriesRouter)
+  .route("/api/export", exportRouter);
 
-app.get("/api/health", (c) => {
-  return c.json({ ok: true });
-});
-
-// Auth routes (no auth middleware on login/logout)
-app.route("/api/auth", auth);
-
-// Sync routes (auth middleware applied inside the router)
-app.route("/api/sync", syncRouter);
-
-// Recurring templates routes (auth middleware applied inside the router)
-app.route("/api/recurring", recurringRouter);
-
-// Push notification routes (auth middleware applied inside the router)
-app.route("/api/push", pushRouter);
-
-// Categories routes (auth middleware applied inside the router)
-app.route("/api/categories", categoriesRouter);
-
-// Export routes (auth middleware applied inside the router)
-app.route("/api/export", exportRouter);
-
-// In production, serve the client build
+// In production, serve the client build (not part of the API chain)
 if (process.env.NODE_ENV === "production") {
   app.use("/*", serveStatic({ root: "../client/dist" }));
   // SPA fallback: serve index.html for any non-API route

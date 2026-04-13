@@ -185,9 +185,9 @@ export function GiftIcon({ color = defaults.color, size = defaults.size }: IconP
 // 15. Other — horizontal ellipsis (three dots)
 export function OtherIcon({ color = defaults.color, size = defaults.size }: IconProps = {}) {
   return svgWrap(color, size, [
-    h("circle", { cx: "5", cy: "12", r: "1.5", fill: color }),
-    h("circle", { cx: "12", cy: "12", r: "1.5", fill: color }),
-    h("circle", { cx: "19", cy: "12", r: "1.5", fill: color }),
+    h("circle", { cx: "5", cy: "12", r: "1" }),
+    h("circle", { cx: "12", cy: "12", r: "1" }),
+    h("circle", { cx: "19", cy: "12", r: "1" }),
   ]);
 }
 

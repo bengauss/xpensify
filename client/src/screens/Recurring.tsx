@@ -5,6 +5,7 @@ import { db } from "@/db/local";
 import type { RecurringTemplate } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { categoryIcons } from "@/icons";
+import { api } from "@/lib/api";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -262,11 +263,11 @@ export default function RecurringScreen() {
 
     // Persist to server
     try {
-      await fetch(`/api/recurring/${template.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ active: newActive }),
+      const res = await api.api.recurring[":id"].$patch({
+        param: { id: template.id },
+        json: { active: newActive } as any,
       });
+      if (!res.ok) throw new Error("Failed");
     } catch {
       // Revert on error
       await db.recurring_templates.update(template.id, { active: template.active });

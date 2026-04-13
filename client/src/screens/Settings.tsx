@@ -6,6 +6,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { currentUser, logout } from "@/lib/auth";
 import { sync } from "@/sync/engine";
 import { categoryIcons } from "@/icons";
+import { api } from "@/lib/api";
 
 // ── Section Card ──────────────────────────────────────────────────────────────
 
@@ -137,14 +138,11 @@ function CategoriesSection() {
   const [error, setError] = useState("");
 
   async function patchCategory(id: string, body: Record<string, unknown>) {
-    const res = await fetch(`/api/categories/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = await api.api.categories[":id"].$patch({ param: { id }, json: body } as any);
     if (!res.ok) throw new Error("Failed to update category");
     // Refresh local DB
-    const updated = await res.json() as Category;
+    const updated = await res.json() as unknown as Category;
     await db.categories.put(updated);
   }
 
@@ -174,7 +172,7 @@ function CategoriesSection() {
 
   async function handleDelete(id: string, name: string) {
     if (!confirm(`Delete category "${name}"? This cannot be undone.`)) return;
-    const res = await fetch(`/api/categories/${id}`, { method: "DELETE" });
+    const res = await api.api.categories[":id"].$delete({ param: { id } });
     if (!res.ok) { setError("Failed to delete category"); return; }
     await db.categories.delete(id);
   }
@@ -182,13 +180,10 @@ function CategoriesSection() {
   async function handleAdd() {
     const name = addName.trim();
     if (!name) return;
-    const res = await fetch("/api/categories", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = await api.api.categories.$post({ json: { name } } as any);
     if (!res.ok) { setError("Failed to add category"); return; }
-    const created = await res.json() as Category;
+    const created = await res.json() as unknown as Category;
     await db.categories.put(created);
     setAddName("");
     setAdding(false);
@@ -270,17 +265,13 @@ function PasswordChangeForm() {
 
   async function handleSave() {
     setMsg(""); setError("");
-    const res = await fetch("/api/auth/change-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ current_password: currentPw, new_password: newPw }),
-    });
+    const res = await api.api.auth["change-password"].$post({ json: { current_password: currentPw, new_password: newPw } });
     if (res.ok) {
       setMsg("Password updated");
       setCurrentPw(""); setNewPw("");
     } else {
-      const data = await res.json().catch(() => ({})) as { message?: string };
-      setError(data.message ?? "Failed to change password");
+      const data = await res.json().catch(() => ({})) as { error?: string };
+      setError((data as { error?: string }).error ?? "Failed to change password");
     }
   }
 
@@ -313,20 +304,9 @@ function PasswordChangeForm() {
 }
 
 function UsersSection() {
-  const [users, setUsers] = useState<UserInfo[]>([]);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetch("/api/users")
-      .then((r) => r.json())
-      .then((data: unknown) => { if (Array.isArray(data)) setUsers(data as UserInfo[]); })
-      .catch(() => {});
-  }, []);
-
-  // Fallback: if API doesn't exist yet, show current user
-  const displayUsers = users.length > 0 ? users : (
-    currentUser.value ? [currentUser.value] : []
-  );
+  const displayUsers = currentUser.value ? [currentUser.value] : [];
 
   return (
     <Card>
@@ -363,28 +343,28 @@ function UsersSection() {
 // ── Push Notifications Section ────────────────────────────────────────────────
 
 interface PushPrefs {
-  daily_enabled: boolean;
-  daily_time: string;
-  weekly_enabled: boolean;
-  weekly_day: number;
-  weekly_time: string;
+  daily_reminder: number;
+  daily_reminder_time: string;
+  weekly_summary: number;
+  weekly_summary_day: number;
+  weekly_summary_time: string;
 }
 
 function PushNotificationsSection() {
   const [subscribed, setSubscribed] = useState(false);
   const [prefs, setPrefs] = useState<PushPrefs>({
-    daily_enabled: false,
-    daily_time: "20:00",
-    weekly_enabled: false,
-    weekly_day: 0,
-    weekly_time: "09:00",
+    daily_reminder: 0,
+    daily_reminder_time: "21:00",
+    weekly_summary: 0,
+    weekly_summary_day: 0,
+    weekly_summary_time: "09:00",
   });
   const [msg, setMsg] = useState("");
 
   const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
   useEffect(() => {
-    fetch("/api/push/preferences")
+    api.api.push.preferences.$get()
       .then((r) => r.ok ? r.json() : null)
       .then((data: unknown) => { if (data) setPrefs(data as PushPrefs); })
       .catch(() => {});
@@ -404,11 +384,7 @@ function PushNotificationsSection() {
       applicationServerKey: vapidKey,
     });
 
-    const res = await fetch("/api/push/subscribe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(sub.toJSON()),
-    });
+    const res = await api.api.push.subscribe.$post({ json: sub.toJSON() });
     if (res.ok) { setSubscribed(true); setMsg("Push notifications enabled"); }
     else setMsg("Failed to subscribe");
   }
@@ -416,11 +392,7 @@ function PushNotificationsSection() {
   async function savePrefs(updated: Partial<PushPrefs>) {
     const next = { ...prefs, ...updated };
     setPrefs(next);
-    await fetch("/api/push/preferences", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(next),
-    }).catch(() => {});
+    await api.api.push.preferences.$put({ json: next }).catch(() => {});
   }
 
   return (
@@ -444,20 +416,20 @@ function PushNotificationsSection() {
           <label class="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
-              checked={prefs.daily_enabled}
-              onChange={(e) => savePrefs({ daily_enabled: (e.target as HTMLInputElement).checked })}
+              checked={!!prefs.daily_reminder}
+              onChange={(e) => savePrefs({ daily_reminder: (e.target as HTMLInputElement).checked ? 1 : 0 })}
               class="accent-accent"
             />
             <span class="text-sm text-text-primary">Daily reminder</span>
           </label>
         </div>
-        {prefs.daily_enabled && (
+        {!!prefs.daily_reminder && (
           <div class="pl-6 flex items-center gap-2">
             <span class="text-xs text-text-ghost">Time:</span>
             <input
               type="time"
-              value={prefs.daily_time}
-              onInput={(e) => savePrefs({ daily_time: (e.target as HTMLInputElement).value })}
+              value={prefs.daily_reminder_time}
+              onInput={(e) => savePrefs({ daily_reminder_time: (e.target as HTMLInputElement).value })}
               class="rounded bg-bg-primary px-2 py-1 text-xs text-text-primary outline-none border border-text-ghost/20 [color-scheme:dark]"
             />
           </div>
@@ -470,20 +442,20 @@ function PushNotificationsSection() {
           <label class="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
-              checked={prefs.weekly_enabled}
-              onChange={(e) => savePrefs({ weekly_enabled: (e.target as HTMLInputElement).checked })}
+              checked={!!prefs.weekly_summary}
+              onChange={(e) => savePrefs({ weekly_summary: (e.target as HTMLInputElement).checked ? 1 : 0 })}
               class="accent-accent"
             />
             <span class="text-sm text-text-primary">Weekly summary</span>
           </label>
         </div>
-        {prefs.weekly_enabled && (
+        {!!prefs.weekly_summary && (
           <div class="pl-6 flex flex-col gap-2">
             <div class="flex items-center gap-2">
               <span class="text-xs text-text-ghost">Day:</span>
               <select
-                value={prefs.weekly_day}
-                onChange={(e) => savePrefs({ weekly_day: parseInt((e.target as HTMLSelectElement).value) })}
+                value={prefs.weekly_summary_day}
+                onChange={(e) => savePrefs({ weekly_summary_day: parseInt((e.target as HTMLSelectElement).value) })}
                 class="rounded bg-bg-primary px-2 py-1 text-xs text-text-primary outline-none border border-text-ghost/20"
               >
                 {DAYS.map((d, i) => (
@@ -495,8 +467,8 @@ function PushNotificationsSection() {
               <span class="text-xs text-text-ghost">Time:</span>
               <input
                 type="time"
-                value={prefs.weekly_time}
-                onInput={(e) => savePrefs({ weekly_time: (e.target as HTMLInputElement).value })}
+                value={prefs.weekly_summary_time}
+                onInput={(e) => savePrefs({ weekly_summary_time: (e.target as HTMLInputElement).value })}
                 class="rounded bg-bg-primary px-2 py-1 text-xs text-text-primary outline-none border border-text-ghost/20 [color-scheme:dark]"
               />
             </div>

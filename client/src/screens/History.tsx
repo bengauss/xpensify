@@ -8,6 +8,7 @@ import { DetailSheet } from "@/components/DetailSheet";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { editingExpense } from "@/screens/Add";
 import { sync } from "@/sync/engine";
+import { historyFilter } from "@/lib/filters";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -442,6 +443,14 @@ export default function HistoryScreen() {
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
+  // On mount: if a filter is set from Analytics drill-down, pre-populate search
+  useEffect(() => {
+    const f = historyFilter.value;
+    if (f) {
+      setSearchQuery(f.category);
+    }
+  }, []);
+
   // Load all non-deleted expenses sorted by timestamp DESC
   const expenses = useLiveQuery(
     () => db.expenses
@@ -506,11 +515,48 @@ export default function HistoryScreen() {
     ? subcategoryMap.get(selectedExpense.subcategory_id)
     : undefined;
 
+  const activeFilter = historyFilter.value;
+
+  function clearFilter() {
+    historyFilter.value = null;
+    setSearchQuery("");
+  }
+
   return (
     <div class="flex flex-col min-h-0 px-4 pb-24">
       {/* Search bar */}
       <div class="pt-2 pb-3 sticky top-0 z-10" style={{ backgroundColor: "var(--color-bg-primary)" }}>
         <SearchBar value={searchQuery} onChange={setSearchQuery} />
+
+        {/* Filter chip — shown when a drill-down filter is active */}
+        {activeFilter && (
+          <div class="flex items-center gap-2 mt-2">
+            <button
+              onClick={clearFilter}
+              class="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border-0 cursor-pointer"
+              style={{
+                backgroundColor: "var(--color-accent)",
+                color: "white",
+              }}
+            >
+              <span>{activeFilter.category}</span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Empty state */}

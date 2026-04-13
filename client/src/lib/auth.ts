@@ -1,4 +1,5 @@
 import { signal } from "@preact/signals";
+import { api } from "@/lib/api";
 
 export interface User {
   id: string;
@@ -10,15 +11,11 @@ export interface User {
 export const currentUser = signal<User | null>(null);
 
 export async function login(username: string, password: string): Promise<void> {
-  const res = await fetch("/api/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
-  });
+  const res = await api.api.auth.login.$post({ json: { username, password } });
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error((data as { message?: string }).message ?? "Login failed");
+    throw new Error((data as { error?: string }).error ?? "Login failed");
   }
 
   const user = await res.json() as User;
@@ -26,12 +23,12 @@ export async function login(username: string, password: string): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
-  await fetch("/api/auth/logout", { method: "POST" });
+  await api.api.auth.logout.$post();
   currentUser.value = null;
 }
 
 export async function checkAuth(): Promise<void> {
-  const res = await fetch("/api/auth/me");
+  const res = await api.api.auth.me.$get();
 
   if (res.status === 401) {
     currentUser.value = null;
