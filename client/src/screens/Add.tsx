@@ -9,6 +9,8 @@ import { AmountInput } from "@/components/AmountInput";
 import { CategorySelector } from "@/components/CategorySelector";
 import { NoteInput } from "@/components/NoteInput";
 import { Toast } from "@/components/Toast";
+import { currentUser } from "@/lib/auth";
+import { sync } from "@/sync/engine";
 
 /** Signal used by History detail sheet to put Add screen into edit mode */
 export const editingExpense = signal<Expense | null>(null);
@@ -62,7 +64,7 @@ export function AddScreen() {
       // New expense
       await db.expenses.add({
         id: crypto.randomUUID(),
-        user_id: "", // filled by sync engine after auth
+        user_id: currentUser.value?.id ?? "",
         category_id: categoryId,
         subcategory_id: subcategoryId,
         amount: amountCents,
@@ -84,6 +86,9 @@ export function AddScreen() {
 
       setToast({ visible: true, message: `✓ EUR ${(amountCents / 100).toFixed(2)} → ${sub?.name ?? "expense"} saved` });
     }
+
+    // Trigger background sync
+    sync().catch(console.error);
 
     // Reset form
     setAmount("");

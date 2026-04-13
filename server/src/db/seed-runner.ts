@@ -3,7 +3,6 @@ import { readFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import bcrypt from "bcryptjs";
-import { v4 as uuidv4 } from "uuid";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -21,11 +20,11 @@ const passwordHash = bcrypt.hashSync("<redacted>", 10);
 db.prepare(
   `INSERT OR IGNORE INTO users (id, username, display_name, password_hash, avatar_color)
    VALUES (?, ?, ?, ?, ?)`
-).run(uuidv4(), "alice", "Alice", passwordHash, "#6c9cff");
+).run("00000000-0000-0000-0000-000000000001", "alice", "Alice", passwordHash, "#6c9cff");
 
 db.prepare(
   `INSERT OR IGNORE INTO users (id, username, display_name, password_hash, avatar_color)
    VALUES (?, ?, ?, ?, ?)`
-).run(uuidv4(), "bob", "Bob", passwordHash, "#9775fa");
+).run("00000000-0000-0000-0000-000000000002", "bob", "Bob", passwordHash, "#9775fa");
 
 console.log("Seed complete.");

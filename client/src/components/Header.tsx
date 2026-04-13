@@ -1,3 +1,5 @@
+import { SyncIndicator } from "@/components/SyncIndicator";
+
 interface HeaderProps {
   onSettingsClick?: () => void;
 }
@@ -9,8 +11,7 @@ export function Header({ onSettingsClick }: HeaderProps) {
         <span class="text-lg font-light text-accent">xpensify</span>
       </div>
       <div class="flex items-center gap-3">
-        {/* Sync indicator placeholder — filled in Phase 2 */}
-        <div id="sync-indicator" />
+        <SyncIndicator />
         {onSettingsClick && (
           <button
             onClick={onSettingsClick}
