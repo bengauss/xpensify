@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync } from "fs";
+import { readFileSync, existsSync, mkdirSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { createRequire } from "module";
@@ -31,14 +31,34 @@ for (const arg of args) {
 
 if (!csvFile) {
   console.error("Usage: npx tsx scripts/import-csv.ts [--dry-run] <csv-file>");
+  console.error("");
+  console.error("  Set DB_PATH env var or create a .env file in the project root.");
+  console.error("  The script reads .env automatically to match the server's DB path.");
   process.exit(1);
+}
+
+// ---------------------------------------------------------------------------
+// Load .env file (same as server) so DB_PATH is consistent
+// ---------------------------------------------------------------------------
+
+const envPath = resolve(__dirname, "../.env");
+if (existsSync(envPath)) {
+  for (const line of readFileSync(envPath, "utf-8").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const val = trimmed.slice(eq + 1).trim();
+    if (!process.env[key]) process.env[key] = val;
+  }
 }
 
 // ---------------------------------------------------------------------------
 // DB connection (mirrors server connection logic)
 // ---------------------------------------------------------------------------
 
-const dbPath = process.env.DB_PATH || "./server/data/xpensify.db";
+const dbPath = process.env.DB_PATH || "./data/xpensify.db";
 const dbDir = resolve(dbPath, "..");
 mkdirSync(dbDir, { recursive: true });
 

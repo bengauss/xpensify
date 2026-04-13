@@ -262,7 +262,7 @@ interface UserInfo {
   avatar_color: string;
 }
 
-function PasswordChangeForm({ userId }: { userId: string }) {
+function PasswordChangeForm() {
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [msg, setMsg] = useState("");
@@ -273,7 +273,7 @@ function PasswordChangeForm({ userId }: { userId: string }) {
     const res = await fetch("/api/auth/change-password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, currentPassword: currentPw, newPassword: newPw }),
+      body: JSON.stringify({ current_password: currentPw, new_password: newPw }),
     });
     if (res.ok) {
       setMsg("Password updated");
@@ -343,14 +343,16 @@ function UsersSection() {
                 {user.display_name.charAt(0).toUpperCase()}
               </div>
               <span class="flex-1 text-sm text-text-primary">{user.display_name}</span>
-              <button
-                onClick={() => setExpandedUser(expandedUser === user.id ? null : user.id)}
-                class="text-xs text-text-ghost hover:text-accent"
-              >
-                {expandedUser === user.id ? "cancel" : "change password"}
-              </button>
+              {user.id === currentUser.value?.id && (
+                <button
+                  onClick={() => setExpandedUser(expandedUser === user.id ? null : user.id)}
+                  class="text-xs text-text-ghost hover:text-accent"
+                >
+                  {expandedUser === user.id ? "cancel" : "change password"}
+                </button>
+              )}
             </div>
-            {expandedUser === user.id && <PasswordChangeForm userId={user.id} />}
+            {expandedUser === user.id && user.id === currentUser.value?.id && <PasswordChangeForm />}
           </div>
         ))}
       </div>
@@ -390,13 +392,16 @@ function PushNotificationsSection() {
 
   async function enablePush() {
     setMsg("");
+    const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+    if (!vapidKey) { setMsg("VAPID key not configured"); return; }
+
     const permission = await Notification.requestPermission();
     if (permission !== "granted") { setMsg("Permission denied"); return; }
 
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: undefined,
+      applicationServerKey: vapidKey,
     });
 
     const res = await fetch("/api/push/subscribe", {
