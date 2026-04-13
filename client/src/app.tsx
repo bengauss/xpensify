@@ -10,6 +10,7 @@ import { lazy } from "preact-iso";
 
 const HistoryScreen = lazy(() => import("@/screens/History"));
 const RecurringScreen = lazy(() => import("@/screens/Recurring"));
+const RecurringForm = lazy(() => import("@/screens/RecurringForm"));
 const AnalyticsScreen = lazy(() => import("@/screens/Analytics"));
 
 /** Wraps a screen component with the shell chrome (Header + BottomNav) */
@@ -74,6 +75,22 @@ export function App() {
           component={() => (
             <Shell>
               <RecurringScreen />
+            </Shell>
+          )}
+        />
+        <Route
+          path="/recurring/new"
+          component={() => (
+            <Shell>
+              <RecurringForm />
+            </Shell>
+          )}
+        />
+        <Route
+          path="/recurring/edit/:id"
+          component={() => (
+            <Shell>
+              <RecurringForm />
             </Shell>
           )}
         />

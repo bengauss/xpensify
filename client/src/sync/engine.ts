@@ -1,4 +1,5 @@
 import { db } from "@/db/local";
+import type { RecurringTemplate } from "@/db/local";
 import { syncStatus } from "@/sync/status";
 
 export async function sync(): Promise<void> {
@@ -62,4 +63,17 @@ export async function sync(): Promise<void> {
 
   const remaining = await db.expenses.where("sync_status").equals("pending").count();
   syncStatus.value = { state: "idle", pendingCount: remaining };
+
+  // Separately fetch recurring templates and upsert into local DB
+  try {
+    const templatesRes = await fetch("/api/recurring");
+    if (templatesRes.ok) {
+      const templates = await templatesRes.json() as RecurringTemplate[];
+      if (Array.isArray(templates) && templates.length > 0) {
+        await db.recurring_templates.bulkPut(templates);
+      }
+    }
+  } catch {
+    // Non-fatal: recurring templates will just be stale / empty
+  }
 }
