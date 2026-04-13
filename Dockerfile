@@ -1,0 +1,33 @@
+# Stage 1: Build client
+FROM node:22-alpine AS client-build
+WORKDIR /app/client
+COPY client/package.json client/package-lock.json* ./
+RUN npm ci
+COPY client/ ./
+COPY server/src/ /app/server/src/
+RUN npm run build
+
+# Stage 2: Build server
+FROM node:22-alpine AS server-build
+WORKDIR /app/server
+COPY server/package.json server/package-lock.json* ./
+RUN npm ci
+COPY server/ ./
+RUN npm run build
+
+# Stage 3: Runtime
+FROM node:22-alpine
+WORKDIR /app
+
+COPY server/package.json server/package-lock.json* ./server/
+RUN cd server && npm ci --omit=dev
+
+COPY --from=server-build /app/server/dist ./server/dist
+COPY --from=server-build /app/server/src/db/*.sql ./server/dist/db/
+COPY --from=client-build /app/client/dist ./client/dist
+
+ENV NODE_ENV=production
+ENV PORT=3000
+
+EXPOSE 3000
+CMD ["node", "server/dist/index.js"]
