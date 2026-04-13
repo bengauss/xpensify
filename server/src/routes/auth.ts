@@ -7,11 +7,14 @@ const auth = new Hono<{ Variables: Variables }>();
 
 const SESSION_MAX_AGE = 60 * 60 * 24 * 90; // 90 days in seconds
 
+const isProduction = process.env.NODE_ENV === "production";
+
 function buildSessionCookie(sessionId: string, clear = false): string {
+  const secure = isProduction ? "; Secure" : "";
   if (clear) {
-    return `xpensify_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
+    return `xpensify_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure}`;
   }
-  return `xpensify_session=${sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_MAX_AGE}`;
+  return `xpensify_session=${sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_MAX_AGE}${secure}`;
 }
 
 // POST /api/auth/login

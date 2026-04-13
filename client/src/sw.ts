@@ -13,8 +13,10 @@ cleanupOutdatedCaches();
 
 // NetworkFirst for all API routes so we get fresh data when online,
 // but can fall back to cache when offline
+// Only cache GET requests to API — never cache mutations (POST, PATCH, DELETE)
 registerRoute(
-  ({ url }) => url.pathname.startsWith("/api/"),
+  ({ url, request }) =>
+    url.pathname.startsWith("/api/") && request.method === "GET",
   new NetworkFirst({ cacheName: "api-cache" })
 );
 

@@ -15,6 +15,8 @@ interface DetailSheetProps {
 export function DetailSheet({ open, onClose, children }: DetailSheetProps) {
   const [state, setState] = useState<SheetState>("closed");
   const sheetRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (open && (state === "closed" || state === "closing")) {
@@ -27,10 +29,8 @@ export function DetailSheet({ open, onClose, children }: DetailSheetProps) {
   useEffect(() => {
     if (state === "opening" && sheetRef.current) {
       const el = sheetRef.current;
-      el.style.transform = "translateY(100%)";
       const kf: DOMKeyframesDefinition = { translateY: ["100%", "0%"] };
       animate(el as Element, kf, springs.gentle).then(() => {
-        if (sheetRef.current) sheetRef.current.style.transform = "";
         setState("open");
       });
     } else if (state === "closing" && sheetRef.current) {
@@ -39,7 +39,7 @@ export function DetailSheet({ open, onClose, children }: DetailSheetProps) {
       const opts: AnimationOptions = { duration: 0.2, ease: "easeOut" };
       animate(el as Element, kf, opts).then(() => {
         setState("closed");
-        onClose();
+        onCloseRef.current();
       });
     }
   }, [state]);
@@ -60,7 +60,9 @@ export function DetailSheet({ open, onClose, children }: DetailSheetProps) {
           backgroundColor: "rgba(0,0,0,0.5)",
           opacity: overlayVisible ? 1 : 0,
         }}
-        onClick={() => setState("closing")}
+        onClick={() => {
+          if (state === "open") setState("closing");
+        }}
       />
 
       {/* Sheet */}

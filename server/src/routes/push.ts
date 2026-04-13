@@ -28,14 +28,16 @@ push.post("/subscribe", async (c) => {
     return c.json({ error: "endpoint, keys.p256dh, and keys.auth are required" }, 400);
   }
 
-  // Upsert: delete existing subscription for this endpoint then re-insert
-  db.prepare(`DELETE FROM push_subscriptions WHERE endpoint = ?`).run(endpoint);
-
-  const id = crypto.randomUUID();
-  db.prepare(
-    `INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth)
-     VALUES (?, ?, ?, ?, ?)`
-  ).run(id, userId, endpoint, keys.p256dh, keys.auth);
+  // Upsert: delete existing subscription for this endpoint then re-insert (atomic)
+  const upsertSubscription = db.transaction(() => {
+    db.prepare(`DELETE FROM push_subscriptions WHERE endpoint = ?`).run(endpoint);
+    const id = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run(id, userId, endpoint, keys.p256dh, keys.auth);
+  });
+  upsertSubscription();
 
   return c.json({ ok: true }, 201);
 });
@@ -136,11 +138,11 @@ push.put("/preferences", async (c) => {
        updated_at           = datetime('now')`
   ).run(
     userId,
-    daily_reminder ?? null,
-    daily_reminder_time ?? null,
-    weekly_summary ?? null,
-    weekly_summary_day ?? null,
-    weekly_summary_time ?? null
+    daily_reminder ?? 0,
+    daily_reminder_time ?? "21:00",
+    weekly_summary ?? 0,
+    weekly_summary_day ?? 0,
+    weekly_summary_time ?? "09:00"
   );
 
   const updated = db

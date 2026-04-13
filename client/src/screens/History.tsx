@@ -309,7 +309,7 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
 
   async function handleDelete() {
     await db.expenses.update(expense.id, {
-      deleted: 1 as any,
+      deleted: 1,
       sync_status: "pending",
       updated_at: new Date().toISOString(),
     });
@@ -463,21 +463,6 @@ export default function HistoryScreen() {
     (subcategories ?? []).map((s) => [s.id, s])
   );
 
-  // IntersectionObserver for infinite scroll
-  useEffect(() => {
-    if (!sentinelRef.current) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setVisibleDays((d) => d + INCREMENT_DAYS);
-        }
-      },
-      { rootMargin: "200px" }
-    );
-    observer.observe(sentinelRef.current);
-    return () => observer.disconnect();
-  }, []);
-
   if (!expenses || !categories || !subcategories) {
     return (
       <div class="flex flex-1 items-center justify-center px-4">
@@ -498,6 +483,21 @@ export default function HistoryScreen() {
   // Limit to visibleDays
   const visibleGroups = allGroups.slice(0, visibleDays);
   const hasMore = allGroups.length > visibleDays;
+
+  // IntersectionObserver for infinite scroll — re-attach when hasMore changes
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleDays((d) => d + INCREMENT_DAYS);
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [hasMore]);
 
   const selectedCategory = selectedExpense
     ? categoryMap.get(selectedExpense.category_id)

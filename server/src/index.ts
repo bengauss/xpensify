@@ -79,8 +79,8 @@ cron.schedule("0 21 * * *", () => {
   }
 });
 
-// Weekly summary push at Sunday 9 AM
-cron.schedule("0 9 * * 0", () => {
+// Weekly summary push at 9 AM every day (the job filters by each user's configured day)
+cron.schedule("0 9 * * *", () => {
   try {
     sendWeeklySummaries();
   } catch (err) {

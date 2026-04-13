@@ -48,21 +48,23 @@ sync.post("/", authMiddleware, async (c) => {
   const lastSync: string | null =
     typeof body.last_sync === "string" ? body.last_sync : null;
 
+  // Server is clock authority: updated_at = datetime('now') on every upsert.
+  // Last sync to arrive always wins (last-write-wins by arrival order).
   const upsertStmt = db.prepare<[string, string, string, string, number, string | null, string | null, string, string, string | null, number]>(
     `INSERT INTO expenses
        (id, user_id, category_id, subcategory_id, amount, note, tags, timestamp, source, recurring_template_id, deleted, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(id) DO UPDATE SET
-       category_id          = CASE WHEN excluded.updated_at > expenses.updated_at THEN excluded.category_id          ELSE expenses.category_id          END,
-       subcategory_id       = CASE WHEN excluded.updated_at > expenses.updated_at THEN excluded.subcategory_id       ELSE expenses.subcategory_id       END,
-       amount               = CASE WHEN excluded.updated_at > expenses.updated_at THEN excluded.amount               ELSE expenses.amount               END,
-       note                 = CASE WHEN excluded.updated_at > expenses.updated_at THEN excluded.note                 ELSE expenses.note                 END,
-       tags                 = CASE WHEN excluded.updated_at > expenses.updated_at THEN excluded.tags                 ELSE expenses.tags                 END,
-       timestamp            = CASE WHEN excluded.updated_at > expenses.updated_at THEN excluded.timestamp            ELSE expenses.timestamp            END,
-       source               = CASE WHEN excluded.updated_at > expenses.updated_at THEN excluded.source               ELSE expenses.source               END,
-       recurring_template_id= CASE WHEN excluded.updated_at > expenses.updated_at THEN excluded.recurring_template_id ELSE expenses.recurring_template_id END,
-       deleted              = CASE WHEN excluded.updated_at > expenses.updated_at THEN excluded.deleted              ELSE expenses.deleted              END,
-       updated_at           = CASE WHEN excluded.updated_at > expenses.updated_at THEN excluded.updated_at           ELSE expenses.updated_at           END`
+       category_id           = excluded.category_id,
+       subcategory_id        = excluded.subcategory_id,
+       amount                = excluded.amount,
+       note                  = excluded.note,
+       tags                  = excluded.tags,
+       timestamp             = excluded.timestamp,
+       source                = excluded.source,
+       recurring_template_id = excluded.recurring_template_id,
+       deleted               = excluded.deleted,
+       updated_at            = datetime('now')`
   );
 
   const appliedIds: string[] = [];

@@ -16,12 +16,13 @@ export function NoteInput({ value, onChange }: NoteInputProps) {
       return;
     }
 
+    let cancelled = false;
     const lower = value.toLowerCase();
-    db.expenses
-      .where("sync_status")
-      .notEqual("") // scan all
-      .toArray()
-      .then((expenses) => {
+
+    // Debounce: wait 200ms before querying
+    const timer = setTimeout(() => {
+      db.expenses.toArray().then((expenses) => {
+        if (cancelled) return;
         // Count note frequencies
         const freq = new Map<string, number>();
         for (const exp of expenses) {
@@ -38,6 +39,12 @@ export function NoteInput({ value, onChange }: NoteInputProps) {
           .map(([n]) => n);
         setSuggestions(matches);
       });
+    }, 200);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [value]);
 
   return (
