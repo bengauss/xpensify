@@ -15,7 +15,8 @@ export interface Expense {
   timestamp: string;
   source: 'manual' | 'import' | 'recurring';
   recurring_template_id: string | null;
-  deleted: boolean;
+  /** 0 = not deleted, 1 = deleted (INTEGER to match server) */
+  deleted: number;
   /** Client-only field — never synced to server */
   sync_status: 'pending' | 'synced' | 'error';
   created_at: string;

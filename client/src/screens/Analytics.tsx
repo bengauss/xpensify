@@ -124,7 +124,7 @@ export default function AnalyticsScreen() {
 
   // Reactively load all expenses + categories so analytics recompute on change
   const allExpenses = useLiveQuery(
-    () => db.expenses.filter((e) => !e.deleted).toArray(),
+    () => db.expenses.filter((e) => e.deleted === 0).toArray(),
     []
   );
   const allCategories = useLiveQuery(() => db.categories.toArray(), []);

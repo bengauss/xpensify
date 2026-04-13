@@ -447,7 +447,7 @@ export default function HistoryScreen() {
     () => db.expenses
       .orderBy("timestamp")
       .reverse()
-      .filter((e) => !e.deleted)
+      .filter((e) => e.deleted === 0)
       .toArray(),
     []
   );

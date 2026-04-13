@@ -21,7 +21,7 @@ export async function getMonthlyTotal(
 ): Promise<number> {
   const ym = `${year}-${String(month).padStart(2, "0")}`;
   const expenses = await db.expenses
-    .filter((e) => !e.deleted && e.timestamp.startsWith(ym))
+    .filter((e) => e.deleted === 0 && e.timestamp.startsWith(ym))
     .toArray();
   return expenses.reduce((sum, e) => sum + e.amount, 0);
 }
@@ -34,7 +34,7 @@ export async function getCategoryBreakdown(
 ): Promise<CategoryBreakdownItem[]> {
   const ym = `${year}-${String(month).padStart(2, "0")}`;
   const expenses = await db.expenses
-    .filter((e) => !e.deleted && e.timestamp.startsWith(ym))
+    .filter((e) => e.deleted === 0 && e.timestamp.startsWith(ym))
     .toArray();
 
   const categories = await db.categories.toArray();
@@ -65,7 +65,7 @@ export async function getMonthlyTrend(
   db: typeof defaultDb
 ): Promise<MonthlyTrendItem[]> {
   const expenses = await db.expenses
-    .filter((e) => !e.deleted)
+    .filter((e) => e.deleted === 0)
     .toArray();
 
   const totals = new Map<string, number>();

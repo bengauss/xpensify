@@ -73,7 +73,7 @@ export function AddScreen() {
         timestamp: `${dateStr}T12:00:00.000Z`,
         source: "manual",
         recurring_template_id: null,
-        deleted: 0 as any,
+        deleted: 0,
         sync_status: "pending",
         created_at: now,
         updated_at: now,

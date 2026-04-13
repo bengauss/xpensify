@@ -39,7 +39,13 @@ app.route("/api/export", exportRouter);
 // In production, serve the client build
 if (process.env.NODE_ENV === "production") {
   app.use("/*", serveStatic({ root: "../client/dist" }));
-  app.get("*", serveStatic({ root: "../client/dist", path: "index.html" }));
+  // SPA fallback: serve index.html for any non-API route
+  app.get("*", async (c) => {
+    const { readFileSync } = await import("fs");
+    const { resolve } = await import("path");
+    const html = readFileSync(resolve("../client/dist/index.html"), "utf-8");
+    return c.html(html);
+  });
 }
 
 const port = parseInt(process.env.PORT || "3000", 10);

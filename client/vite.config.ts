@@ -15,7 +15,7 @@ export default defineConfig({
       injectRegister: false,
       manifest: false, // already have public/manifest.json
       injectManifest: {
-        injectionPoint: undefined, // let workbox find __WB_MANIFEST
+        injectionPoint: "self.__WB_MANIFEST",
       },
       devOptions: {
         enabled: false, // don't run SW in dev

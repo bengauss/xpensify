@@ -111,7 +111,7 @@ function useForecast(): ForecastData | null | "error" {
       .filter((e) => {
         const now = new Date();
         const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-        return e.timestamp.startsWith(ym) && !e.deleted;
+        return e.timestamp.startsWith(ym) && e.deleted === 0;
       })
       .toArray(),
     []
