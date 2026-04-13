@@ -40,7 +40,15 @@ export function AmountInput({ value, onChange, inputRef }: AmountInputProps) {
     onChange(sanitized);
   }
 
-  const displayText = value || "0";
+  function handleBlur() {
+    if (!value) return;
+    const n = parseFloat(value);
+    if (!isNaN(n)) {
+      onChange(n.toFixed(2));
+    }
+  }
+
+  const displayText = value || "0.00";
 
   return (
     <div class="flex flex-col items-center gap-2">
@@ -59,7 +67,8 @@ export function AmountInput({ value, onChange, inputRef }: AmountInputProps) {
             inputMode="decimal"
             value={value}
             onInput={handleInput}
-            placeholder="0"
+            onBlur={handleBlur}
+            placeholder="0.00"
             class="
               w-full
               bg-transparent

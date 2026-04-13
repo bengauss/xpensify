@@ -31,6 +31,7 @@ const SUBCATEGORIES: Subcategory[] = [
   // Living
   { id: 'sub-rent',                category_id: 'cat-living',         name: 'rent',          sort_order: 1, created_at: NOW, updated_at: NOW },
   { id: 'sub-mortgage',            category_id: 'cat-living',         name: 'mortgage',      sort_order: 2, created_at: NOW, updated_at: NOW },
+  { id: 'sub-fees',                category_id: 'cat-living',         name: 'fees',          sort_order: 3, created_at: NOW, updated_at: NOW },
   // Household
   { id: 'sub-cleaning',            category_id: 'cat-household',      name: 'cleaning',      sort_order: 1, created_at: NOW, updated_at: NOW },
   { id: 'sub-hh-utilities',        category_id: 'cat-household',      name: 'utilities',     sort_order: 2, created_at: NOW, updated_at: NOW },

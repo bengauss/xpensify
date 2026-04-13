@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "preact/hooks";
+import { useState, useRef, useEffect, useMemo } from "preact/hooks";
 import { signal } from "@preact/signals";
 import { animate } from "motion";
 import { springs } from "@/lib/animations";
@@ -12,6 +12,63 @@ import { Toast } from "@/components/Toast";
 import { currentUser } from "@/lib/auth";
 import { sync } from "@/sync/engine";
 import { useLocation } from "preact-iso";
+
+// ── Discretionary spend helpers ──────────────────────────────────────────────
+
+function getMonthKey(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function prevMonth(year: number, month: number): { year: number; month: number } {
+  return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
+}
+
+function formatWhole(cents: number): string {
+  return Math.round(cents / 100).toLocaleString("de-DE");
+}
+
+function roundToHundred(cents: number): number {
+  return Math.round(cents / 10000) * 10000;
+}
+
+function computeDiscretionary(expenses: Expense[] | undefined) {
+  if (!expenses) return null;
+
+  const now = new Date();
+  const curYear = now.getFullYear();
+  const curMonth = now.getMonth() + 1;
+  const curKey = getMonthKey(curYear, curMonth);
+
+  // Current month discretionary
+  const currentTotal = expenses
+    .filter((e) => e.timestamp.startsWith(curKey) && e.deleted === 0 && e.source !== "recurring")
+    .reduce((s, e) => s + e.amount, 0);
+
+  // Last 3 completed months
+  let y = curYear, m = curMonth;
+  const monthTotals: number[] = [];
+  for (let i = 0; i < 3; i++) {
+    ({ year: y, month: m } = prevMonth(y, m));
+    const key = getMonthKey(y, m);
+    const total = expenses
+      .filter((e) => e.timestamp.startsWith(key) && e.deleted === 0 && e.source !== "recurring")
+      .reduce((s, e) => s + e.amount, 0);
+    monthTotals.push(total);
+  }
+
+  // Outlier guard: if any month > 2x median, drop it
+  const hasData = monthTotals.some((t) => t > 0);
+  if (!hasData) return { current: currentTotal, avg: null };
+
+  const sorted = [...monthTotals].sort((a, b) => a - b);
+  const median = sorted[1]; // middle of 3
+  const filtered = monthTotals.filter((t) => t <= median * 2);
+  const avg = filtered.length > 0
+    ? filtered.reduce((s, t) => s + t, 0) / filtered.length
+    : monthTotals.reduce((s, t) => s + t, 0) / monthTotals.length;
+
+  return { current: currentTotal, avg: roundToHundred(avg) };
+}
 
 /** Signal used by History detail sheet to put Add screen into edit mode */
 export const editingExpense = signal<Expense | null>(null);
@@ -42,6 +99,10 @@ export function AddScreen() {
     db.categories.toArray().then((cats) => cats.sort((a, b) => a.sort_order - b.sort_order))
   );
   const subcategories = useLiveQuery(() => db.subcategories.toArray());
+
+  // Discretionary spend counter — reactive via liveQuery
+  const allExpenses = useLiveQuery(() => db.expenses.toArray());
+  const disc = useMemo(() => computeDiscretionary(allExpenses), [allExpenses]);
 
   const today = new Date();
   const dateLabel = formatDateLabel(dateStr, today);
@@ -121,23 +182,36 @@ export function AddScreen() {
         inputRef={amountRef}
       />
 
-      {/* Date label — tappable to open date picker */}
-      <div class="relative px-1">
-        <button
-          onClick={() => dateInputRef.current?.showPicker()}
-          class="text-base text-text-tertiary bg-transparent border-0 cursor-pointer p-0"
-        >
-          {dateLabel}
-        </button>
-        <input
-          ref={dateInputRef}
-          type="date"
-          value={dateStr}
-          onInput={(e) => setDateStr((e.target as HTMLInputElement).value)}
-          class="absolute inset-0 opacity-0 pointer-events-none"
-          tabIndex={-1}
-          style={{ colorScheme: "dark" }}
-        />
+      {/* Date label + discretionary counter */}
+      <div class="flex items-center justify-between px-1">
+        {/* Date — tappable to open picker */}
+        <div class="relative">
+          <button
+            onClick={() => dateInputRef.current?.showPicker()}
+            class="text-xs text-text-tertiary bg-transparent border-0 cursor-pointer p-0"
+          >
+            {dateLabel}
+          </button>
+          <input
+            ref={dateInputRef}
+            type="date"
+            value={dateStr}
+            onInput={(e) => setDateStr((e.target as HTMLInputElement).value)}
+            class="absolute inset-0 opacity-0 pointer-events-none"
+            tabIndex={-1}
+            style={{ colorScheme: "dark" }}
+          />
+        </div>
+
+        {/* Discretionary spend counter */}
+        {disc && (
+          <span class="text-xs text-text-tertiary tabular-nums">
+            {formatWhole(disc.current)} discretionary
+            {disc.avg !== null && (
+              <> / ~{formatWhole(disc.avg)} avg</>
+            )}
+          </span>
+        )}
       </div>
 
       {/* Category selector */}

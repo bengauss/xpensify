@@ -57,6 +57,14 @@ export function animateRowEntrance(container: HTMLElement): () => void {
   const anims: { stop: () => void }[] = [];
   const timers: number[] = [];
 
+  // Set initial hidden state on rows we'll animate (rows render visible by default)
+  for (let i = 0; i < count; i++) {
+    const textEl = rows[i].querySelector<HTMLElement>("[data-row-text]");
+    const amountEl = rows[i].querySelector<HTMLElement>("[data-row-amount]");
+    if (textEl) { textEl.style.opacity = "0"; textEl.style.transform = "translateX(-20px)"; }
+    if (amountEl) { amountEl.style.opacity = "0"; }
+  }
+
   // Phase 1: text slides in from left
   for (let i = 0; i < count; i++) {
     const textEl = rows[i].querySelector<HTMLElement>("[data-row-text]");
@@ -83,14 +91,6 @@ export function animateRowEntrance(container: HTMLElement): () => void {
       }, delay);
       timers.push(t);
     }
-  }
-
-  // Rows beyond MAX_ANIMATED_ROWS — make them visible immediately
-  for (let i = count; i < rows.length; i++) {
-    const textEl = rows[i].querySelector<HTMLElement>("[data-row-text]");
-    const amountEl = rows[i].querySelector<HTMLElement>("[data-row-amount]");
-    if (textEl) { textEl.style.opacity = "1"; textEl.style.transform = ""; }
-    if (amountEl) { amountEl.style.opacity = "1"; }
   }
 
   return () => {

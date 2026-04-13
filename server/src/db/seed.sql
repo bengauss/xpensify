@@ -19,7 +19,7 @@ INSERT OR REPLACE INTO categories (id, name, icon, color, sort_order) VALUES
 -- Subcategories
 DELETE FROM subcategories WHERE id NOT IN (
   'sub-groceries','sub-delivery','sub-eating-out','sub-drinks',
-  'sub-rent','sub-mortgage',
+  'sub-rent','sub-mortgage','sub-fees',
   'sub-cleaning','sub-hh-utilities','sub-hh-furniture','sub-kitchen','sub-toiletries','sub-appliances','sub-hh-other',
   'sub-public','sub-taxi','sub-car',
   'sub-medical','sub-working-out','sub-sports-gear',
@@ -44,6 +44,7 @@ INSERT OR REPLACE INTO subcategories (id, category_id, name, sort_order) VALUES
   -- Living
   ('sub-rent', 'cat-living', 'rent', 1),
   ('sub-mortgage', 'cat-living', 'mortgage', 2),
+  ('sub-fees', 'cat-living', 'fees', 3),
   -- Household
   ('sub-cleaning', 'cat-household', 'cleaning', 1),
   ('sub-hh-utilities', 'cat-household', 'utilities', 2),

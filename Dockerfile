@@ -3,12 +3,13 @@ FROM node:22-alpine AS client-build
 WORKDIR /app/client
 COPY client/package.json client/package-lock.json* ./
 RUN npm ci
-COPY client/ ./
-# Copy server source for type-only imports (@server/* path alias)
-COPY server/src/ /app/server/src/
-# Install server deps so tsc can resolve transitive type imports (hono, etc.)
+# Install server deps for type-only imports (@server/* path alias) BEFORE copying
+# client source — these layers rarely change and are expensive (~10s).
 COPY server/package.json server/package-lock.json* /app/server/
+COPY server/src/ /app/server/src/
 RUN apk add --no-cache python3 make g++ && cd /app/server && npm ci
+# Now copy client source (changes frequently, but everything above is cached)
+COPY client/ ./
 # VITE_* env vars must be present at build time for import.meta.env
 ARG VITE_VAPID_PUBLIC_KEY
 ENV VITE_VAPID_PUBLIC_KEY=$VITE_VAPID_PUBLIC_KEY

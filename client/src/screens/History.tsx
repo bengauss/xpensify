@@ -54,7 +54,8 @@ function formatDateLabel(dateKey: string): string {
   if (dateKey === yesterdayKey) return "yesterday";
 
   const d = new Date(dateKey + "T12:00:00");
-  return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  const suffix = d.getFullYear() !== today.getFullYear() ? ` ${d.getFullYear()}` : "";
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}${suffix}`;
 }
 
 function formatFullDate(dateKey: string): string {
@@ -220,7 +221,7 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
       style={{ WebkitTapHighlightColor: "transparent", paddingTop: 10, paddingBottom: 10 }}
     >
       {/* Icon + text — animated together */}
-      <div data-row-text class="flex items-center gap-3 flex-1 min-w-0" style={{ opacity: 0, transform: "translateX(-20px)" }}>
+      <div data-row-text class="flex items-center gap-3 flex-1 min-w-0">
         {/* Category icon + user badge */}
         <div class="flex-shrink-0 relative" style={{ width: 36, height: 36 }}>
           <div
@@ -292,7 +293,7 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
       </div>
 
       {/* Amount — no currency prefix */}
-      <span data-row-amount class="flex-shrink-0 text-base font-medium tabular-nums" style={{ color: "var(--color-text-primary)", opacity: 0 }}>
+      <span data-row-amount class="flex-shrink-0 text-base font-medium tabular-nums" style={{ color: "var(--color-text-primary)" }}>
         {formatRowAmount(expense.amount)}
       </span>
     </button>
@@ -309,11 +310,11 @@ interface DayHeaderProps {
 function DayHeader({ dateKey, total }: DayHeaderProps) {
   return (
     <div data-row class="flex flex-col gap-1 pt-5 pb-1">
-      <div data-row-text class="flex items-center justify-between px-1" style={{ opacity: 0, transform: "translateX(-20px)" }}>
+      <div data-row-text class="flex items-center justify-between px-1">
         <span class="text-sm font-semibold tracking-wider" style={{ color: "var(--color-text-tertiary)" }}>
           {formatDateLabel(dateKey)}
         </span>
-        <span data-row-amount class="text-sm tabular-nums" style={{ color: "var(--color-text-tertiary)", opacity: 0 }}>
+        <span data-row-amount class="text-sm tabular-nums" style={{ color: "var(--color-text-tertiary)" }}>
           {formatAmount(total)}
         </span>
       </div>
