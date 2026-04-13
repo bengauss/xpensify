@@ -26,10 +26,10 @@ export function AddScreen() {
   const [dateStr, setDateStr] = useState(
     editing ? editing.timestamp.split("T")[0] : new Date().toISOString().split("T")[0]
   );
-  const [showDate, setShowDate] = useState(!!editing);
   const [toast, setToast] = useState({ visible: false, message: "" });
 
   const amountRef = useRef<HTMLInputElement>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   // Re-focus input when navigating back to Add tab
   useEffect(() => {
@@ -102,7 +102,6 @@ export function AddScreen() {
     setAmount("");
     setNote("");
     setShowNote(false);
-    setShowDate(false);
     setDateStr(new Date().toISOString().split("T")[0]);
 
     setTimeout(() => amountRef.current?.focus(), 100);
@@ -122,8 +121,24 @@ export function AddScreen() {
         inputRef={amountRef}
       />
 
-      {/* Date label */}
-      <div class="text-base text-text-tertiary px-1">{dateLabel}</div>
+      {/* Date label — tappable to open date picker */}
+      <div class="relative px-1">
+        <button
+          onClick={() => dateInputRef.current?.showPicker()}
+          class="text-base text-text-tertiary bg-transparent border-0 cursor-pointer p-0"
+        >
+          {dateLabel}
+        </button>
+        <input
+          ref={dateInputRef}
+          type="date"
+          value={dateStr}
+          onInput={(e) => setDateStr((e.target as HTMLInputElement).value)}
+          class="absolute inset-0 opacity-0 pointer-events-none"
+          tabIndex={-1}
+          style={{ colorScheme: "dark" }}
+        />
+      </div>
 
       {/* Category selector */}
       {dataReady ? (
@@ -153,22 +168,6 @@ export function AddScreen() {
         )}
         {showNote && <NoteInput value={note} onChange={setNote} />}
 
-        {!showDate && (
-          <button
-            onClick={() => setShowDate(true)}
-            class="text-base text-text-secondary self-start"
-          >
-            + date
-          </button>
-        )}
-        {showDate && (
-          <input
-            type="date"
-            value={dateStr}
-            onInput={(e) => setDateStr((e.target as HTMLInputElement).value)}
-            class="w-full rounded-lg bg-bg-surface px-4 py-3 text-sm text-text-primary outline-none border border-text-ghost/20 [color-scheme:dark]"
-          />
-        )}
       </div>
     </div>
   );
