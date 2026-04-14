@@ -82,9 +82,9 @@ export function NoteInput({ value, onChange }: NoteInputProps) {
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         placeholder="add a note..."
-        class="w-full bg-transparent outline-none border-0 text-sm font-normal placeholder:text-[#2a2a32] py-1"
+        class="w-full bg-transparent outline-none border-0 text-sm font-normal placeholder:text-text-muted py-1"
         style={{
-          color: "#4a4a52",
+          color: "var(--color-text-secondary)",
           caretColor: "var(--color-accent)",
           borderBottom: `0.5px solid ${focused ? "rgba(255,255,255,0.06)" : "transparent"}`,
         }}
