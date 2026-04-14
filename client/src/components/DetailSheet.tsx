@@ -32,7 +32,7 @@ export function DetailSheet({ open, onClose, children }: DetailSheetProps) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const anim = (animate as any)(
         el,
-        { transform: ["translateY(100%)", "translateY(0%)"] },
+        { y: ["100%", "0%"] },
         springs.gentle
       );
       anim.then(() => setState("open"));
@@ -41,8 +41,8 @@ export function DetailSheet({ open, onClose, children }: DetailSheetProps) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const anim = (animate as any)(
         el,
-        { transform: ["translateY(0%)", "translateY(100%)"] },
-        { duration: 0.2, ease: "ease-out" }
+        { y: ["0%", "100%"] },
+        { duration: 0.2, ease: "easeOut" }
       );
       anim.then(() => {
         setState("closed");
