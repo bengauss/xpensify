@@ -4,6 +4,38 @@ import db from "../db/connection.js";
 import { authMiddleware, type Variables } from "../middleware/auth.js";
 
 const SESSION_MAX_AGE = 60 * 60 * 24 * 90; // 90 days in seconds
+const MIN_PASSWORD_LENGTH = 8;
+
+// Simple in-memory per-IP rate limit for login.
+const LOGIN_MAX_ATTEMPTS = 10;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function clientIp(header: string | undefined): string {
+  if (!header) return "unknown";
+  // x-forwarded-for may contain a comma-separated list — first entry is the client
+  return header.split(",")[0]?.trim() || "unknown";
+}
+
+function registerFailedLogin(ip: string): void {
+  const now = Date.now();
+  const current = loginAttempts.get(ip);
+  if (!current || current.resetAt < now) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+  } else {
+    current.count += 1;
+  }
+}
+
+function isLoginBlocked(ip: string): boolean {
+  const current = loginAttempts.get(ip);
+  if (!current) return false;
+  if (current.resetAt < Date.now()) {
+    loginAttempts.delete(ip);
+    return false;
+  }
+  return current.count >= LOGIN_MAX_ATTEMPTS;
+}
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -18,6 +50,12 @@ function buildSessionCookie(sessionId: string, clear = false): string {
 const auth = new Hono<{ Variables: Variables }>()
   // POST /api/auth/login
   .post("/login", async (c) => {
+    const ip = clientIp(c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip"));
+
+    if (isLoginBlocked(ip)) {
+      return c.json({ error: "Too many attempts, try again later" }, 429);
+    }
+
     let body: { username?: unknown; password?: unknown };
     try {
       body = await c.req.json();
@@ -39,13 +77,18 @@ const auth = new Hono<{ Variables: Variables }>()
       | undefined;
 
     if (!user) {
+      registerFailedLogin(ip);
       return c.json({ error: "Invalid credentials" }, 401);
     }
 
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
+      registerFailedLogin(ip);
       return c.json({ error: "Invalid credentials" }, 401);
     }
+
+    // Success — clear any accumulated failures for this IP
+    loginAttempts.delete(ip);
 
     const sessionId = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + SESSION_MAX_AGE * 1000).toISOString();
@@ -100,8 +143,8 @@ const auth = new Hono<{ Variables: Variables }>()
       return c.json({ error: "current_password and new_password are required" }, 400);
     }
 
-    if (new_password.length < 1) {
-      return c.json({ error: "new_password must not be empty" }, 400);
+    if (new_password.length < MIN_PASSWORD_LENGTH) {
+      return c.json({ error: `new_password must be at least ${MIN_PASSWORD_LENGTH} characters` }, 400);
     }
 
     const userId = c.get("userId");

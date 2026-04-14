@@ -34,6 +34,8 @@ interface ExpenseRow {
   updated_at: string;
 }
 
+const MAX_NOTE_LENGTH = 1000;
+
 const sync = new Hono<{ Variables: Variables }>()
   // POST /api/sync
   .post("/", authMiddleware, async (c) => {
@@ -49,65 +51,114 @@ const sync = new Hono<{ Variables: Variables }>()
     const lastSync: string | null =
       typeof body.last_sync === "string" ? body.last_sync : null;
 
-    // Server is clock authority: updated_at = datetime('now') on every upsert.
-    // Last sync to arrive always wins (last-write-wins by arrival order).
-    const upsertStmt = db.prepare<[string, string, string, string, number, string | null, string | null, string | null, string, string, string | null, number]>(
-      `INSERT INTO expenses
-         (id, user_id, category_id, subcategory_id, amount, note, tags, image_url, timestamp, source, recurring_template_id, deleted, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-       ON CONFLICT(id) DO UPDATE SET
-         category_id           = excluded.category_id,
-         subcategory_id        = excluded.subcategory_id,
-         amount                = excluded.amount,
-         note                  = excluded.note,
-         tags                  = excluded.tags,
-         image_url             = excluded.image_url,
-         timestamp             = excluded.timestamp,
-         source                = excluded.source,
-         recurring_template_id = excluded.recurring_template_id,
-         deleted               = excluded.deleted,
-         updated_at            = datetime('now')`
+    const selectExistingStmt = db.prepare<[string], { updated_at: string }>(
+      `SELECT updated_at FROM expenses WHERE id = ?`
     );
 
-    const appliedIds: string[] = [];
+    const insertStmt = db.prepare<[string, string, string, string, number, string | null, string | null, string | null, string, string, string | null, number]>(
+      `INSERT INTO expenses
+         (id, user_id, category_id, subcategory_id, amount, note, tags, image_url, timestamp, source, recurring_template_id, deleted, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+    );
+
+    const updateStmt = db.prepare<[string, string, number, string | null, string | null, string | null, string, string, string | null, number, string]>(
+      `UPDATE expenses SET
+         category_id = ?,
+         subcategory_id = ?,
+         amount = ?,
+         note = ?,
+         tags = ?,
+         image_url = ?,
+         timestamp = ?,
+         source = ?,
+         recurring_template_id = ?,
+         deleted = ?,
+         updated_at = datetime('now')
+       WHERE id = ?`
+    );
+
+    const subcategoryCheckStmt = db.prepare<[string, string], { id: string }>(
+      `SELECT id FROM subcategories WHERE id = ? AND category_id = ?`
+    );
+
+    // Track IDs that were accepted (client's version won and server now stores it).
+    // Rejected IDs (server had newer version) must be included in the delta so the
+    // client receives the authoritative state.
+    const acceptedIds: string[] = [];
 
     const runTransaction = db.transaction(() => {
       for (const change of changes) {
-        upsertStmt.run(
-          change.id,
-          userId,
-          change.category_id,
-          change.subcategory_id,
-          change.amount,
-          change.note ?? null,
-          change.tags ?? null,
-          change.image_url ?? null,
-          change.timestamp,
-          change.source ?? "manual",
-          change.recurring_template_id ?? null,
-          change.deleted ?? 0
-        );
-        appliedIds.push(change.id);
+        if (typeof change.id !== "string" || !change.id) continue;
+
+        // Reject malformed/oversized notes rather than silently truncating
+        if (typeof change.note === "string" && change.note.length > MAX_NOTE_LENGTH) {
+          console.warn(`[sync] rejecting ${change.id}: note exceeds ${MAX_NOTE_LENGTH} chars`);
+          continue;
+        }
+
+        // Validate that subcategory belongs to the claimed category
+        const sub = subcategoryCheckStmt.get(change.subcategory_id, change.category_id);
+        if (!sub) {
+          console.warn(`[sync] rejecting ${change.id}: subcategory ${change.subcategory_id} does not belong to category ${change.category_id}`);
+          continue;
+        }
+
+        const existing = selectExistingStmt.get(change.id);
+        const clientUpdatedAt = typeof change.updated_at === "string" ? change.updated_at : "";
+
+        if (!existing) {
+          insertStmt.run(
+            change.id,
+            userId,
+            change.category_id,
+            change.subcategory_id,
+            change.amount,
+            change.note ?? null,
+            change.tags ?? null,
+            change.image_url ?? null,
+            change.timestamp,
+            change.source ?? "manual",
+            change.recurring_template_id ?? null,
+            change.deleted ?? 0
+          );
+          acceptedIds.push(change.id);
+        } else if (clientUpdatedAt > existing.updated_at) {
+          updateStmt.run(
+            change.category_id,
+            change.subcategory_id,
+            change.amount,
+            change.note ?? null,
+            change.tags ?? null,
+            change.image_url ?? null,
+            change.timestamp,
+            change.source ?? "manual",
+            change.recurring_template_id ?? null,
+            change.deleted ?? 0,
+            change.id
+          );
+          acceptedIds.push(change.id);
+        }
+        // else: server has a newer version — don't push to acceptedIds so the
+        // authoritative server row flows back in the delta below.
       }
 
       let serverChanges: ExpenseRow[];
 
       if (lastSync === null) {
-        // Initial sync: return all non-deleted expenses (shared household)
+        // Initial sync / cache clear: return ALL records including soft-deleted
+        // tombstones so the client's view stays consistent after future deletes.
         serverChanges = db
-          .prepare(
-            `SELECT * FROM expenses WHERE deleted = 0`
-          )
+          .prepare(`SELECT * FROM expenses`)
           .all() as ExpenseRow[];
-      } else if (appliedIds.length > 0) {
-        const placeholders = appliedIds.map(() => "?").join(", ");
+      } else if (acceptedIds.length > 0) {
+        const placeholders = acceptedIds.map(() => "?").join(", ");
         serverChanges = db
           .prepare(
             `SELECT * FROM expenses
              WHERE updated_at > ?
                AND id NOT IN (${placeholders})`
           )
-          .all(lastSync, ...appliedIds) as ExpenseRow[];
+          .all(lastSync, ...acceptedIds) as ExpenseRow[];
       } else {
         serverChanges = db
           .prepare(

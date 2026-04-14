@@ -12,60 +12,47 @@ import { editingExpense } from "@/screens/Add";
 import { sync } from "@/sync/engine";
 import { historyFilter } from "@/lib/filters";
 import { useEntrance, animateRowEntrance } from "@/lib/entrance";
+import { formatMoney, formatEur, dateKey as toDateKey, todayKey, MONTHS_SHORT } from "@/lib/format";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const INITIAL_DAYS = 60;
 const INCREMENT_DAYS = 60;
 
-const USER_STYLES: Array<{ match: (id: string) => boolean; bg: string; text: string; label: string; name: string }> = [
-  { match: (id) => id === "00000000-0000-0000-0000-000000000001" || id.toLowerCase().includes("alice"), bg: "#1a3066", text: "#6c9cff", label: "B", name: "Alice" },
-  { match: (id) => id === "00000000-0000-0000-0000-000000000002" || id.toLowerCase().includes("bob"), bg: "#2d1a52", text: "#9775fa", label: "Y", name: "Bob" },
+const USER_STYLES: Array<{ id: string; bg: string; text: string; label: string; name: string }> = [
+  { id: "00000000-0000-0000-0000-000000000001", bg: "#1a3066", text: "#6c9cff", label: "B", name: "Alice" },
+  { id: "00000000-0000-0000-0000-000000000002", bg: "#2d1a52", text: "#9775fa", label: "Y", name: "Bob" },
 ];
 
 const DEFAULT_USER_COLOR = { bg: "#1a3066", text: "#6c9cff", label: "?", name: "?" };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function getDateKey(timestamp: string): string {
-  return timestamp.split("T")[0];
-}
-
-function formatAmount(cents: number): string {
-  return `EUR ${(cents / 100).toFixed(2)}`;
-}
-
-function formatRowAmount(cents: number): string {
-  return (cents / 100).toFixed(2);
-}
-
-const MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
-
-function formatDateLabel(dateKey: string): string {
+function formatDateLabel(key: string): string {
   const today = new Date();
-  const todayKey = today.toISOString().split("T")[0];
+  const todayK = todayKey();
 
-  if (dateKey === todayKey) return "today";
+  if (key === todayK) return "today";
 
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayKey = yesterday.toISOString().split("T")[0];
 
-  if (dateKey === yesterdayKey) return "yesterday";
+  if (key === yesterdayKey) return "yesterday";
 
-  const d = new Date(dateKey + "T12:00:00");
+  const d = new Date(key + "T12:00:00");
   const suffix = d.getFullYear() !== today.getFullYear() ? ` ${d.getFullYear()}` : "";
-  return `${d.getDate()} ${MONTHS[d.getMonth()]}${suffix}`;
+  return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}${suffix}`;
 }
 
-function formatFullDate(dateKey: string): string {
-  const d = new Date(dateKey + "T12:00:00");
-  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+function formatFullDate(key: string): string {
+  const d = new Date(key + "T12:00:00");
+  return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 function getUserStyle(userId: string): { bg: string; text: string; label: string; name: string } {
   for (const style of USER_STYLES) {
-    if (style.match(userId)) return style;
+    if (style.id === userId) return style;
   }
   const initial = (userId ?? "?")[0]?.toUpperCase() ?? "?";
   return { ...DEFAULT_USER_COLOR, label: initial, name: userId };
@@ -80,7 +67,7 @@ interface DayGroup {
 function groupByDay(expenses: Expense[]): DayGroup[] {
   const map = new Map<string, Expense[]>();
   for (const e of expenses) {
-    const key = getDateKey(e.timestamp);
+    const key = toDateKey(e.timestamp);
     const arr = map.get(key) ?? [];
     arr.push(e);
     map.set(key, arr);
@@ -105,7 +92,7 @@ function matchesSearch(
   const q = query.toLowerCase();
   const cat = categoryMap.get(expense.category_id);
   const sub = subcategoryMap.get(expense.subcategory_id);
-  const amount = formatAmount(expense.amount).toLowerCase();
+  const amount = formatEur(expense.amount).toLowerCase();
   return (
     (cat?.name ?? "").toLowerCase().includes(q) ||
     (sub?.name ?? "").toLowerCase().includes(q) ||
@@ -221,7 +208,7 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
       style={{ WebkitTapHighlightColor: "transparent", paddingTop: 10, paddingBottom: 10 }}
     >
       {/* Icon + text — animated together */}
-      <div data-row-text class="flex items-center gap-3 flex-1 min-w-0">
+      <div data-row-text class="flex items-center gap-3 flex-1 min-w-0" style={{ opacity: 0, transform: "translateX(-20px)" }}>
         {/* Category icon + user badge */}
         <div class="flex-shrink-0 relative" style={{ width: 36, height: 36 }}>
           <div
@@ -293,8 +280,8 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
       </div>
 
       {/* Amount — no currency prefix */}
-      <span data-row-amount class="flex-shrink-0 text-base font-medium tabular-nums" style={{ color: "var(--color-text-primary)" }}>
-        {formatRowAmount(expense.amount)}
+      <span data-row-amount class="flex-shrink-0 text-base font-medium tabular-nums" style={{ color: "var(--color-text-primary)", opacity: 0 }}>
+        {formatMoney(expense.amount)}
       </span>
     </button>
   );
@@ -310,12 +297,12 @@ interface DayHeaderProps {
 function DayHeader({ dateKey, total }: DayHeaderProps) {
   return (
     <div data-row class="flex flex-col gap-1 pt-5 pb-1">
-      <div data-row-text class="flex items-center justify-between px-1">
+      <div data-row-text class="flex items-center justify-between px-1" style={{ opacity: 0, transform: "translateX(-20px)" }}>
         <span class="text-sm font-semibold tracking-wider" style={{ color: "var(--color-text-tertiary)" }}>
           {formatDateLabel(dateKey)}
         </span>
-        <span data-row-amount class="text-sm tabular-nums" style={{ color: "var(--color-text-tertiary)" }}>
-          {formatAmount(total)}
+        <span data-row-amount class="text-sm tabular-nums" style={{ color: "var(--color-text-tertiary)", opacity: 0 }}>
+          {formatEur(total)}
         </span>
       </div>
       <div class="h-px w-full bg-accent opacity-30" />
@@ -339,7 +326,7 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
   const iconKey = (category?.icon ?? "other").toLowerCase();
   const IconComponent = categoryIcons[iconKey] ?? categoryIcons["other"];
   const color = category?.color ?? "#868e96";
-  const dateKey = getDateKey(expense.timestamp);
+  const expenseDateKey = toDateKey(expense.timestamp);
 
   async function handleDelete() {
     await db.expenses.update(expense.id, {
@@ -373,7 +360,7 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
           class="text-3xl font-semibold tabular-nums"
           style={{ color }}
         >
-          {formatAmount(expense.amount)}
+          {formatMoney(expense.amount)}
         </div>
         <div class="text-sm" style={{ color: "var(--color-text-secondary)" }}>
           {category?.name ?? "—"}
@@ -389,7 +376,7 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
         style={{ backgroundColor: "rgba(255,255,255,0.04)" }}
       >
         {/* Date */}
-        <DetailRow label="date" value={formatFullDate(dateKey)} />
+        <DetailRow label="date" value={formatFullDate(expenseDateKey)} />
 
         {/* Note */}
         {expense.note && <DetailRow label="note" value={expense.note} />}
@@ -420,38 +407,47 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
       </div>
 
       {/* Action buttons */}
-      <div class="flex flex-col gap-2 mt-1">
-        {/* Edit */}
-        <button
-          onClick={handleEdit}
-          class="w-full py-3 rounded-xl text-sm font-medium"
-          style={{
-            backgroundColor: "rgba(108,156,255,0.15)",
-            color: "var(--color-accent)",
-          }}
-        >
-          edit
-        </button>
-
-        {/* Delete / confirm */}
-        {showConfirm ? (
-          <ConfirmDialog
-            onConfirm={handleDelete}
-            onCancel={() => setShowConfirm(false)}
-          />
-        ) : (
+      {showConfirm ? (
+        <ConfirmDialog
+          onConfirm={handleDelete}
+          onCancel={() => setShowConfirm(false)}
+        />
+      ) : (
+        <div class="grid grid-cols-2 mt-1" style={{ gap: 10 }}>
+          <button
+            onClick={handleEdit}
+            onPointerDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
+            onPointerUp={(e) => { animate(e.currentTarget, { scale: 1 }, springs.snappy); }}
+            onPointerLeave={(e) => { animate(e.currentTarget, { scale: 1 }, springs.snappy); }}
+            class="flex items-center justify-center text-sm font-medium cursor-pointer border-0"
+            style={{
+              height: 48,
+              borderRadius: 14,
+              backgroundColor: "rgba(108,156,255,0.12)",
+              color: "var(--color-accent)",
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            edit
+          </button>
           <button
             onClick={() => setShowConfirm(true)}
-            class="w-full py-3 rounded-xl text-sm font-medium"
+            onPointerDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
+            onPointerUp={(e) => { animate(e.currentTarget, { scale: 1 }, springs.snappy); }}
+            onPointerLeave={(e) => { animate(e.currentTarget, { scale: 1 }, springs.snappy); }}
+            class="flex items-center justify-center text-sm font-medium cursor-pointer border-0"
             style={{
+              height: 48,
+              borderRadius: 14,
               backgroundColor: "rgba(255,55,95,0.12)",
               color: "var(--color-danger)",
+              WebkitTapHighlightColor: "transparent",
             }}
           >
             delete
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -563,7 +559,7 @@ export default function HistoryScreen() {
   }
 
   return (
-    <div class="flex flex-col min-h-0 px-4 pb-24">
+    <div class="flex flex-col min-h-0 px-4 pt-2 pb-24">
       {/* Search bar */}
       <div class="pt-2 pb-3 sticky top-0 z-10" style={{ backgroundColor: "var(--color-bg-primary)" }}>
         <SearchBar value={searchQuery} onChange={setSearchQuery} />

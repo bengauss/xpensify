@@ -1,16 +1,13 @@
 import { useRef, useEffect } from "preact/hooks";
 import { animate } from "motion";
 import type { CategoryBreakdownItem } from "@/lib/analytics";
+import { formatMoney } from "@/lib/format";
 
 interface CategoryBarsProps {
   breakdown: CategoryBreakdownItem[];
   onCategoryTap?: (categoryId: string) => void;
   /** When false, bars stay at width 0 and amounts hidden. Set to true to trigger animations. */
   enabled?: boolean;
-}
-
-function formatAmount(cents: number): string {
-  return (cents / 100).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export function CategoryBars({ breakdown, onCategoryTap, enabled = true }: CategoryBarsProps) {
@@ -150,7 +147,7 @@ export function CategoryBars({ breakdown, onCategoryTap, enabled = true }: Categ
               transform: "translateY(6px)",
             }}
           >
-            {formatAmount(item.total)}
+            {formatMoney(item.total)}
           </span>
         </button>
       ))}

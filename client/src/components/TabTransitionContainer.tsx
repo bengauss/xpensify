@@ -1,17 +1,20 @@
 import { useState, useRef, useEffect } from "preact/hooks";
-import { useLocation, lazy } from "preact-iso";
-import { animate } from "motion";
+import { lazy, Suspense } from "preact/compat";
+import { useLocation } from "preact-iso";
 import { AddScreen } from "@/screens/Add";
-import HistoryScreen from "@/screens/History";
-import RecurringScreen from "@/screens/Recurring";
-import RecurringForm from "@/screens/RecurringForm";
-import SettingsScreen from "@/screens/Settings";
 import {
   pendingDirection,
   isTransitioning,
   completeTransition,
 } from "@/lib/transitions";
 
+// Keep AddScreen (the default landing) eager; lazy-load everything else to
+// shrink the main bundle on cold start.
+const HistoryScreen = lazy(() => import("@/screens/History"));
+const RecurringScreen = lazy(() => import("@/screens/Recurring"));
+const RecurringForm = lazy(() => import("@/screens/RecurringForm"));
+const SettingsScreen = lazy(() => import("@/screens/Settings"));
+const SettingsCategoriesScreen = lazy(() => import("@/screens/SettingsCategories"));
 const AnalyticsScreen = lazy(() => import("@/screens/Analytics"));
 
 // ── RouteContent: manual path → component mapping ──────────────────────────
@@ -27,6 +30,7 @@ function RouteContent({ path }: { path: string }) {
   }
   if (path === "/analytics") return <AnalyticsScreen />;
   if (path === "/settings") return <SettingsScreen />;
+  if (path === "/settings/categories") return <SettingsCategoriesScreen />;
   return <AddScreen />;
 }
 
@@ -40,12 +44,10 @@ interface Slot {
 export function TabTransitionContainer() {
   const { path } = useLocation();
 
-  // Two slots — each can hold a Slot or null
   const [slots, setSlots] = useState<(Slot | null)[]>([
     { path, key: 0 },
     null,
   ]);
-  // Which slot is currently the active (visible, interactive) one
   const [activeIdx, setActiveIdx] = useState(0);
 
   const layer0Ref = useRef<HTMLDivElement>(null);
@@ -54,6 +56,17 @@ export function TabTransitionContainer() {
 
   const prevPathRef = useRef(path);
   const nextKeyRef = useRef(1);
+  const activeIdxRef = useRef(activeIdx);
+  const inFlightRef = useRef<{
+    oldIdx: number;
+    newIdx: number;
+    cleanup: () => void;
+  } | null>(null);
+
+  // Keep activeIdxRef in sync for use in effects/callbacks
+  useEffect(() => {
+    activeIdxRef.current = activeIdx;
+  }, [activeIdx]);
 
   useEffect(() => {
     if (path === prevPathRef.current) return;
@@ -62,42 +75,37 @@ export function TabTransitionContainer() {
     const dir = pendingDirection.value;
     pendingDirection.value = 0;
 
-    // Non-tab navigation: just swap content in the active layer (no animation)
+    // Non-tab navigation: swap content in active layer (no animation)
     if (dir === 0) {
+      // If mid-transition, fast-forward first
+      if (inFlightRef.current) fastForward();
+
       setSlots((s) => {
         const next = [...s];
-        next[activeIdx] = { path, key: nextKeyRef.current++ };
+        next[activeIdxRef.current] = { path, key: nextKeyRef.current++ };
         return next;
       });
       completeTransition();
       return;
     }
 
-    // Tab transition: crossfade between two layers
-    if (isTransitioning.value) {
-      // Safety: shouldn't happen because navigateTab blocks, but bail if it does
-      setSlots((s) => {
-        const next = [...s];
-        next[activeIdx] = { path, key: nextKeyRef.current++ };
-        return next;
-      });
-      completeTransition();
-      return;
-    }
+    // Tab transition — fast-forward any in-flight transition first
+    if (inFlightRef.current) fastForward();
+
+    const oldIdx = activeIdxRef.current;
+    const newIdx = 1 - oldIdx;
 
     isTransitioning.value = true;
 
-    const oldIdx = activeIdx;
-    const newIdx = 1 - oldIdx;
-
-    // Mount new content into the inactive layer (which is at opacity 0)
+    // Mount new content in inactive layer. JSX will render it at opacity 0
+    // (no `active` class on the inactive layer), so it mounts invisibly.
     setSlots((s) => {
       const next = [...s];
       next[newIdx] = { path, key: nextKeyRef.current++ };
       return next;
     });
 
-    // After Preact renders, animate both layers
+    // After Preact commits the render, run the CSS transition
     requestAnimationFrame(() => {
       const outLayer = layerRefs[oldIdx].current;
       const inLayer = layerRefs[newIdx].current;
@@ -107,28 +115,41 @@ export function TabTransitionContainer() {
         return;
       }
 
-      const inFromX = dir === 1 ? "30%" : "-30%";
-      const outToX = dir === 1 ? "-15%" : "15%";
+      // Step 1: Outgoing layer — set exit transform, remove active class.
+      // CSS transition handles opacity (1 → 0, from .active → base) and
+      // transform (0 → exit). Starts immediately, no frame gap.
+      outLayer.style.transform = `translateX(${dir === 1 ? "-15%" : "15%"})`;
+      outLayer.classList.remove("active");
 
-      // Set incoming layer's starting transform
-      inLayer.style.transform = `translateX(${inFromX})`;
+      // Step 2: Incoming layer — place at starting position WITHOUT transition.
+      inLayer.style.transition = "none";
+      inLayer.style.transform = `translateX(${dir === 1 ? "30%" : "-30%"})`;
+      // Force layout to commit the starting state in this frame.
+      void inLayer.offsetHeight;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const outAnim = (animate as any)(
-        outLayer,
-        { opacity: [1, 0], transform: ["translateX(0%)", `translateX(${outToX})`] },
-        { duration: 0.2, easing: "ease-out" }
-      );
+      // Step 3: Re-enable transition, activate. CSS transition animates
+      // from the committed start state to the active state in ONE frame.
+      inLayer.style.transition = "";
+      inLayer.style.transform = "translateX(0)";
+      inLayer.classList.add("active");
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const inAnim = (animate as any)(
-        inLayer,
-        { opacity: [0, 1], transform: [`translateX(${inFromX})`, "translateX(0%)"] },
-        { type: "spring", stiffness: 400, damping: 35 }
-      );
+      // Cleanup when the incoming layer's transition ends
+      const onEnd = (e: TransitionEvent) => {
+        if (e.target !== inLayer) return; // ignore bubbled events
+        if (e.propertyName !== "opacity" && e.propertyName !== "transform") return;
+        cleanup();
+      };
+      inLayer.addEventListener("transitionend", onEnd);
 
-      Promise.all([outAnim, inAnim].map((a: any) => a)).then(() => {
-        // Transition complete: flip activeIdx and unmount old content
+      // Fallback timer in case transitionend doesn't fire
+      const fallbackTimer = window.setTimeout(cleanup, 400);
+
+      function cleanup() {
+        inLayer!.removeEventListener("transitionend", onEnd);
+        clearTimeout(fallbackTimer);
+        inFlightRef.current = null;
+
+        // Update state: new layer is active, old content unmounted
         setActiveIdx(newIdx);
         setSlots((s) => {
           const next = [...s];
@@ -137,12 +158,44 @@ export function TabTransitionContainer() {
         });
         isTransitioning.value = false;
         completeTransition();
-      });
+      }
+
+      inFlightRef.current = { oldIdx, newIdx, cleanup };
     });
   }, [path]);
 
+  /**
+   * Fast-forward any in-flight transition to its end state.
+   * Used when a new tab is tapped mid-transition.
+   */
+  function fastForward() {
+    const inFlight = inFlightRef.current;
+    if (!inFlight) return;
+
+    const outLayer = layerRefs[inFlight.oldIdx].current;
+    const inLayer = layerRefs[inFlight.newIdx].current;
+
+    if (outLayer) {
+      outLayer.style.transition = "none";
+      outLayer.style.transform = "";
+      outLayer.classList.remove("active");
+      void outLayer.offsetHeight;
+      outLayer.style.transition = "";
+    }
+    if (inLayer) {
+      inLayer.style.transition = "none";
+      inLayer.style.transform = "";
+      inLayer.classList.add("active");
+      void inLayer.offsetHeight;
+      inLayer.style.transition = "";
+    }
+
+    // Trigger the cleanup so state catches up
+    inFlight.cleanup();
+  }
+
   return (
-    <main class="flex-1 relative overflow-hidden pt-2">
+    <main class="transition-container">
       {[0, 1].map((i) => {
         const slot = slots[i];
         const isActive = activeIdx === i;
@@ -150,15 +203,13 @@ export function TabTransitionContainer() {
           <div
             key={i}
             ref={layerRefs[i]}
-            style={{
-              position: "absolute",
-              inset: 0,
-              opacity: isActive ? 1 : 0,
-              pointerEvents: isActive ? "auto" : "none",
-              overflowY: "auto",
-            }}
+            class={`transition-layer ${isActive ? "active" : ""}`}
           >
-            {slot && <RouteContent key={slot.key} path={slot.path} />}
+            {slot && (
+              <Suspense fallback={null}>
+                <RouteContent key={slot.key} path={slot.path} />
+              </Suspense>
+            )}
           </div>
         );
       })}

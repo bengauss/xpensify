@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useState, useRef, useEffect } from "preact/hooks";
 import { useLocation } from "preact-iso";
 import { login } from "@/lib/auth";
 
@@ -8,67 +8,176 @@ export function LoginScreen() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const userRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    userRef.current?.focus();
+  }, []);
 
   async function handleSubmit(e: Event) {
     e.preventDefault();
+    if (loading) return;
     setError(null);
     setLoading(true);
     try {
       await login(username, password);
       route("/");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      const msg = err instanceof Error ? err.message : "";
+      setError(msg.toLowerCase().includes("invalid") || msg.toLowerCase().includes("password")
+        ? "invalid username or password"
+        : msg.toLowerCase() || "invalid username or password");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div class="flex min-h-dvh items-center justify-center bg-bg-primary px-6">
-      <div class="w-full max-w-sm rounded-2xl bg-bg-surface p-6 sm:p-8 flex flex-col gap-6">
-        <div class="text-center">
-          <h1 class="text-3xl font-light text-accent tracking-wide">xpensify</h1>
-          <p class="mt-2 text-sm text-text-secondary">sign in to continue</p>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "100dvh",
+        padding: 20,
+        backgroundColor: "#0c0d12",
+      }}
+    >
+      <div style={{ width: "100%", maxWidth: 320, display: "flex", flexDirection: "column", alignItems: "center" }}>
+        {/* Logo + wordmark */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="1" y="1" width="22" height="22" rx="6" fill="none" stroke="#6c9cff" stroke-width="1.5" />
+            <path d="M8 8L16 16M16 8L8 16" stroke="#6c9cff" stroke-width="1.75" stroke-linecap="round" />
+          </svg>
+          <span style={{ color: "#6c9cff", fontSize: 24, fontWeight: 600, letterSpacing: 0.2 }}>
+            xpensify
+          </span>
         </div>
 
-        <form onSubmit={handleSubmit} class="flex flex-col gap-5">
-          <div class="flex flex-col gap-1.5">
-            <label class="text-xs text-text-secondary uppercase tracking-wider">username</label>
-            <input
-              type="text"
-              value={username}
-              onInput={(e) => setUsername((e.target as HTMLInputElement).value)}
-              autocomplete="username"
-              required
-              class="rounded-xl bg-bg-primary border border-text-muted px-4 py-3.5 text-base text-text-primary outline-none focus:border-accent transition-colors"
-            />
-          </div>
+        {/* Subtitle */}
+        <p
+          style={{
+            marginTop: 8,
+            marginBottom: 32,
+            fontSize: 14,
+            color: "#8e8e93",
+            whiteSpace: "nowrap",
+          }}
+        >
+          sign in to continue
+        </p>
 
-          <div class="flex flex-col gap-1.5">
-            <label class="text-xs text-text-secondary uppercase tracking-wider">password</label>
-            <input
-              type="password"
-              value={password}
-              onInput={(e) => setPassword((e.target as HTMLInputElement).value)}
-              autocomplete="current-password"
-              required
-              class="rounded-xl bg-bg-primary border border-text-muted px-4 py-3.5 text-base text-text-primary outline-none focus:border-accent transition-colors"
-            />
-          </div>
+        {/* Form */}
+        <form onSubmit={handleSubmit} style={{ width: "100%", display: "flex", flexDirection: "column" }}>
+          <LoginField
+            ref={userRef}
+            label="username"
+            type="text"
+            value={username}
+            onInput={(v) => setUsername(v)}
+            autocomplete="username"
+          />
+
+          <div style={{ height: 16 }} />
+
+          <LoginField
+            label="password"
+            type="password"
+            value={password}
+            onInput={(v) => setPassword(v)}
+            autocomplete="current-password"
+          />
 
           <button
             type="submit"
             disabled={loading}
-            class="mt-2 rounded-xl bg-accent px-4 py-3.5 text-base font-medium text-bg-primary transition-opacity disabled:opacity-50 hover:opacity-90"
+            onPointerDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.98)"; }}
+            onPointerUp={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = ""; }}
+            onPointerLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = ""; }}
+            style={{
+              marginTop: 24,
+              height: 48,
+              borderRadius: 12,
+              backgroundColor: "#6c9cff",
+              color: "white",
+              fontSize: 14,
+              fontWeight: 500,
+              border: 0,
+              cursor: loading ? "default" : "pointer",
+              opacity: loading ? 0.7 : 1,
+              transition: "transform 120ms ease, opacity 150ms ease",
+              WebkitTapHighlightColor: "transparent",
+            }}
           >
-            {loading ? "signing in…" : "sign in"}
+            {loading ? "signing in..." : "sign in"}
           </button>
 
           {error && (
-            <p class="text-sm text-[var(--color-danger)] text-center">{error}</p>
+            <p
+              style={{
+                marginTop: 16,
+                fontSize: 13,
+                color: "#ff375f",
+                textAlign: "center",
+              }}
+            >
+              {error}
+            </p>
           )}
         </form>
       </div>
     </div>
   );
 }
+
+// ── Labeled input ────────────────────────────────────────────────────────────
+
+import { forwardRef } from "preact/compat";
+
+interface LoginFieldProps {
+  label: string;
+  type: "text" | "password";
+  value: string;
+  onInput: (v: string) => void;
+  autocomplete: string;
+}
+
+const LoginField = forwardRef<HTMLInputElement, LoginFieldProps>(function LoginField(
+  { label, type, value, onInput, autocomplete },
+  ref
+) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <label style={{ fontSize: 12, color: "#8e8e93" }}>{label}</label>
+      <input
+        ref={ref}
+        type={type}
+        value={value}
+        onInput={(e) => onInput((e.target as HTMLInputElement).value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        autocomplete={autocomplete}
+        required
+        class="placeholder:text-[#3a3a42]"
+        placeholder={label}
+        style={{
+          width: "100%",
+          height: 48,
+          boxSizing: "border-box",
+          padding: "0 16px",
+          fontSize: 16,
+          color: "#c8c8d0",
+          backgroundColor: "rgba(255,255,255,0.04)",
+          border: `1px solid ${focused ? "#6c9cff" : "rgba(255,255,255,0.08)"}`,
+          borderRadius: 12,
+          outline: "none",
+          boxShadow: focused ? "0 0 0 2px rgba(108,156,255,0.2)" : "none",
+          transition: "border-color 120ms ease, box-shadow 120ms ease",
+        }}
+      />
+    </div>
+  );
+});

@@ -1,5 +1,6 @@
 import { signal } from "@preact/signals";
 import { api } from "@/lib/api";
+import { db } from "@/db/local";
 
 export interface User {
   id: string;
@@ -23,8 +24,20 @@ export async function login(username: string, password: string): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
-  await api.api.auth.logout.$post();
+  try {
+    await api.api.auth.logout.$post();
+  } catch {
+    // Network failure — still wipe local state so another user can't reuse the device
+  }
   currentUser.value = null;
+  localStorage.removeItem("xpensify_last_sync");
+  try {
+    await db.delete();
+  } catch {
+    // If IndexedDB is unavailable, nothing to clean up
+  }
+  // Hard reload so all in-memory signals/liveQueries reset before next login
+  window.location.href = "/login";
 }
 
 export async function checkAuth(): Promise<void> {

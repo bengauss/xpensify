@@ -12,19 +12,12 @@ import { Toast } from "@/components/Toast";
 import { currentUser } from "@/lib/auth";
 import { sync } from "@/sync/engine";
 import { useLocation } from "preact-iso";
+import { formatMoney, formatMoneyWhole, monthKey } from "@/lib/format";
 
 // ── Discretionary spend helpers ──────────────────────────────────────────────
 
-function getMonthKey(year: number, month: number): string {
-  return `${year}-${String(month).padStart(2, "0")}`;
-}
-
 function prevMonth(year: number, month: number): { year: number; month: number } {
   return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
-}
-
-function formatWhole(cents: number): string {
-  return Math.round(cents / 100).toLocaleString("de-DE");
 }
 
 function roundToHundred(cents: number): number {
@@ -37,7 +30,7 @@ function computeDiscretionary(expenses: Expense[] | undefined) {
   const now = new Date();
   const curYear = now.getFullYear();
   const curMonth = now.getMonth() + 1;
-  const curKey = getMonthKey(curYear, curMonth);
+  const curKey = monthKey(curYear, curMonth);
 
   // Current month discretionary
   const currentTotal = expenses
@@ -49,7 +42,7 @@ function computeDiscretionary(expenses: Expense[] | undefined) {
   const monthTotals: number[] = [];
   for (let i = 0; i < 3; i++) {
     ({ year: y, month: m } = prevMonth(y, m));
-    const key = getMonthKey(y, m);
+    const key = monthKey(y, m);
     const total = expenses
       .filter((e) => e.timestamp.startsWith(key) && e.deleted === 0 && e.source !== "recurring")
       .reduce((s, e) => s + e.amount, 0);
@@ -75,7 +68,8 @@ export const editingExpense = signal<Expense | null>(null);
 
 export function AddScreen() {
   const editing = editingExpense.value;
-  const { path } = useLocation();
+  const isEditing = !!editing;
+  const { path, route } = useLocation();
 
   const [amount, setAmount] = useState(editing ? formatCentsDE(editing.amount) : "");
   const [note, setNote] = useState(editing?.note ?? "");
@@ -84,6 +78,10 @@ export function AddScreen() {
     editing ? editing.timestamp.split("T")[0] : new Date().toISOString().split("T")[0]
   );
   const [toast, setToast] = useState({ visible: false, message: "" });
+  // Pending category/subcategory selection — only used in edit mode, so the user
+  // can change multiple fields before committing via the save button.
+  const [pendingCategoryId, setPendingCategoryId] = useState<string>(editing?.category_id ?? "");
+  const [pendingSubcategoryId, setPendingSubcategoryId] = useState<string>(editing?.subcategory_id ?? "");
 
   const amountRef = useRef<HTMLInputElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
@@ -100,8 +98,13 @@ export function AddScreen() {
   );
   const subcategories = useLiveQuery(() => db.subcategories.toArray());
 
-  // Discretionary spend counter — reactive via liveQuery
-  const allExpenses = useLiveQuery(() => db.expenses.toArray());
+  // Discretionary spend counter — only queries the last 4 months via the
+  // timestamp index. Full-table scans aren't needed for this widget.
+  const allExpenses = useLiveQuery(() => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString();
+    return db.expenses.where("timestamp").aboveOrEqual(start).toArray();
+  });
   const disc = useMemo(() => computeDiscretionary(allExpenses), [allExpenses]);
 
   const today = new Date();
@@ -109,8 +112,22 @@ export function AddScreen() {
   const dataReady = categories && categories.length > 0 && subcategories && subcategories.length > 0;
 
   async function handleSelect(categoryId: string, subcategoryId: string) {
+    // In edit mode, tapping a subcategory only selects it — commit happens via save button.
+    if (isEditing) {
+      setPendingCategoryId(categoryId);
+      setPendingSubcategoryId(subcategoryId);
+      return;
+    }
+
     const amountCents = parseCents(amount);
     if (amountCents <= 0) return;
+
+    const userId = currentUser.value?.id;
+    if (!userId) {
+      // Auth not yet loaded — refuse to save rather than persist a row with empty user_id
+      setToast({ visible: true, message: "not logged in — refresh and try again" });
+      return;
+    }
 
     const now = new Date().toISOString();
     const sub = subcategories?.find((s) => s.id === subcategoryId);
@@ -119,43 +136,29 @@ export function AddScreen() {
     const todayStr = new Date().toISOString().split("T")[0];
     const timestamp = dateStr === todayStr ? now : `${dateStr}T12:00:00.000Z`;
 
-    if (editing) {
-      await db.expenses.update(editing.id, {
-        amount: amountCents,
-        category_id: categoryId,
-        subcategory_id: subcategoryId,
-        note: note.trim() || null,
-        timestamp,
-        updated_at: now,
-        sync_status: "pending",
-      });
-      setToast({ visible: true, message: `✓ EUR ${(amountCents / 100).toFixed(2)} → ${sub?.name ?? "expense"} updated` });
-      editingExpense.value = null;
-    } else {
-      await db.expenses.add({
-        id: crypto.randomUUID(),
-        user_id: currentUser.value?.id ?? "",
-        category_id: categoryId,
-        subcategory_id: subcategoryId,
-        amount: amountCents,
-        note: note.trim() || null,
-        tags: null,
-        image_url: null,
-        timestamp,
-        source: "manual",
-        recurring_template_id: null,
-        deleted: 0,
-        sync_status: "pending",
-        created_at: now,
-        updated_at: now,
-      });
+    await db.expenses.add({
+      id: crypto.randomUUID(),
+      user_id: userId,
+      category_id: categoryId,
+      subcategory_id: subcategoryId,
+      amount: amountCents,
+      note: note.trim() || null,
+      tags: null,
+      image_url: null,
+      timestamp,
+      source: "manual",
+      recurring_template_id: null,
+      deleted: 0,
+      sync_status: "pending",
+      created_at: now,
+      updated_at: now,
+    });
 
-      if (amountRef.current) {
-        animate(amountRef.current, { scale: [1, 0.97, 1] }, springs.bouncy);
-      }
-
-      setToast({ visible: true, message: `✓ EUR ${(amountCents / 100).toFixed(2)} → ${sub?.name ?? "expense"} saved` });
+    if (amountRef.current) {
+      animate(amountRef.current, { scale: [1, 0.97, 1] }, springs.bouncy);
     }
+
+    setToast({ visible: true, message: `✓ EUR ${formatMoney(amountCents)} → ${sub?.name ?? "expense"} saved` });
 
     sync().catch(console.error);
 
@@ -168,8 +171,40 @@ export function AddScreen() {
     setTimeout(() => amountRef.current?.focus(), 100);
   }
 
+  async function handleSaveEdit() {
+    if (!editing) return;
+    const amountCents = parseCents(amount);
+    if (amountCents <= 0) return;
+    if (!pendingCategoryId || !pendingSubcategoryId) return;
+
+    const now = new Date().toISOString();
+    const todayStr = new Date().toISOString().split("T")[0];
+    const timestamp = dateStr === todayStr ? now : `${dateStr}T12:00:00.000Z`;
+    const sub = subcategories?.find((s) => s.id === pendingSubcategoryId);
+
+    await db.expenses.update(editing.id, {
+      amount: amountCents,
+      category_id: pendingCategoryId,
+      subcategory_id: pendingSubcategoryId,
+      note: note.trim() || null,
+      timestamp,
+      updated_at: now,
+      sync_status: "pending",
+    });
+
+    setToast({ visible: true, message: `✓ EUR ${formatMoney(amountCents)} → ${sub?.name ?? "expense"} updated` });
+    editingExpense.value = null;
+    sync().catch(console.error);
+    route("/history");
+  }
+
+  function handleCancelEdit() {
+    editingExpense.value = null;
+    route("/history");
+  }
+
   return (
-    <div class="flex flex-col gap-4 px-4 pb-24">
+    <div class={`flex flex-col gap-4 px-4 pt-2 ${isEditing ? "pb-40" : "pb-24"}`}>
       <Toast
         message={toast.message}
         visible={toast.visible}
@@ -184,13 +219,14 @@ export function AddScreen() {
 
       {/* Date label + discretionary counter */}
       <div class="flex items-center justify-between px-1">
-        {/* Date — tappable to open picker */}
+        {/* Date — tappable to open picker; "editing · …" prefix in edit mode */}
         <div class="relative">
           <button
             onClick={() => dateInputRef.current?.showPicker()}
-            class="text-xs text-text-tertiary bg-transparent border-0 cursor-pointer p-0"
+            class="text-xs bg-transparent border-0 cursor-pointer p-0"
+            style={{ color: isEditing ? "var(--color-text-secondary)" : "var(--color-text-tertiary)" }}
           >
-            {dateLabel}
+            {isEditing ? `editing · ${dateLabel}` : dateLabel}
           </button>
           <input
             ref={dateInputRef}
@@ -203,12 +239,12 @@ export function AddScreen() {
           />
         </div>
 
-        {/* Discretionary spend counter */}
-        {disc && (
+        {/* Discretionary spend counter — hidden in edit mode */}
+        {!isEditing && disc && (
           <span class="text-xs text-text-tertiary tabular-nums">
-            {formatWhole(disc.current)} discretionary
+            {formatMoneyWhole(disc.current)} discretionary
             {disc.avg !== null && (
-              <> / ~{formatWhole(disc.avg)} avg</>
+              <> / ~{formatMoneyWhole(disc.avg)} avg</>
             )}
           </span>
         )}
@@ -221,6 +257,7 @@ export function AddScreen() {
           subcategories={subcategories}
           onSelect={handleSelect}
           initialCategoryId={editing?.category_id}
+          confirmedSubcategoryId={isEditing ? pendingSubcategoryId : undefined}
         />
       ) : (
         <div class="grid grid-cols-3 gap-3">
@@ -243,6 +280,51 @@ export function AddScreen() {
         {showNote && <NoteInput value={note} onChange={setNote} />}
 
       </div>
+
+      {/* Edit-mode save bar — fixed above the tab bar */}
+      {isEditing && (
+        <div
+          class="fixed left-0 right-0 z-40 px-4"
+          style={{
+            bottom: "calc(68px + env(safe-area-inset-bottom))",
+            backgroundColor: "var(--color-bg-primary)",
+          }}
+        >
+          <div class="grid grid-cols-2 pt-2 pb-3" style={{ gap: 10 }}>
+            <button
+              onClick={handleSaveEdit}
+              onPointerDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
+              onPointerUp={(e) => { animate(e.currentTarget, { scale: 1 }, springs.snappy); }}
+              onPointerLeave={(e) => { animate(e.currentTarget, { scale: 1 }, springs.snappy); }}
+              class="flex items-center justify-center text-sm font-medium text-white cursor-pointer border-0"
+              style={{
+                height: 48,
+                borderRadius: 14,
+                backgroundColor: "var(--color-accent)",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              save
+            </button>
+            <button
+              onClick={handleCancelEdit}
+              onPointerDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
+              onPointerUp={(e) => { animate(e.currentTarget, { scale: 1 }, springs.snappy); }}
+              onPointerLeave={(e) => { animate(e.currentTarget, { scale: 1 }, springs.snappy); }}
+              class="flex items-center justify-center text-sm font-medium cursor-pointer border-0"
+              style={{
+                height: 48,
+                borderRadius: 14,
+                backgroundColor: "rgba(255,255,255,0.06)",
+                color: "var(--color-text-secondary)",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

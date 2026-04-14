@@ -19,26 +19,32 @@ export function NoteInput({ value, onChange }: NoteInputProps) {
     let cancelled = false;
     const lower = value.toLowerCase();
 
-    // Debounce: wait 200ms before querying
+    // Debounce: wait 200ms before querying.
+    // Only scan the last 90 days — autocomplete cares about recent notes, and
+    // the timestamp index lets Dexie skip the rest of the table.
     const timer = setTimeout(() => {
-      db.expenses.toArray().then((expenses) => {
-        if (cancelled) return;
-        // Count note frequencies
-        const freq = new Map<string, number>();
-        for (const exp of expenses) {
-          if (exp.note && exp.note.trim()) {
-            const n = exp.note.trim();
-            freq.set(n, (freq.get(n) || 0) + 1);
+      const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+      db.expenses
+        .where("timestamp")
+        .above(ninetyDaysAgo)
+        .toArray()
+        .then((expenses) => {
+          if (cancelled) return;
+          const freq = new Map<string, number>();
+          for (const exp of expenses) {
+            if (exp.deleted) continue;
+            if (exp.note && exp.note.trim()) {
+              const n = exp.note.trim();
+              freq.set(n, (freq.get(n) || 0) + 1);
+            }
           }
-        }
-        // Filter by prefix match, sort by frequency desc, take top 5
-        const matches = [...freq.entries()]
-          .filter(([n]) => n.toLowerCase().startsWith(lower) && n.toLowerCase() !== lower)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5)
-          .map(([n]) => n);
-        setSuggestions(matches);
-      });
+          const matches = [...freq.entries()]
+            .filter(([n]) => n.toLowerCase().startsWith(lower) && n.toLowerCase() !== lower)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([n]) => n);
+          setSuggestions(matches);
+        });
     }, 200);
 
     return () => {

@@ -76,3 +76,28 @@ body {
   min-height: 100dvh;
   overflow-x: hidden;
 }
+
+/* ── Tab transition layers ───────────────────────────────────────────────── */
+
+.transition-container {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.transition-layer {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  opacity: 0;
+  transition: opacity 250ms ease-out, transform 250ms ease-out;
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+
+.transition-layer.active {
+  opacity: 1;
+  pointer-events: auto;
+}

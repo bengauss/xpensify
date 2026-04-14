@@ -1,361 +1,244 @@
 import { useState, useEffect } from "preact/hooks";
+import type { ComponentChildren } from "preact";
+import { toChildArray } from "preact";
 import { useLocation } from "preact-iso";
 import { db } from "@/db/local";
-import type { Category } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { currentUser, logout } from "@/lib/auth";
 import { sync } from "@/sync/engine";
-import { categoryIcons } from "@/icons";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { api } from "@/lib/api";
+import { MONTHS_SHORT } from "@/lib/format";
 
-// ── Section Card ──────────────────────────────────────────────────────────────
+// ── Shared primitives ────────────────────────────────────────────────────────
 
-function Card({ children }: { children: preact.ComponentChildren }) {
+function Section({ title, children }: { title: string; children: ComponentChildren }) {
+  const rows = toChildArray(children);
   return (
-    <div class="bg-bg-surface rounded-xl p-4 flex flex-col gap-3">
+    <section
+      style={{
+        backgroundColor: "rgba(255,255,255,0.03)",
+        border: "0.5px solid rgba(255,255,255,0.06)",
+        borderRadius: 14,
+      }}
+    >
+      <div class="px-4 pt-3 pb-3">
+        <span class="text-xs font-semibold lowercase" style={{ color: "var(--color-text-tertiary)" }}>
+          {title}
+        </span>
+      </div>
+      {rows.map((row, i) => (
+        <div key={i}>
+          {i > 0 && (
+            <div
+              style={{
+                marginLeft: 16,
+                borderTop: "0.5px solid rgba(255,255,255,0.04)",
+              }}
+            />
+          )}
+          {row}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function Row({
+  onClick,
+  children,
+  danger = false,
+}: {
+  onClick?: () => void;
+  children: ComponentChildren;
+  danger?: boolean;
+}) {
+  const tappable = !!onClick;
+  return (
+    <div
+      onClick={onClick}
+      onPointerDown={tappable ? (e) => { (e.currentTarget as HTMLDivElement).style.opacity = "0.7"; } : undefined}
+      onPointerUp={tappable ? (e) => { (e.currentTarget as HTMLDivElement).style.opacity = ""; } : undefined}
+      onPointerLeave={tappable ? (e) => { (e.currentTarget as HTMLDivElement).style.opacity = ""; } : undefined}
+      class="flex items-center gap-3"
+      style={{
+        padding: "12px 16px",
+        minHeight: 48,
+        cursor: tappable ? "pointer" : "default",
+        color: danger ? "var(--color-danger)" : "var(--color-text-body)",
+        WebkitTapHighlightColor: "transparent",
+        transition: "opacity 120ms ease",
+      }}
+    >
       {children}
     </div>
   );
 }
 
-function SectionHeader({ title, action }: { title: string; action?: preact.ComponentChildren }) {
+function Chevron() {
   return (
-    <div class="flex items-center justify-between">
-      <span class="text-xs uppercase tracking-wider text-text-ghost">{title}</span>
-      {action}
-    </div>
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="var(--color-text-hint)"
+      stroke-width="2.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      style={{ flexShrink: 0 }}
+    >
+      <path d="M9 6l6 6-6 6" />
+    </svg>
   );
 }
 
-// ── Categories Section ────────────────────────────────────────────────────────
-
-function CategoryRow({
-  category,
-  isFirst,
-  isLast,
-  onMoveUp,
-  onMoveDown,
-  onEdit,
-  onDelete,
-}: {
-  category: Category;
-  isFirst: boolean;
-  isLast: boolean;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  onEdit: (newName: string) => void;
-  onDelete: () => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [editVal, setEditVal] = useState(category.name);
-
-  const IconComponent = categoryIcons[category.icon] ?? categoryIcons["other"];
-
-  function commitEdit() {
-    const trimmed = editVal.trim();
-    if (trimmed && trimmed !== category.name) {
-      onEdit(trimmed);
-    }
-    setEditing(false);
-  }
-
+function Toggle({ active, onToggle }: { active: boolean; onToggle: () => void }) {
   return (
-    <div class="flex items-center gap-3 py-2">
-      {/* Icon */}
-      <span class="shrink-0" style={{ color: category.color }}>
-        <IconComponent color={category.color} size={20} />
-      </span>
-
-      {/* Name / edit input */}
-      {editing ? (
-        <input
-          class="flex-1 rounded-lg bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none border border-accent/40"
-          value={editVal}
-          onInput={(e) => setEditVal((e.target as HTMLInputElement).value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commitEdit();
-            if (e.key === "Escape") { setEditVal(category.name); setEditing(false); }
-          }}
-          onBlur={commitEdit}
-          autoFocus
-        />
-      ) : (
-        <span class="flex-1 text-sm text-text-primary">{category.name}</span>
-      )}
-
-      {/* Arrow buttons */}
-      <button
-        onClick={onMoveUp}
-        disabled={isFirst}
-        class="text-text-secondary hover:text-text-primary disabled:opacity-20 p-1.5 text-base leading-none"
-        title="Move up"
-      >
-        ↑
-      </button>
-      <button
-        onClick={onMoveDown}
-        disabled={isLast}
-        class="text-text-secondary hover:text-text-primary disabled:opacity-20 p-1.5 text-base leading-none"
-        title="Move down"
-      >
-        ↓
-      </button>
-
-      {/* Edit (pencil) */}
-      <button
-        onClick={() => { setEditVal(category.name); setEditing(true); }}
-        class="text-text-secondary hover:text-accent p-1.5"
-        title="Edit"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-        </svg>
-      </button>
-
-      {/* Delete (x) */}
-      <button
-        onClick={onDelete}
-        class="text-text-secondary hover:text-red-400 p-1.5"
-        title="Delete"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      </button>
-    </div>
-  );
-}
-
-function CategoriesSection() {
-  const categories = useLiveQuery(() =>
-    db.categories.toArray().then((cats) => cats.sort((a, b) => a.sort_order - b.sort_order)), []
-  ) ?? [];
-
-  const [addName, setAddName] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [error, setError] = useState("");
-  const [deletingCategory, setDeletingCategory] = useState<{ id: string; name: string } | null>(null);
-
-  async function patchCategory(id: string, body: Record<string, unknown>) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res = await api.api.categories[":id"].$patch({ param: { id }, json: body } as any);
-    if (!res.ok) throw new Error("Failed to update category");
-    // Refresh local DB
-    const updated = await res.json() as unknown as Category;
-    await db.categories.put(updated);
-  }
-
-  async function handleMoveUp(idx: number) {
-    if (idx === 0) return;
-    const a = categories[idx];
-    const b = categories[idx - 1];
-    const aOrder = a.sort_order;
-    const bOrder = b.sort_order;
-    await patchCategory(a.id, { sort_order: bOrder });
-    await patchCategory(b.id, { sort_order: aOrder });
-  }
-
-  async function handleMoveDown(idx: number) {
-    if (idx === categories.length - 1) return;
-    const a = categories[idx];
-    const b = categories[idx + 1];
-    const aOrder = a.sort_order;
-    const bOrder = b.sort_order;
-    await patchCategory(a.id, { sort_order: bOrder });
-    await patchCategory(b.id, { sort_order: aOrder });
-  }
-
-  async function handleEdit(id: string, newName: string) {
-    await patchCategory(id, { name: newName });
-  }
-
-  async function handleDeleteConfirmed(id: string) {
-    const res = await api.api.categories[":id"].$delete({ param: { id } });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({})) as { error?: string };
-      setError((data as { error?: string }).error ?? "Failed to delete category");
-      setDeletingCategory(null);
-      return;
-    }
-    await db.categories.delete(id);
-    setDeletingCategory(null);
-  }
-
-  async function handleAdd() {
-    const name = addName.trim();
-    if (!name) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res = await api.api.categories.$post({ json: { name } } as any);
-    if (!res.ok) { setError("Failed to add category"); return; }
-    const created = await res.json() as unknown as Category;
-    await db.categories.put(created);
-    setAddName("");
-    setAdding(false);
-  }
-
-  return (
-    <Card>
-      <SectionHeader
-        title="categories"
-        action={
-          <button
-            onClick={() => setAdding(true)}
-            class="text-xs text-accent hover:opacity-80"
-          >
-            add
-          </button>
-        }
+    <button
+      onClick={(e) => { e.stopPropagation(); onToggle(); }}
+      class="relative flex-shrink-0 rounded-full border-0 p-0 cursor-pointer"
+      style={{
+        width: 40,
+        height: 24,
+        backgroundColor: active ? "var(--color-accent)" : "var(--color-text-ghost)",
+        transition: "background-color 150ms ease",
+      }}
+      aria-label={active ? "disable" : "enable"}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: 3,
+          left: 3,
+          width: 18,
+          height: 18,
+          borderRadius: "50%",
+          backgroundColor: "white",
+          transform: active ? "translateX(16px)" : "translateX(0)",
+          transition: "transform 150ms ease",
+        }}
       />
-
-      {error && <p class="text-xs text-red-400">{error}</p>}
-
-      <div class="flex flex-col divide-y divide-text-ghost/10">
-        {categories.map((cat, idx) => (
-          <CategoryRow
-            key={cat.id}
-            category={cat}
-            isFirst={idx === 0}
-            isLast={idx === categories.length - 1}
-            onMoveUp={() => handleMoveUp(idx)}
-            onMoveDown={() => handleMoveDown(idx)}
-            onEdit={(newName) => handleEdit(cat.id, newName)}
-            onDelete={() => setDeletingCategory({ id: cat.id, name: cat.name })}
-          />
-        ))}
-      </div>
-
-      {adding && (
-        <div class="flex items-center gap-2 pt-2 border-t border-text-ghost/10">
-          <input
-            class="flex-1 rounded bg-bg-primary px-2 py-1.5 text-sm text-text-primary outline-none border border-accent/40"
-            placeholder="Category name"
-            value={addName}
-            onInput={(e) => setAddName((e.target as HTMLInputElement).value)}
-            onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); if (e.key === "Escape") setAdding(false); }}
-            autoFocus
-          />
-          <button
-            onClick={handleAdd}
-            class="text-xs text-accent hover:opacity-80 px-2 py-1.5"
-          >
-            save
-          </button>
-          <button
-            onClick={() => { setAdding(false); setAddName(""); }}
-            class="text-xs text-text-ghost hover:text-text-primary px-2 py-1.5"
-          >
-            cancel
-          </button>
-        </div>
-      )}
-
-      {deletingCategory && (
-        <ConfirmDialog
-          message={`Delete category "${deletingCategory.name}"? This cannot be undone.`}
-          onConfirm={() => handleDeleteConfirmed(deletingCategory.id)}
-          onCancel={() => setDeletingCategory(null)}
-        />
-      )}
-    </Card>
+    </button>
   );
 }
 
-// ── Users Section ─────────────────────────────────────────────────────────────
+// ── Categories row (collapsed) ───────────────────────────────────────────────
 
-interface UserInfo {
-  id: string;
-  username: string;
-  display_name: string;
-  avatar_color: string;
+function CategoriesRow({ onTap }: { onTap: () => void }) {
+  const count = useLiveQuery(() => db.categories.count(), []) ?? 0;
+  return (
+    <Row onClick={onTap}>
+      <div
+        class="flex-shrink-0 flex items-center justify-center rounded-lg"
+        style={{ width: 28, height: 28, backgroundColor: "rgba(108,156,255,0.12)" }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+      </div>
+      <span class="flex-1 text-sm">categories</span>
+      <span class="text-sm tabular-nums" style={{ color: "var(--color-text-secondary)" }}>{count}</span>
+      <Chevron />
+    </Row>
+  );
 }
 
-function PasswordChangeForm() {
+// ── Account section ──────────────────────────────────────────────────────────
+
+function PasswordChangeForm({ onDone }: { onDone: () => void }) {
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   async function handleSave() {
-    setMsg(""); setError("");
-    const res = await api.api.auth["change-password"].$post({ json: { current_password: currentPw, new_password: newPw } });
-    if (res.ok) {
-      setMsg("Password updated");
-      setCurrentPw(""); setNewPw("");
-    } else {
-      const data = await res.json().catch(() => ({})) as { error?: string };
-      setError((data as { error?: string }).error ?? "Failed to change password");
+    setMsg(""); setError(""); setSaving(true);
+    try {
+      const res = await api.api.auth["change-password"].$post({ json: { current_password: currentPw, new_password: newPw } });
+      if (res.ok) {
+        setMsg("password updated");
+        setCurrentPw(""); setNewPw("");
+        setTimeout(onDone, 600);
+      } else {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        setError(data.error?.toLowerCase() ?? "failed to change password");
+      }
+    } finally {
+      setSaving(false);
     }
   }
 
   return (
-    <div class="mt-3 flex flex-col gap-3 pl-11">
+    <div class="flex flex-col gap-2 px-4 pb-3">
       <input
         type="password"
-        placeholder="Current password"
+        placeholder="current password"
         value={currentPw}
         onInput={(e) => setCurrentPw((e.target as HTMLInputElement).value)}
-        class="rounded-lg bg-bg-primary px-3 py-2.5 text-sm text-text-primary outline-none border border-text-muted/40"
+        class="rounded-lg bg-bg-primary px-3 py-2.5 text-sm text-text-primary outline-none border border-text-ghost/20"
       />
       <input
         type="password"
-        placeholder="New password"
+        placeholder="new password"
         value={newPw}
         onInput={(e) => setNewPw((e.target as HTMLInputElement).value)}
-        class="rounded-lg bg-bg-primary px-3 py-2.5 text-sm text-text-primary outline-none border border-text-muted/40"
+        class="rounded-lg bg-bg-primary px-3 py-2.5 text-sm text-text-primary outline-none border border-text-ghost/20"
       />
-      {error && <p class="text-xs text-red-400">{error}</p>}
-      {msg && <p class="text-xs text-green-400">{msg}</p>}
-      <button
-        onClick={handleSave}
-        class="self-start rounded-lg bg-accent/20 px-4 py-2 text-xs text-accent hover:bg-accent/30"
-      >
-        save
-      </button>
+      {error && <p class="text-xs" style={{ color: "var(--color-danger)" }}>{error}</p>}
+      {msg && <p class="text-xs" style={{ color: "#30d158" }}>{msg}</p>}
+      <div class="flex gap-2 pt-1">
+        <button
+          onClick={handleSave}
+          disabled={saving || !currentPw || !newPw}
+          class="rounded-lg px-4 py-2 text-xs font-medium text-white cursor-pointer border-0"
+          style={{ backgroundColor: "var(--color-accent)", opacity: saving || !currentPw || !newPw ? 0.6 : 1 }}
+        >
+          {saving ? "saving..." : "save"}
+        </button>
+        <button
+          onClick={onDone}
+          class="rounded-lg px-4 py-2 text-xs cursor-pointer bg-transparent border-0"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          cancel
+        </button>
+      </div>
     </div>
   );
 }
 
-function UsersSection() {
-  const [expandedUser, setExpandedUser] = useState<string | null>(null);
-
-  const displayUsers = currentUser.value ? [currentUser.value] : [];
+function AccountSection() {
+  const user = currentUser.value;
+  const [expanded, setExpanded] = useState(false);
 
   return (
-    <Card>
-      <SectionHeader title="users" />
-      <div class="flex flex-col gap-3">
-        {displayUsers.map((user) => (
-          <div key={user.id}>
-            <div class="flex items-center gap-3">
-              {/* Avatar */}
-              <div
-                class="h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-sm font-medium text-bg-primary"
-                style={{ backgroundColor: user.avatar_color }}
-              >
-                {user.display_name.charAt(0).toUpperCase()}
-              </div>
-              <span class="flex-1 text-sm text-text-primary">{user.display_name}</span>
-              {user.id === currentUser.value?.id && (
-                <button
-                  onClick={() => setExpandedUser(expandedUser === user.id ? null : user.id)}
-                  class="text-xs text-text-ghost hover:text-accent"
-                >
-                  {expandedUser === user.id ? "cancel" : "change password"}
-                </button>
-              )}
-            </div>
-            {expandedUser === user.id && user.id === currentUser.value?.id && <PasswordChangeForm />}
+    <Section title="account">
+      <div>
+        <Row onClick={() => setExpanded((v) => !v)}>
+          <div
+            class="flex-shrink-0 flex items-center justify-center rounded-full text-xs font-semibold text-white"
+            style={{ width: 24, height: 24, backgroundColor: user?.avatar_color ?? "#6c9cff" }}
+          >
+            {user?.display_name?.[0]?.toUpperCase() ?? "?"}
           </div>
-        ))}
+          <span class="flex-1 text-sm">{user?.display_name ?? "—"}</span>
+          <span class="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+            {expanded ? "cancel" : "change password"}
+          </span>
+          {!expanded && <Chevron />}
+        </Row>
+        {expanded && <PasswordChangeForm onDone={() => setExpanded(false)} />}
       </div>
-    </Card>
+    </Section>
   );
 }
 
-// ── Push Notifications Section ────────────────────────────────────────────────
+// ── Notifications section ────────────────────────────────────────────────────
 
 interface PushPrefs {
   daily_reminder: number;
@@ -365,8 +248,9 @@ interface PushPrefs {
   weekly_summary_time: string;
 }
 
-function PushNotificationsSection() {
-  const [subscribed, setSubscribed] = useState(false);
+const DAYS_SHORT = ["sundays", "mondays", "tuesdays", "wednesdays", "thursdays", "fridays", "saturdays"];
+
+function NotificationsSection() {
   const [prefs, setPrefs] = useState<PushPrefs>({
     daily_reminder: 0,
     daily_reminder_time: "21:00",
@@ -374,9 +258,9 @@ function PushNotificationsSection() {
     weekly_summary_day: 0,
     weekly_summary_time: "09:00",
   });
-  const [msg, setMsg] = useState("");
-
-  const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const [permission, setPermission] = useState<NotificationPermission>(
+    typeof Notification !== "undefined" ? Notification.permission : "denied"
+  );
 
   useEffect(() => {
     api.api.push.preferences.$get()
@@ -385,116 +269,75 @@ function PushNotificationsSection() {
       .catch(() => {});
   }, []);
 
-  async function enablePush() {
-    setMsg("");
-    const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
-    if (!vapidKey) { setMsg("VAPID key not configured"); return; }
-
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") { setMsg("Permission denied"); return; }
-
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: vapidKey,
-    });
-
-    const res = await api.api.push.subscribe.$post({ json: sub.toJSON() });
-    if (res.ok) { setSubscribed(true); setMsg("Push notifications enabled"); }
-    else setMsg("Failed to subscribe");
-  }
-
   async function savePrefs(updated: Partial<PushPrefs>) {
     const next = { ...prefs, ...updated };
     setPrefs(next);
     await api.api.push.preferences.$put({ json: next }).catch(() => {});
   }
 
+  async function requestPermission() {
+    if (permission === "granted") return;
+    const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+    const result = await Notification.requestPermission();
+    setPermission(result);
+    if (result === "granted" && vapidKey) {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: vapidKey,
+        });
+        await api.api.push.subscribe.$post({ json: sub.toJSON() });
+      } catch {
+        /* subscription best-effort */
+      }
+    }
+  }
+
+  const dailyTime = prefs.daily_reminder_time.slice(0, 5);
+  const weeklyDescription = `${DAYS_SHORT[prefs.weekly_summary_day] ?? "sundays"} at ${prefs.weekly_summary_time.slice(0, 5)}`;
+
   return (
-    <Card>
-      <SectionHeader title="push notifications" />
-
-      {msg && <p class="text-xs text-accent">{msg}</p>}
-
-      {!subscribed && (
-        <button
-          onClick={enablePush}
-          class="self-start rounded bg-accent/20 px-3 py-1.5 text-xs text-accent hover:bg-accent/30"
+    <Section title="notifications">
+      <Row>
+        <div class="flex-1 flex flex-col gap-0.5">
+          <span class="text-sm">daily reminder</span>
+          <span class="text-xs" style={{ color: "var(--color-text-hint)" }}>
+            {prefs.daily_reminder ? `at ${dailyTime}, if no expenses logged` : "evening, if no expenses logged"}
+          </span>
+        </div>
+        <Toggle
+          active={!!prefs.daily_reminder}
+          onToggle={() => savePrefs({ daily_reminder: prefs.daily_reminder ? 0 : 1 })}
+        />
+      </Row>
+      <Row>
+        <div class="flex-1 flex flex-col gap-0.5">
+          <span class="text-sm">weekly summary</span>
+          <span class="text-xs" style={{ color: "var(--color-text-hint)" }}>
+            {weeklyDescription}
+          </span>
+        </div>
+        <Toggle
+          active={!!prefs.weekly_summary}
+          onToggle={() => savePrefs({ weekly_summary: prefs.weekly_summary ? 0 : 1 })}
+        />
+      </Row>
+      <Row onClick={permission !== "granted" ? requestPermission : undefined}>
+        <span class="flex-1 text-sm">push permission</span>
+        <span
+          class="text-sm"
+          style={{ color: permission === "granted" ? "#30d158" : "var(--color-text-secondary)" }}
         >
-          enable push notifications
-        </button>
-      )}
-
-      {/* Daily reminder */}
-      <div class="flex flex-col gap-2">
-        <div class="flex items-center gap-3">
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={!!prefs.daily_reminder}
-              onChange={(e) => savePrefs({ daily_reminder: (e.target as HTMLInputElement).checked ? 1 : 0 })}
-              class="accent-accent"
-            />
-            <span class="text-sm text-text-primary">Daily reminder</span>
-          </label>
-        </div>
-        {!!prefs.daily_reminder && (
-          <div class="pl-6 flex items-center gap-2">
-            <span class="text-xs text-text-ghost">Time:</span>
-            <input
-              type="time"
-              value={prefs.daily_reminder_time}
-              onInput={(e) => savePrefs({ daily_reminder_time: (e.target as HTMLInputElement).value })}
-              class="rounded-lg bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none border border-text-muted/40 [color-scheme:dark]"
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Weekly summary */}
-      <div class="flex flex-col gap-2">
-        <div class="flex items-center gap-3">
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={!!prefs.weekly_summary}
-              onChange={(e) => savePrefs({ weekly_summary: (e.target as HTMLInputElement).checked ? 1 : 0 })}
-              class="accent-accent"
-            />
-            <span class="text-sm text-text-primary">Weekly summary</span>
-          </label>
-        </div>
-        {!!prefs.weekly_summary && (
-          <div class="pl-6 flex flex-col gap-2">
-            <div class="flex items-center gap-2">
-              <span class="text-xs text-text-ghost">Day:</span>
-              <select
-                value={prefs.weekly_summary_day}
-                onChange={(e) => savePrefs({ weekly_summary_day: parseInt((e.target as HTMLSelectElement).value) })}
-                class="rounded-lg bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none border border-text-muted/40"
-              >
-                {DAYS.map((d, i) => (
-                  <option key={i} value={i}>{d}</option>
-                ))}
-              </select>
-            </div>
-            <div class="flex items-center gap-2">
-              <span class="text-xs text-text-ghost">Time:</span>
-              <input
-                type="time"
-                value={prefs.weekly_summary_time}
-                onInput={(e) => savePrefs({ weekly_summary_time: (e.target as HTMLInputElement).value })}
-                class="rounded-lg bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none border border-text-muted/40 [color-scheme:dark]"
-              />
-            </div>
-          </div>
-        )}
-      </div>
-    </Card>
+          {permission === "granted" ? "granted" : "not granted"}
+        </span>
+        {permission !== "granted" && <Chevron />}
+      </Row>
+    </Section>
   );
 }
 
-// ── Data Section ──────────────────────────────────────────────────────────────
+// ── Data section ─────────────────────────────────────────────────────────────
 
 function DataSection() {
   function handleExport() {
@@ -502,29 +345,38 @@ function DataSection() {
   }
 
   return (
-    <Card>
-      <SectionHeader title="data" />
-      <div class="flex flex-col gap-3">
-        <button
-          onClick={handleExport}
-          class="self-start rounded bg-accent/20 px-3 py-1.5 text-xs text-accent hover:bg-accent/30"
-        >
-          export CSV
-        </button>
-        <p class="text-xs text-text-ghost">
-          import CSV: use the server-side import script (<code class="font-mono text-text-secondary">npm run import</code>)
-        </p>
-      </div>
-    </Card>
+    <Section title="data">
+      <Row onClick={handleExport}>
+        <span class="flex-1 text-sm">export CSV</span>
+        <Chevron />
+      </Row>
+      <Row>
+        <div class="flex-1 flex flex-col gap-0.5">
+          <span class="text-sm">import</span>
+          <span class="text-xs" style={{ color: "var(--color-text-hint)" }}>
+            run server-side: npm run import
+          </span>
+        </div>
+      </Row>
+    </Section>
   );
 }
 
-// ── Sync Section ──────────────────────────────────────────────────────────────
+// ── Sync section ─────────────────────────────────────────────────────────────
+
+function formatSyncTime(ts: string | null): string {
+  if (!ts) return "never";
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return "never";
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}, ${hh}:${mm}`;
+}
 
 function SyncSection() {
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [msg, setMsg] = useState("");
+  const [syncDone, setSyncDone] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   useEffect(() => {
@@ -532,15 +384,15 @@ function SyncSection() {
   }, []);
 
   async function handleForceSync() {
-    setSyncing(true); setMsg("");
+    if (syncing) return;
+    setSyncing(true);
+    setSyncDone(false);
     localStorage.removeItem("xpensify_last_sync");
-    setLastSync(null);
     try {
       await sync();
       setLastSync(localStorage.getItem("xpensify_last_sync"));
-      setMsg("Full sync complete");
-    } catch {
-      setMsg("Sync failed");
+      setSyncDone(true);
+      setTimeout(() => setSyncDone(false), 1500);
     } finally {
       setSyncing(false);
     }
@@ -555,85 +407,91 @@ function SyncSection() {
     window.location.reload();
   }
 
-  function formatSyncTime(ts: string | null) {
-    if (!ts) return "never";
-    try {
-      return new Date(ts).toLocaleString();
-    } catch {
-      return ts;
-    }
-  }
-
   return (
-    <Card>
-      <SectionHeader title="sync" />
-      <p class="text-xs text-text-ghost">
-        Last sync: <span class="text-text-secondary">{formatSyncTime(lastSync)}</span>
-      </p>
-      {msg && <p class="text-xs text-accent">{msg}</p>}
-      <div class="flex flex-wrap gap-2">
-        <button
-          onClick={handleForceSync}
-          disabled={syncing}
-          class="rounded bg-accent/20 px-3 py-1.5 text-xs text-accent hover:bg-accent/30 disabled:opacity-50"
-        >
-          {syncing ? "syncing…" : "force full sync"}
-        </button>
-        {showClearConfirm ? (
+    <Section title="sync">
+      <Row>
+        <span class="flex-1 text-sm">last sync</span>
+        <span class="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+          {formatSyncTime(lastSync)}
+        </span>
+      </Row>
+      <Row onClick={handleForceSync}>
+        <span class="flex-1 text-sm">{syncing ? "syncing..." : "force full sync"}</span>
+        {syncDone ? (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#30d158" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+        ) : (
+          <Chevron />
+        )}
+      </Row>
+      {showClearConfirm ? (
+        <div class="px-4 py-2">
           <ConfirmDialog
-            message="Clear all local data? The page will reload and re-sync from the server."
+            message="clear all local data? the page will reload and re-sync."
             onConfirm={handleClearCache}
             onCancel={() => setShowClearConfirm(false)}
           />
-        ) : (
-          <button
-            onClick={() => setShowClearConfirm(true)}
-            class="rounded bg-red-500/10 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/20"
-          >
-            clear local cache
-          </button>
-        )}
-      </div>
-    </Card>
+        </div>
+      ) : (
+        <Row onClick={() => setShowClearConfirm(true)} danger>
+          <span class="flex-1 text-sm">clear local cache</span>
+          <Chevron />
+        </Row>
+      )}
+    </Section>
   );
 }
 
-// ── About Section ─────────────────────────────────────────────────────────────
+// ── About section ────────────────────────────────────────────────────────────
 
 function AboutSection() {
-  const { route } = useLocation();
+  const [confirmLogout, setConfirmLogout] = useState(false);
 
   async function handleLogout() {
+    // logout() clears the session, deletes IndexedDB, and hard-reloads to /login
     await logout();
-    route("/login");
   }
 
   return (
-    <Card>
-      <SectionHeader title="about" />
-      <p class="text-sm text-text-secondary">xpensify v1.0.0</p>
-      <button
-        onClick={handleLogout}
-        class="self-start rounded bg-red-500/10 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/20"
-      >
-        log out
-      </button>
-    </Card>
+    <Section title="about">
+      <Row>
+        <span class="flex-1 text-sm">version</span>
+        <span class="text-sm" style={{ color: "var(--color-text-secondary)" }}>v1.0.0</span>
+      </Row>
+      {confirmLogout ? (
+        <div class="px-4 py-2">
+          <ConfirmDialog
+            message="log out? local data will be cleared."
+            onConfirm={handleLogout}
+            onCancel={() => setConfirmLogout(false)}
+          />
+        </div>
+      ) : (
+        <Row onClick={() => setConfirmLogout(true)} danger>
+          <span class="flex-1 text-sm">log out</span>
+        </Row>
+      )}
+    </Section>
   );
 }
 
-// ── Main Screen ───────────────────────────────────────────────────────────────
+// ── Main screen ──────────────────────────────────────────────────────────────
 
 export default function SettingsScreen() {
+  const { route } = useLocation();
   const hasPush = typeof window !== "undefined" && "PushManager" in window;
 
   return (
-    <div class="flex flex-col gap-5 px-4 pb-28 pt-2">
-      <h1 class="text-sm uppercase tracking-wider text-text-secondary px-1">settings</h1>
+    <div class="flex flex-col gap-4 px-4 pt-2 pb-28">
+      <h1 class="text-[17px] font-semibold text-text-primary">settings</h1>
 
-      <CategoriesSection />
-      <UsersSection />
-      {hasPush && <PushNotificationsSection />}
+      <Section title="categories">
+        <CategoriesRow onTap={() => route("/settings/categories")} />
+      </Section>
+
+      <AccountSection />
+      {hasPush && <NotificationsSection />}
       <DataSection />
       <SyncSection />
       <AboutSection />

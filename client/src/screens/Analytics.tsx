@@ -10,6 +10,7 @@ import {
 } from "@/lib/analytics";
 import { CategoryBars } from "@/components/CategoryBars";
 import { TrendChart } from "@/components/TrendChart";
+import { formatMoney } from "@/lib/format";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -20,10 +21,6 @@ const MONTH_NAMES = [
 
 function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
-}
-
-function formatAmount(cents: number): string {
-  return (cents / 100).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatPct(a: number, b: number): string {
@@ -64,7 +61,7 @@ function rollNumber(
       // ease-out cubic
       const eased = 1 - Math.pow(1 - progress, 3);
       const current = Math.round(from + (to - from) * eased);
-      el.textContent = formatAmount(current);
+      el.textContent = formatMoney(current);
       if (progress < 1) {
         rafId = requestAnimationFrame(tick);
       }
@@ -97,8 +94,18 @@ export default function AnalyticsScreen() {
   // Wait for entrance delay before starting any animations
   useEntrance(() => { setEntranceReady(true); });
 
+  // Bound the scan to the last 24 months (plus the previous month for the
+  // MoM delta) so the trend chart stays responsive as the table grows.
   const allExpenses = useLiveQuery(
-    () => db.expenses.filter((e) => e.deleted === 0).toArray(),
+    () => {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth() - 24, 1).toISOString();
+      return db.expenses
+        .where("timestamp")
+        .aboveOrEqual(start)
+        .filter((e) => e.deleted === 0)
+        .toArray();
+    },
     []
   );
   const allCategories = useLiveQuery(() => db.categories.toArray(), []);
@@ -298,7 +305,7 @@ export default function AnalyticsScreen() {
                 class="tabular-nums"
                 style={{ fontSize: 28, fontWeight: 300, color: "var(--color-text-primary)" }}
               >
-                {formatAmount(0)}
+                {formatMoney(0)}
               </span>
               {prevTotal > 0 && (
                 <span
@@ -327,7 +334,7 @@ export default function AnalyticsScreen() {
                 class="tabular-nums"
                 style={{ fontSize: 28, fontWeight: 300, color: "var(--color-text-primary)" }}
               >
-                {formatAmount(0)}
+                {formatMoney(0)}
               </span>
               <span style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>
                 over {days} days

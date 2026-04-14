@@ -7,6 +7,7 @@ import { LoginScreen } from "@/screens/Login";
 import { checkAuth, currentUser } from "@/lib/auth";
 import { startSyncScheduler, stopSyncScheduler } from "@/sync/scheduler";
 import { TabTransitionContainer } from "@/components/TabTransitionContainer";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 /** True once checkAuth() has resolved (regardless of result) */
 const authChecked = signal(false);
@@ -45,7 +46,7 @@ function AuthenticatedShell() {
   const { route } = useLocation();
 
   return (
-    <div class="flex min-h-dvh flex-col bg-bg-primary">
+    <div class="flex h-dvh flex-col bg-bg-primary overflow-hidden">
       <Header onSettingsClick={() => route("/settings")} />
       <TabTransitionContainer />
       <BottomNav />
@@ -64,9 +65,11 @@ function AppRoutes() {
 
 export function App() {
   return (
-    <LocationProvider>
-      <AuthGate />
-      <AppRoutes />
-    </LocationProvider>
+    <ErrorBoundary>
+      <LocationProvider>
+        <AuthGate />
+        <AppRoutes />
+      </LocationProvider>
+    </ErrorBoundary>
   );
 }

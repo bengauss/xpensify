@@ -1,8 +1,5 @@
 /// <reference lib="webworker" />
 import { precacheAndRoute, cleanupOutdatedCaches } from "workbox-precaching";
-import { registerRoute } from "workbox-routing";
-import { NetworkFirst } from "workbox-strategies";
-
 import { clientsClaim } from "workbox-core";
 
 declare let self: ServiceWorkerGlobalScope;
@@ -17,14 +14,15 @@ precacheAndRoute(self.__WB_MANIFEST);
 // Clean up old precaches from previous versions
 cleanupOutdatedCaches();
 
-// NetworkFirst for all API routes so we get fresh data when online,
-// but can fall back to cache when offline
-// Only cache GET requests to API — never cache mutations (POST, PATCH, DELETE)
-registerRoute(
-  ({ url, request }) =>
-    url.pathname.startsWith("/api/") && request.method === "GET",
-  new NetworkFirst({ cacheName: "api-cache" })
-);
+// Delete the legacy api-cache from earlier SW versions on activate so users
+// upgrading from a prior build don't keep serving stale authenticated data.
+self.addEventListener("activate", (event) => {
+  event.waitUntil(caches.delete("api-cache"));
+});
+
+// Intentionally no runtime caching for /api/*: the app's offline-first
+// data lives in IndexedDB (Dexie). Caching authenticated API responses in
+// the SW risks leaking one user's data to the next user on a shared device.
 
 // Handle push notifications
 self.addEventListener("push", (event: PushEvent) => {

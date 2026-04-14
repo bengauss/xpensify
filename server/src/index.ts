@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import cron from "node-cron";
+import { readFileSync } from "fs";
+import { resolve } from "path";
 import auth from "./routes/auth.js";
 import syncRouter from "./routes/sync.js";
 import recurringRouter from "./routes/recurring.js";
@@ -10,28 +12,31 @@ import categoriesRouter from "./routes/categories.js";
 import exportRouter from "./routes/export.js";
 import { processRecurringTemplates } from "./jobs/recurring.js";
 import { sendDailyReminders, sendWeeklySummaries } from "./jobs/notifications.js";
+import { sweepExpiredSessions } from "./jobs/sessions.js";
+import { csrfMiddleware, noStoreMiddleware } from "./middleware/csrf.js";
+import db from "./db/connection.js";
 import type { Variables } from "./middleware/auth.js";
 
 // Chain .route() calls so Hono RPC can infer the full route tree from AppType
 const app = new Hono<{ Variables: Variables }>()
+  .use("/api/*", csrfMiddleware)
+  .use("/api/*", noStoreMiddleware)
   .get("/api/health", (c) => c.json({ ok: true }))
   .route("/api/auth", auth)
   .route("/api/sync", syncRouter)
   .route("/api/recurring", recurringRouter)
   .route("/api/push", pushRouter)
   .route("/api/categories", categoriesRouter)
-  .route("/api/export", exportRouter);
+  .route("/api/export", exportRouter)
+  // Unknown API routes return JSON 404 (not the SPA shell)
+  .all("/api/*", (c) => c.json({ error: "Not found" }, 404));
 
 // In production, serve the client build (not part of the API chain)
 if (process.env.NODE_ENV === "production") {
   app.use("/*", serveStatic({ root: "./client/dist" }));
-  // SPA fallback: serve index.html for any non-API route
-  app.get("*", async (c) => {
-    const { readFileSync } = await import("fs");
-    const { resolve } = await import("path");
-    const html = readFileSync(resolve("./client/dist/index.html"), "utf-8");
-    return c.html(html);
-  });
+  // Cache the SPA shell once at startup instead of reading from disk per request
+  const indexHtml = readFileSync(resolve("./client/dist/index.html"), "utf-8");
+  app.get("*", (c) => c.html(indexHtml));
 }
 
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -45,6 +50,13 @@ serve({ fetch: app.fetch, port }, () => {
   } catch (err) {
     console.error("[recurring] Startup processing failed:", err);
   }
+
+  // Clear any expired sessions left from previous runs
+  try {
+    sweepExpiredSessions(db);
+  } catch (err) {
+    console.error("[sessions] Startup sweep failed:", err);
+  }
 });
 
 // Daily cron at 00:05 to generate recurring expenses
@@ -53,6 +65,15 @@ cron.schedule("5 0 * * *", () => {
     processRecurringTemplates();
   } catch (err) {
     console.error("[recurring] Cron processing failed:", err);
+  }
+});
+
+// Daily cron at 03:00 to sweep expired sessions
+cron.schedule("0 3 * * *", () => {
+  try {
+    sweepExpiredSessions(db);
+  } catch (err) {
+    console.error("[sessions] Sweep cron failed:", err);
   }
 });
 

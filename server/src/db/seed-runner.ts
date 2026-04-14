@@ -14,17 +14,33 @@ db.exec(schema);
 const seed = readFileSync(resolve(__dirname, "seed.sql"), "utf-8");
 db.exec(seed);
 
-// Seed users
-const passwordHash = bcrypt.hashSync("<redacted>", 10);
+// Resolve passwords from env, or generate random ones and log them once.
+function resolvePassword(name: string, envVar: string): string {
+  const fromEnv = process.env[envVar];
+  if (fromEnv) return fromEnv;
+  const generated = crypto.randomUUID();
+  console.log(`[seed] Generated password for ${name}: ${generated}`);
+  console.log(`[seed] Set ${envVar} in .env to override on next seed.`);
+  return generated;
+}
 
-db.prepare(
-  `INSERT OR IGNORE INTO users (id, username, display_name, password_hash, avatar_color)
-   VALUES (?, ?, ?, ?, ?)`
-).run("00000000-0000-0000-0000-000000000001", "alice", "Alice", passwordHash, "#6c9cff");
+function seedUser(id: string, username: string, displayName: string, color: string, envVar: string): void {
+  const existing = db
+    .prepare(`SELECT id FROM users WHERE id = ?`)
+    .get(id) as { id: string } | undefined;
+  if (existing) {
+    console.log(`[seed] User ${username} already exists — skipping password seed`);
+    return;
+  }
+  const password = resolvePassword(displayName, envVar);
+  const hash = bcrypt.hashSync(password, 12);
+  db.prepare(
+    `INSERT INTO users (id, username, display_name, password_hash, avatar_color)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(id, username, displayName, hash, color);
+}
 
-db.prepare(
-  `INSERT OR IGNORE INTO users (id, username, display_name, password_hash, avatar_color)
-   VALUES (?, ?, ?, ?, ?)`
-).run("00000000-0000-0000-0000-000000000002", "bob", "Bob", passwordHash, "#9775fa");
+seedUser("00000000-0000-0000-0000-000000000001", "alice", "Alice", "#6c9cff", "ALICE_PASSWORD");
+seedUser("00000000-0000-0000-0000-000000000002", "bob", "Bob", "#9775fa", "BOB_PASSWORD");
 
 console.log("Seed complete.");

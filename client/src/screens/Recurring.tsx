@@ -8,19 +8,17 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { categoryIcons } from "@/icons";
 import { api } from "@/lib/api";
 import { useEntrance, animateRowEntrance } from "@/lib/entrance";
+import { formatMoney } from "@/lib/format";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function formatCents(cents: number): string {
-  return (cents / 100).toFixed(2);
-}
+const MONTHS_LONG = [
+  "january", "february", "march", "april", "may", "june",
+  "july", "august", "september", "october", "november", "december",
+] as const;
 
 function monthName(monthIndex: number): string {
-  const names = [
-    "january", "february", "march", "april", "may", "june",
-    "july", "august", "september", "october", "november", "december",
-  ];
-  return names[monthIndex] ?? "";
+  return MONTHS_LONG[monthIndex] ?? "";
 }
 
 function scheduleText(t: RecurringTemplate): string {
@@ -192,7 +190,7 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
         class="font-light mb-1"
         style={{ fontSize: 32, color: "var(--color-accent)", lineHeight: 1.1 }}
       >
-        EUR {formatCents(forecast.total_remaining)}
+        EUR {formatMoney(forecast.total_remaining)}
       </p>
       <p class="text-xs text-text-secondary mb-4">
         {forecast.upcoming_count} of {forecast.total_count} expenses still due in {month}
@@ -213,7 +211,7 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
                 {item.note || item.subcategory_name || item.category_name}
               </span>
               <span class="text-text-secondary tabular-nums">
-                {item.next_due.slice(8)} · EUR {formatCents(item.amount)}
+                {item.next_due.slice(8)} · EUR {formatMoney(item.amount)}
               </span>
             </div>
           ))}
@@ -243,7 +241,7 @@ function TemplateRow({
       class="flex items-center gap-3 w-full text-left px-1 py-2.5 cursor-pointer bg-transparent border-0"
     >
       {/* Icon + text — animated together */}
-      <div data-row-text class="flex items-center gap-3 flex-1 min-w-0">
+      <div data-row-text class="flex items-center gap-3 flex-1 min-w-0" style={{ opacity: 0, transform: "translateX(-20px)" }}>
         {/* Category icon */}
         <div
           class="flex-shrink-0 flex items-center justify-center rounded-xl"
@@ -260,8 +258,8 @@ function TemplateRow({
       </div>
 
       {/* Amount */}
-      <span data-row-amount class="text-sm text-text-body tabular-nums">
-        EUR {formatCents(template.amount)}
+      <span data-row-amount class="text-sm text-text-body tabular-nums" style={{ opacity: 0 }}>
+        EUR {formatMoney(template.amount)}
       </span>
     </button>
   );
@@ -349,7 +347,7 @@ export default function RecurringScreen() {
   );
 
   return (
-    <div ref={screenRef} class="flex flex-col gap-5 px-4 pb-28">
+    <div ref={screenRef} class="flex flex-col gap-5 px-4 pt-2 pb-28">
       {/* Forecast card */}
       {forecast && forecast !== "error" && (
         <ForecastCard forecast={forecast} />
