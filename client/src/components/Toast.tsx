@@ -51,7 +51,7 @@ export function Toast({ message, visible, onDone }: ToastProps) {
       ref={toastRef}
       class="fixed left-1/2 -translate-x-1/2 z-50 whitespace-nowrap pointer-events-none"
       style={{
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 64px)",
+        bottom: "calc(env(safe-area-inset-bottom, 0px) + 84px)",
         backgroundColor: "rgba(52,199,89,0.12)",
         border: "0.5px solid rgba(52,199,89,0.2)",
         color: "#34c759",
