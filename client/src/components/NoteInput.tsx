@@ -8,6 +8,7 @@ interface NoteInputProps {
 
 export function NoteInput({ value, onChange }: NoteInputProps) {
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -55,14 +56,6 @@ export function NoteInput({ value, onChange }: NoteInputProps) {
 
   return (
     <div class="flex flex-col gap-2">
-      <input
-        ref={inputRef}
-        type="text"
-        value={value}
-        onInput={(e) => onChange((e.target as HTMLInputElement).value)}
-        placeholder="add a note..."
-        class="w-full rounded-lg bg-bg-surface px-4 py-3 text-sm text-text-primary placeholder:text-text-hint outline-none border border-text-ghost/20"
-      />
       {suggestions.length > 0 && (
         <div class="flex flex-wrap gap-2">
           {suggestions.map((s) => (
@@ -72,6 +65,7 @@ export function NoteInput({ value, onChange }: NoteInputProps) {
               onClick={() => {
                 onChange(s);
                 setSuggestions([]);
+                inputRef.current?.focus();
               }}
               class="rounded-full bg-accent/10 border border-accent/20 px-3 py-1 text-xs text-accent"
             >
@@ -80,6 +74,21 @@ export function NoteInput({ value, onChange }: NoteInputProps) {
           ))}
         </div>
       )}
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        onInput={(e) => onChange((e.target as HTMLInputElement).value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        placeholder="add a note..."
+        class="w-full bg-transparent outline-none border-0 text-sm font-normal placeholder:text-[#2a2a32] py-1"
+        style={{
+          color: "#4a4a52",
+          caretColor: "var(--color-accent)",
+          borderBottom: `0.5px solid ${focused ? "rgba(255,255,255,0.06)" : "transparent"}`,
+        }}
+      />
     </div>
   );
 }

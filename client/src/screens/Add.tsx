@@ -73,7 +73,6 @@ export function AddScreen() {
 
   const [amount, setAmount] = useState(editing ? formatCentsDE(editing.amount) : "");
   const [note, setNote] = useState(editing?.note ?? "");
-  const [showNote, setShowNote] = useState(!!editing?.note);
   const [dateStr, setDateStr] = useState(
     editing ? editing.timestamp.split("T")[0] : new Date().toISOString().split("T")[0]
   );
@@ -181,7 +180,6 @@ export function AddScreen() {
     // Reset form
     setAmount("");
     setNote("");
-    setShowNote(false);
     setDateStr(new Date().toISOString().split("T")[0]);
     setFormKey((k) => k + 1);
 
@@ -286,19 +284,7 @@ export function AddScreen() {
         </div>
       )}
 
-      {/* Expandable extras */}
-      <div class="flex flex-col gap-3 px-1">
-        {!showNote && (
-          <button
-            onClick={() => setShowNote(true)}
-            class="text-base text-text-secondary self-start"
-          >
-            + note
-          </button>
-        )}
-        {showNote && <NoteInput value={note} onChange={setNote} />}
-
-      </div>
+      <NoteInput value={note} onChange={setNote} />
 
       {/* Edit-mode save bar — fixed above the tab bar */}
       {isEditing && (
