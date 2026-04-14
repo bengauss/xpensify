@@ -7,6 +7,8 @@ interface TrendChartProps {
   selectedYear: number;
   selectedMonth: number;
   onSelect: (year: number, month: number) => void;
+  /** Override bar + label color for the selected month. Defaults to --color-accent. */
+  accentColor?: string;
 }
 
 const MONTH_LABELS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
@@ -23,12 +25,19 @@ function monthLabel(year: number, month: number): string {
   return `${MONTH_LABELS[month - 1]}'${String(year).slice(2)}`;
 }
 
-export function TrendChart({ trend, selectedYear, selectedMonth, onSelect }: TrendChartProps) {
+export function TrendChart({
+  trend,
+  selectedYear,
+  selectedMonth,
+  onSelect,
+  accentColor,
+}: TrendChartProps) {
+  const selectedColor = accentColor ?? "var(--color-accent)";
   const scrollRef = useRef<HTMLDivElement>(null);
   const barRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const dataKey = trend.map((t) => `${t.year}-${t.month}:${t.total}`).join("|") +
-    `|${selectedYear}-${selectedMonth}`;
+    `|${selectedYear}-${selectedMonth}|${selectedColor}`;
   const prevKeyRef = useRef<string>("");
 
   const maxTotal = trend.length > 0 ? Math.max(...trend.map((t) => t.total), 1) : 1;
@@ -92,7 +101,7 @@ export function TrendChart({ trend, selectedYear, selectedMonth, onSelect }: Tre
             {/* Value label on top */}
             <span
               class="text-[10px] tabular-nums mb-1"
-              style={{ color: isSelected ? "var(--color-accent)" : "var(--color-text-secondary)" }}
+              style={{ color: isSelected ? selectedColor : "var(--color-text-secondary)" }}
             >
               {formatTrendLabel(item.total)}
             </span>
@@ -107,7 +116,7 @@ export function TrendChart({ trend, selectedYear, selectedMonth, onSelect }: Tre
                 class="w-full rounded-t-sm"
                 style={{
                   height: `${targetPx}px`,
-                  backgroundColor: isSelected ? "var(--color-accent)" : "#4a4a52",
+                  backgroundColor: isSelected ? selectedColor : "#4a4a52",
                   willChange: "height",
                   minHeight: item.total > 0 ? 2 : 0,
                 }}
@@ -117,7 +126,7 @@ export function TrendChart({ trend, selectedYear, selectedMonth, onSelect }: Tre
             {/* Month label below */}
             <span
               class="text-[10px] mt-1"
-              style={{ color: isSelected ? "var(--color-accent)" : "var(--color-text-tertiary)" }}
+              style={{ color: isSelected ? selectedColor : "var(--color-text-tertiary)" }}
             >
               {monthLabel(item.year, item.month)}
             </span>

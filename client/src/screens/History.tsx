@@ -473,11 +473,12 @@ export default function HistoryScreen() {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // On mount: if a filter is set from Analytics drill-down, pre-populate search
+  // On mount: if a filter is set from Analytics drill-down, pre-populate search.
+  // Subcategory wins when present (L3 drill), else fall back to category (L2).
   useEffect(() => {
     const f = historyFilter.value;
     if (f) {
-      setSearchQuery(f.category);
+      setSearchQuery(f.subcategory || f.category);
     }
   }, []);
 
