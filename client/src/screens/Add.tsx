@@ -173,7 +173,7 @@ export function AddScreen() {
       animate(amountRef.current, { scale: [1, 0.97, 1] }, springs.bouncy);
     }
 
-    setToast({ visible: true, message: `✓ ${formatMoney(amountCents)} → ${sub?.name ?? "expense"}` });
+    setToast({ visible: true, message: `✓ ${formatCentsDE(amountCents)} → ${sub?.name ?? "expense"}` });
 
     sync().catch(console.error);
 
