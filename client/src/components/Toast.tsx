@@ -51,11 +51,11 @@ export function Toast({ message, visible, onDone }: ToastProps) {
   return (
     <div
       ref={toastRef}
-      // Fixed pill at top-center
+      // Fixed pill above the input — sits in the header band, honors iOS notch
       class="
-        fixed top-6 left-1/2 -translate-x-1/2 z-50
+        fixed left-1/2 -translate-x-1/2 z-50
         flex items-center gap-2
-        px-5 py-3
+        px-5 py-2
         rounded-full
         bg-success/15
         border border-success/30
@@ -64,7 +64,10 @@ export function Toast({ message, visible, onDone }: ToastProps) {
         whitespace-nowrap
         pointer-events-none
       "
-      style={{ opacity: 0 }} // start invisible; animation drives it in
+      style={{
+        top: "max(4px, env(safe-area-inset-top, 4px))",
+        opacity: 0, // start invisible; animation drives it in
+      }}
     >
       {message}
     </div>

@@ -82,6 +82,9 @@ export function AddScreen() {
   // can change multiple fields before committing via the save button.
   const [pendingCategoryId, setPendingCategoryId] = useState<string>(editing?.category_id ?? "");
   const [pendingSubcategoryId, setPendingSubcategoryId] = useState<string>(editing?.subcategory_id ?? "");
+  // Remount key for CategorySelector — bumped after each save so the selector
+  // resets to the grid view and replays its staggered entrance animation.
+  const [formKey, setFormKey] = useState(0);
 
   const amountRef = useRef<HTMLInputElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
@@ -120,7 +123,20 @@ export function AddScreen() {
     }
 
     const amountCents = parseCents(amount);
-    if (amountCents <= 0) return;
+    if (amountCents <= 0) {
+      // User tapped a subcategory before entering an amount — draw attention to
+      // the amount input with a brief shake instead of silently doing nothing.
+      if (amountRef.current) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (animate as any)(
+          amountRef.current,
+          { x: [0, -8, 8, -6, 6, -3, 0] },
+          { duration: 0.4 }
+        );
+      }
+      setTimeout(() => amountRef.current?.focus(), 0);
+      return;
+    }
 
     const userId = currentUser.value?.id;
     if (!userId) {
@@ -167,6 +183,7 @@ export function AddScreen() {
     setNote("");
     setShowNote(false);
     setDateStr(new Date().toISOString().split("T")[0]);
+    setFormKey((k) => k + 1);
 
     setTimeout(() => amountRef.current?.focus(), 100);
   }
@@ -253,11 +270,13 @@ export function AddScreen() {
       {/* Category selector */}
       {dataReady ? (
         <CategorySelector
+          key={formKey}
           categories={categories}
           subcategories={subcategories}
           onSelect={handleSelect}
           initialCategoryId={editing?.category_id}
           confirmedSubcategoryId={isEditing ? pendingSubcategoryId : undefined}
+          amountReady={parseCents(amount) > 0 || isEditing}
         />
       ) : (
         <div class="grid grid-cols-3 gap-3">
