@@ -3,11 +3,12 @@ FROM node:22-alpine AS client-build
 WORKDIR /app/client
 COPY client/package.json client/package-lock.json* ./
 RUN npm ci
-# Install server deps for type-only imports (@server/* path alias) BEFORE copying
-# client source — these layers rarely change and are expensive (~10s).
+# Install server deps FIRST (package.json only), then copy server src.
+# Ordering matters: native-module install (python3 + make + g++ + better-sqlite3)
+# is expensive (~10s) and should stay cached across server source changes.
 COPY server/package.json server/package-lock.json* /app/server/
-COPY server/src/ /app/server/src/
 RUN apk add --no-cache python3 make g++ && cd /app/server && npm ci
+COPY server/src/ /app/server/src/
 # Now copy client source (changes frequently, but everything above is cached)
 COPY client/ ./
 # VITE_* env vars must be present at build time for import.meta.env
@@ -18,17 +19,21 @@ RUN npm run build
 # Stage 2: Build server
 FROM node:22-alpine AS server-build
 WORKDIR /app/server
+RUN apk add --no-cache python3 make g++
 COPY server/package.json server/package-lock.json* ./
 RUN npm ci
 COPY server/ ./
 RUN npm run build
 
-# Stage 3: Runtime
+# Stage 3: Runtime — reuse server-build's node_modules, prune dev deps
 FROM node:22-alpine
 WORKDIR /app
 
+# Copy full server node_modules from build stage, then prune dev deps.
+# Avoids a second `npm ci --omit=dev` that would re-download everything.
 COPY server/package.json server/package-lock.json* ./server/
-RUN cd server && npm ci --omit=dev
+COPY --from=server-build /app/server/node_modules ./server/node_modules
+RUN cd server && npm prune --omit=dev
 
 COPY --from=server-build /app/server/dist ./server/dist
 COPY --from=server-build /app/server/src/db/*.sql ./server/dist/db/
