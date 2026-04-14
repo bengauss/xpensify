@@ -17,27 +17,25 @@ export function Toast({ message, visible, onDone }: ToastProps) {
 
     const el = toastRef.current;
 
-    // Reset opacity in case of a re-entrance during fade-out
+    // Reset transform/opacity in case of a re-entrance during fade-out
     el.style.opacity = "1";
     el.style.transition = "none";
 
-    // Spring slide-in from top
-    animate(el, { y: [-20, 0], opacity: [0, 1] }, springs.gentle);
+    // Spring slide UP from below
+    animate(el, { y: [20, 0], opacity: [0, 1] }, springs.gentle);
 
-    // Clear any pending dismiss
     if (dismissTimer.current !== null) {
       clearTimeout(dismissTimer.current);
     }
 
-    // Auto-dismiss after 2 s with a CSS opacity fade
+    // Auto-dismiss after 1.5 s — bottom position is less intrusive so keep it short
     dismissTimer.current = setTimeout(() => {
       if (!toastRef.current) return;
-      toastRef.current.style.transition = "opacity 300ms ease";
+      toastRef.current.style.transition = "opacity 150ms ease";
       toastRef.current.style.opacity = "0";
 
-      // Notify parent after the fade completes
-      setTimeout(onDone, 300);
-    }, 2000);
+      setTimeout(onDone, 150);
+    }, 1500);
 
     return () => {
       if (dismissTimer.current !== null) {
@@ -51,22 +49,17 @@ export function Toast({ message, visible, onDone }: ToastProps) {
   return (
     <div
       ref={toastRef}
-      // Fixed pill above the input — sits in the header band, honors iOS notch
-      class="
-        fixed left-1/2 -translate-x-1/2 z-50
-        flex items-center gap-2
-        px-5 py-2
-        rounded-full
-        bg-success/15
-        border border-success/30
-        text-success text-sm font-medium
-        shadow-lg
-        whitespace-nowrap
-        pointer-events-none
-      "
+      class="fixed left-1/2 -translate-x-1/2 z-50 whitespace-nowrap pointer-events-none"
       style={{
-        top: "max(4px, env(safe-area-inset-top, 4px))",
-        opacity: 0, // start invisible; animation drives it in
+        bottom: "calc(env(safe-area-inset-bottom, 0px) + 64px)",
+        backgroundColor: "rgba(52,199,89,0.12)",
+        border: "0.5px solid rgba(52,199,89,0.2)",
+        color: "#34c759",
+        fontSize: "13px",
+        fontWeight: 500,
+        padding: "8px 20px",
+        borderRadius: "20px",
+        opacity: 0,
       }}
     >
       {message}
