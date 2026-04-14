@@ -204,7 +204,7 @@ export function AddScreen() {
   }
 
   return (
-    <div class={`flex flex-col gap-4 px-4 pt-2 ${isEditing ? "pb-40" : "pb-24"}`}>
+    <div class={`flex flex-col gap-4 px-4 pt-2 ${isEditing ? "pb-40" : "safe-pb"}`}>
       <Toast
         message={toast.message}
         visible={toast.visible}

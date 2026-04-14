@@ -140,7 +140,7 @@ export default function SettingsCategoriesScreen() {
   }
 
   return (
-    <div class="flex flex-col gap-4 px-4 pt-2 pb-28">
+    <div class="flex flex-col gap-4 px-4 pt-2 safe-pb-lg">
       {/* Back header */}
       <div class="flex items-center justify-between pt-1">
         <button

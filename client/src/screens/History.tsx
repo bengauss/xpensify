@@ -559,7 +559,7 @@ export default function HistoryScreen() {
   }
 
   return (
-    <div class="flex flex-col min-h-0 px-4 pt-2 pb-24">
+    <div class="flex flex-col min-h-0 px-4 pt-2 safe-pb">
       {/* Search bar */}
       <div class="pt-2 pb-3 sticky top-0 z-10" style={{ backgroundColor: "var(--color-bg-primary)" }}>
         <SearchBar value={searchQuery} onChange={setSearchQuery} />

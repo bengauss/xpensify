@@ -104,7 +104,7 @@ export function DetailSheet({ open, onClose, children }: DetailSheetProps) {
           maxHeight: "70dvh",
           overflowY: "auto",
           overscrollBehavior: "contain",
-          paddingBottom: "env(safe-area-inset-bottom, 20px)",
+          paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
           willChange: "transform",
           transform: "translateY(100%)",
         }}

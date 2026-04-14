@@ -238,7 +238,7 @@ export default function AnalyticsScreen() {
   const isLess = diff <= 0;
 
   return (
-    <div class="flex flex-col gap-4 px-4 pb-24 pt-2">
+    <div class="flex flex-col gap-4 px-4 pt-2 safe-pb">
 
       {/* Month selector */}
       <div class="flex items-center justify-between">

@@ -18,7 +18,10 @@ export function BottomNav() {
   }
 
   return (
-    <nav class="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-text-ghost/10 bg-bg-primary px-2 pb-[env(safe-area-inset-bottom)] pt-2">
+    <nav
+      class="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-text-ghost/10 bg-bg-primary px-2 pt-2"
+      style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 4px)" }}
+    >
       {tabs.map((tab) => {
         const active = path === tab.path;
         return (

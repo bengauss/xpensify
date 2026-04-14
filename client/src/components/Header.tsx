@@ -6,7 +6,10 @@ interface HeaderProps {
 
 export function Header({ onSettingsClick }: HeaderProps) {
   return (
-    <header class="flex items-center justify-between px-4 py-3">
+    <header
+      class="flex items-center justify-between px-4 py-3 flex-shrink-0"
+      style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
+    >
       <div class="flex items-center gap-2">
         <span class="text-lg font-light text-accent">xpensify</span>
       </div>

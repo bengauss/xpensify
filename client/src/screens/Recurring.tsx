@@ -347,7 +347,7 @@ export default function RecurringScreen() {
   );
 
   return (
-    <div ref={screenRef} class="flex flex-col gap-5 px-4 pt-2 pb-28">
+    <div ref={screenRef} class="flex flex-col gap-5 px-4 pt-2 safe-pb-lg">
       {/* Forecast card */}
       {forecast && forecast !== "error" && (
         <ForecastCard forecast={forecast} />

@@ -40,7 +40,10 @@ export function LoginScreen() {
         alignItems: "center",
         justifyContent: "center",
         minHeight: "100dvh",
-        padding: 20,
+        paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)",
+        paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)",
+        paddingLeft: 20,
+        paddingRight: 20,
         backgroundColor: "#0c0d12",
       }}
     >

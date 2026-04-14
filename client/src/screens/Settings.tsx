@@ -483,7 +483,7 @@ export default function SettingsScreen() {
   const hasPush = typeof window !== "undefined" && "PushManager" in window;
 
   return (
-    <div class="flex flex-col gap-4 px-4 pt-2 pb-28">
+    <div class="flex flex-col gap-4 px-4 pt-2 safe-pb-lg">
       <h1 class="text-[17px] font-semibold text-text-primary">settings</h1>
 
       <Section title="categories">

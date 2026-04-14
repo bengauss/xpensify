@@ -152,7 +152,7 @@ export default function RecurringForm({ id: idProp }: { id?: string } = {}) {
   const identityAmount = amountStr || "0,00";
 
   return (
-    <div class="flex flex-col gap-4 px-4 pt-2 pb-28">
+    <div class="flex flex-col gap-4 px-4 pt-2 safe-pb-lg">
       {/* ── Identity card ──────────────────────────────────────────────────── */}
       <div
         class="rounded-2xl border"
