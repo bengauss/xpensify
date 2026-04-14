@@ -76,9 +76,3 @@ body {
   min-height: 100dvh;
   overflow-x: hidden;
 }
-
-/* Screen content is hidden by default via CSS.
-   The transition system is the ONLY thing that sets opacity > 0. */
-.screen-content {
-  opacity: 0;
-}

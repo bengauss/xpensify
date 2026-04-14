@@ -25,7 +25,15 @@ function monthName(monthIndex: number): string {
 
 function scheduleText(t: RecurringTemplate): string {
   if (t.frequency === "weekly") return "every week";
-  if (t.frequency === "yearly") return "every year";
+  if (t.frequency === "yearly") {
+    const anchor = t.start_date ?? t.next_due;
+    if (anchor) {
+      const [, mm, dd] = anchor.split("-").map(Number);
+      const day = Number(dd);
+      return `every year on ${day} ${monthName(mm - 1)}`;
+    }
+    return "every year";
+  }
   // monthly
   const dom = t.day_of_month;
   if (dom) return `every month on the ${dom}${ordinal(dom)}`;
@@ -235,7 +243,7 @@ function TemplateRow({
       class="flex items-center gap-3 w-full text-left px-1 py-2.5 cursor-pointer bg-transparent border-0"
     >
       {/* Icon + text — animated together */}
-      <div data-row-text class="flex items-center gap-3 flex-1 min-w-0" style={{ opacity: 0, transform: "translateX(-20px)" }}>
+      <div data-row-text class="flex items-center gap-3 flex-1 min-w-0">
         {/* Category icon */}
         <div
           class="flex-shrink-0 flex items-center justify-center rounded-xl"
@@ -252,7 +260,7 @@ function TemplateRow({
       </div>
 
       {/* Amount */}
-      <span data-row-amount class="text-sm text-text-body tabular-nums" style={{ opacity: 0 }}>
+      <span data-row-amount class="text-sm text-text-body tabular-nums">
         EUR {formatCents(template.amount)}
       </span>
     </button>
@@ -356,7 +364,7 @@ export default function RecurringScreen() {
         <div class="flex flex-col gap-5">
           {sections.map((freq) => (
             <div key={freq} class="flex flex-col gap-1">
-              <p class="text-xs font-semibold text-text-tertiary uppercase tracking-widest px-1 mb-1">
+              <p class="text-xs font-semibold text-text-tertiary tracking-widest px-1 mb-1">
                 {freq}
               </p>
               {byFrequency[freq].map((t) => (
@@ -371,24 +379,24 @@ export default function RecurringScreen() {
         </div>
       )}
 
-      {/* Floating add button — sticky to bottom-right of scroll area */}
-      <div class="sticky z-30 self-end" style={{ bottom: 16, marginTop: -28 }}>
-        <button
-          onClick={() => route("/recurring/new")}
-          class="flex items-center justify-center rounded-full cursor-pointer border-0"
-          style={{
-            width: 44,
-            height: 44,
-            backgroundColor: "var(--color-accent)",
-            color: "var(--color-bg-primary)",
-            boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-          }}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </button>
-      </div>
+      {/* Floating add button — fixed to viewport, above bottom nav */}
+      <button
+        onClick={() => route("/recurring/new")}
+        class="fixed z-30 flex items-center justify-center rounded-full cursor-pointer border-0"
+        style={{
+          right: 16,
+          bottom: "calc(76px + env(safe-area-inset-bottom))",
+          width: 44,
+          height: 44,
+          backgroundColor: "var(--color-accent)",
+          color: "var(--color-bg-primary)",
+          boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+        }}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </button>
     </div>
   );
 }

@@ -1,5 +1,4 @@
 import { signal } from "@preact/signals";
-import { animate } from "motion";
 
 // ── Tab index mapping ────────────────────────────────────────────────────────
 
@@ -12,112 +11,64 @@ export function getTabIndex(path: string): number {
 
 // ── Shared state ─────────────────────────────────────────────────────────────
 
-export const contentEl = signal<HTMLElement | null>(null);
+/**
+ * Direction of the pending tab transition.
+ *  1 = forward (slide left, new screen enters from right)
+ * -1 = backward (slide right, new screen enters from left)
+ *  0 = no pending tab transition (non-tab nav or no nav)
+ *
+ * Set by navigateTab(), read + reset by TabTransitionContainer.
+ */
 export const pendingDirection = signal<number>(0);
+
+/**
+ * Promise that resolves when the current tab transition completes.
+ * Per-screen entrance animations (CategorySelector reveal, list stagger, etc.)
+ * await this before starting, so they play AFTER the crossfade.
+ */
 export const transitionDone = signal<Promise<void> | null>(null);
 
-let inAnim: { stop: () => void } | null = null;
+/** True while a tab crossfade is in progress. Blocks rapid taps. */
+export const isTransitioning = signal<boolean>(false);
+
 let resolveTransitionDone: (() => void) | null = null;
-let pendingRafIds: number[] = [];
-let outTimer: number | null = null;
-
-// ── Reveal (initial page load) ───────────────────────────────────────────────
-
-export function revealContent() {
-  const el = contentEl.value;
-  if (el) el.style.opacity = "1";
-}
 
 // ── Navigate with transition ─────────────────────────────────────────────────
 
-const OUT_DURATION = 180;
-
+/**
+ * Called by BottomNav when a tab is tapped. Sets the pending direction
+ * and triggers the route change. TabTransitionContainer picks up the
+ * signal and performs the crossfade.
+ */
 export function navigateTab(
   newPath: string,
   currentPath: string,
   routeFn: (path: string) => void
 ) {
+  // Ignore rapid taps during an in-flight transition
+  if (isTransitioning.value) return;
+
   const oldIdx = getTabIndex(currentPath);
   const newIdx = getTabIndex(newPath);
-  const el = contentEl.value;
 
-  if (oldIdx === newIdx || oldIdx < 0 || newIdx < 0 || !el) {
+  // Same tab or non-tab route: just navigate without animation
+  if (oldIdx === newIdx || oldIdx < 0 || newIdx < 0) {
     routeFn(newPath);
     return;
   }
 
-  cancelAll(el);
-
-  const dir = newIdx > oldIdx ? 1 : -1;
-  pendingDirection.value = dir;
-
+  pendingDirection.value = newIdx > oldIdx ? 1 : -1;
   transitionDone.value = new Promise<void>((resolve) => {
     resolveTransitionDone = resolve;
   });
 
-  // OUT: CSS transition
-  const outX = `${dir * -15}%`;
-  el.style.transition = `opacity ${OUT_DURATION}ms ease-out, transform ${OUT_DURATION}ms ease-out`;
-  el.style.opacity = "0";
-  el.style.transform = `translateX(${outX})`;
-
-  outTimer = window.setTimeout(() => {
-    outTimer = null;
-    el.style.transition = "";
-    el.style.transform = `translateX(${dir * 30}%)`;
-    // opacity is already "0" inline — matches CSS class
-    routeFn(newPath);
-  }, OUT_DURATION);
+  routeFn(newPath);
 }
 
-/**
- * Called by Shell after route change. Double-rAF before animation.
- */
-export function animateIn(): Promise<void> {
-  const dir = pendingDirection.value;
-  const el = contentEl.value;
-
-  if (dir === 0 || !el) {
-    if (resolveTransitionDone) { resolveTransitionDone(); resolveTransitionDone = null; }
-    return Promise.resolve();
+/** Called by TabTransitionContainer when the transition finishes. */
+export function completeTransition() {
+  if (resolveTransitionDone) {
+    resolveTransitionDone();
+    resolveTransitionDone = null;
   }
-
-  pendingDirection.value = 0;
-
-  const fromX = `${dir * 30}%`;
-  el.style.transform = `translateX(${fromX})`;
-
-  const id1 = requestAnimationFrame(() => {
-    const id2 = requestAnimationFrame(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      inAnim = (animate as any)(
-        el,
-        { opacity: [0, 1], transform: [`translateX(${fromX})`, `translateX(0%)`] },
-        { type: "spring", stiffness: 400, damping: 35 }
-      );
-
-      (inAnim as any).then(() => {
-        inAnim = null;
-        if (el) {
-          el.style.transform = "";
-          el.style.opacity = "1";
-        }
-        if (resolveTransitionDone) { resolveTransitionDone(); resolveTransitionDone = null; }
-      });
-    });
-    pendingRafIds.push(id2);
-  });
-  pendingRafIds.push(id1);
-
-  return transitionDone.value ?? Promise.resolve();
-}
-
-function cancelAll(el: HTMLElement) {
-  if (outTimer !== null) { clearTimeout(outTimer); outTimer = null; }
-  if (inAnim) { inAnim.stop(); inAnim = null; }
-  for (const id of pendingRafIds) cancelAnimationFrame(id);
-  pendingRafIds = [];
-  el.style.transition = "";
-  el.style.opacity = "1";
-  el.style.transform = "";
 }

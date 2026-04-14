@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS recurring_templates (
   note TEXT,
   frequency TEXT NOT NULL CHECK(frequency IN ('weekly', 'monthly', 'yearly')),
   day_of_month INTEGER,
+  start_date TEXT,
   active INTEGER NOT NULL DEFAULT 1,
   next_due TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),

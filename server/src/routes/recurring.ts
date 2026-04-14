@@ -11,6 +11,7 @@ interface RecurringTemplateRow {
   note: string | null;
   frequency: "weekly" | "monthly" | "yearly";
   day_of_month: number | null;
+  start_date: string | null;
   active: number;
   next_due: string;
   created_at: string;
@@ -22,15 +23,21 @@ interface RecurringTemplateRow {
   subcategory_name?: string;
 }
 
-/** Compute next_due from frequency and optional day_of_month */
+function ymd(year: number, month: number, day: number): string {
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** Compute next_due from frequency, optional day_of_month, and optional start_date (yearly) */
 function computeNextDue(
   frequency: "weekly" | "monthly" | "yearly",
-  dayOfMonth: number | null
+  dayOfMonth: number | null,
+  startDate: string | null
 ): string {
   const today = new Date();
   const year = today.getFullYear();
   const month = today.getMonth() + 1; // 1-12
   const todayDay = today.getDate();
+  const todayKey = ymd(year, month, todayDay);
 
   if (frequency === "monthly") {
     const dom = dayOfMonth ?? todayDay;
@@ -38,14 +45,14 @@ function computeNextDue(
     if (dom >= todayDay) {
       const maxDay = new Date(year, month, 0).getDate();
       const clampedDay = Math.min(dom, maxDay);
-      return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`;
+      return ymd(year, month, clampedDay);
     } else {
       let newMonth = month + 1;
       let newYear = year;
       if (newMonth > 12) { newMonth = 1; newYear += 1; }
       const maxDay = new Date(newYear, newMonth, 0).getDate();
       const clampedDay = Math.min(dom, maxDay);
-      return `${String(newYear).padStart(4, "0")}-${String(newMonth).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`;
+      return ymd(newYear, newMonth, clampedDay);
     }
   } else if (frequency === "weekly") {
     // Next week from today
@@ -53,11 +60,20 @@ function computeNextDue(
     d.setDate(d.getDate() + 7);
     return d.toISOString().split("T")[0];
   } else {
-    // yearly — same month/day next year
+    // yearly — use start_date to anchor month/day; if start_date is today or future, use it directly
+    if (startDate) {
+      if (startDate >= todayKey) return startDate;
+      const [, sm, sd] = startDate.split("-").map(Number);
+      const anniversaryThisYear = ymd(year, sm, Math.min(sd, new Date(year, sm, 0).getDate()));
+      if (anniversaryThisYear >= todayKey) return anniversaryThisYear;
+      const maxDay = new Date(year + 1, sm, 0).getDate();
+      return ymd(year + 1, sm, Math.min(sd, maxDay));
+    }
+    // Fallback: legacy behavior — same month/day next year
     const dom = dayOfMonth ?? todayDay;
     const maxDay = new Date(year + 1, month, 0).getDate();
     const clampedDay = Math.min(dom, maxDay);
-    return `${String(year + 1).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`;
+    return ymd(year + 1, month, clampedDay);
   }
 }
 
@@ -149,6 +165,7 @@ const recurring = new Hono<{ Variables: Variables }>()
       note?: string | null;
       frequency?: "weekly" | "monthly" | "yearly";
       day_of_month?: number | null;
+      start_date?: string | null;
       active?: number;
     };
 
@@ -158,7 +175,7 @@ const recurring = new Hono<{ Variables: Variables }>()
       return c.json({ error: "Invalid JSON" }, 400);
     }
 
-    const { category_id, subcategory_id, amount, frequency, day_of_month, note, active } = body;
+    const { category_id, subcategory_id, amount, frequency, day_of_month, start_date, note, active } = body;
 
     if (!category_id || !subcategory_id || amount == null || !frequency) {
       return c.json({ error: "category_id, subcategory_id, amount, and frequency are required" }, 400);
@@ -168,13 +185,14 @@ const recurring = new Hono<{ Variables: Variables }>()
       return c.json({ error: "frequency must be weekly, monthly, or yearly" }, 400);
     }
 
+    const startDate = frequency === "yearly" ? (start_date ?? null) : null;
     const id = crypto.randomUUID();
-    const nextDue = computeNextDue(frequency, day_of_month ?? null);
+    const nextDue = computeNextDue(frequency, day_of_month ?? null, startDate);
 
     db.prepare(
       `INSERT INTO recurring_templates
-         (id, user_id, category_id, subcategory_id, amount, note, frequency, day_of_month, active, next_due)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         (id, user_id, category_id, subcategory_id, amount, note, frequency, day_of_month, start_date, active, next_due)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       userId,
@@ -184,6 +202,7 @@ const recurring = new Hono<{ Variables: Variables }>()
       note ?? null,
       frequency,
       day_of_month ?? null,
+      startDate,
       active ?? 1,
       nextDue
     );
@@ -222,6 +241,7 @@ const recurring = new Hono<{ Variables: Variables }>()
       note: string | null;
       frequency: "weekly" | "monthly" | "yearly";
       day_of_month: number | null;
+      start_date: string | null;
       active: number;
       next_due: string;
     }>;
@@ -241,8 +261,19 @@ const recurring = new Hono<{ Variables: Variables }>()
     if (body.note !== undefined) { fields.push("note = ?"); values.push(body.note); }
     if (body.frequency !== undefined) { fields.push("frequency = ?"); values.push(body.frequency); }
     if (body.day_of_month !== undefined) { fields.push("day_of_month = ?"); values.push(body.day_of_month); }
+    if (body.start_date !== undefined) { fields.push("start_date = ?"); values.push(body.start_date); }
     if (body.active !== undefined) { fields.push("active = ?"); values.push(body.active); }
     if (body.next_due !== undefined) { fields.push("next_due = ?"); values.push(body.next_due); }
+
+    // Recompute next_due when schedule inputs change and next_due wasn't explicitly provided
+    if (body.next_due === undefined && (body.frequency !== undefined || body.day_of_month !== undefined || body.start_date !== undefined)) {
+      const freq = body.frequency ?? existing.frequency;
+      const dom = body.day_of_month !== undefined ? body.day_of_month : existing.day_of_month;
+      const sd = body.start_date !== undefined ? body.start_date : existing.start_date;
+      const nextDue = computeNextDue(freq, dom, freq === "yearly" ? sd : null);
+      fields.push("next_due = ?");
+      values.push(nextDue);
+    }
 
     if (fields.length === 0) {
       return c.json({ error: "No fields to update" }, 400);

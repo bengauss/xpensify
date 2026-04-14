@@ -5,7 +5,7 @@ import { springs } from "@/lib/animations";
 import { db } from "@/db/local";
 import type { Expense } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { AmountInput, parseCents } from "@/components/AmountInput";
+import { AmountInput, parseCents, formatCentsDE } from "@/components/AmountInput";
 import { CategorySelector } from "@/components/CategorySelector";
 import { NoteInput } from "@/components/NoteInput";
 import { Toast } from "@/components/Toast";
@@ -77,7 +77,7 @@ export function AddScreen() {
   const editing = editingExpense.value;
   const { path } = useLocation();
 
-  const [amount, setAmount] = useState(editing ? (editing.amount / 100).toFixed(2) : "");
+  const [amount, setAmount] = useState(editing ? formatCentsDE(editing.amount) : "");
   const [note, setNote] = useState(editing?.note ?? "");
   const [showNote, setShowNote] = useState(!!editing?.note);
   const [dateStr, setDateStr] = useState(

@@ -53,6 +53,8 @@ export interface RecurringTemplate {
   note: string | null;
   frequency: 'weekly' | 'monthly' | 'yearly';
   day_of_month: number | null;
+  /** YYYY-MM-DD — anchor month/day for yearly recurrences (first occurrence) */
+  start_date: string | null;
   /** 0 = inactive, 1 = active */
   active: number;
   next_due: string;
