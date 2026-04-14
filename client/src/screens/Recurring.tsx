@@ -3,12 +3,12 @@ import { useLocation } from "preact-iso";
 import { animate } from "motion";
 import { springs } from "@/lib/animations";
 import { db } from "@/db/local";
-import type { RecurringTemplate } from "@/db/local";
+import type { RecurringTemplate, Expense } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { categoryIcons } from "@/icons";
 import { api } from "@/lib/api";
 import { useEntrance, animateRowEntrance } from "@/lib/entrance";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, MONTHS_SHORT } from "@/lib/format";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -102,121 +102,223 @@ function Toggle({ active, onToggle }: ToggleProps) {
 
 // ── Forecast card ─────────────────────────────────────────────────────────────
 
+interface ForecastItem {
+  key: string;
+  name: string;
+  amount: number;
+  /** YYYY-MM-DD */
+  date: string;
+  already_generated: boolean;
+}
+
 interface ForecastData {
   total_remaining: number;
   upcoming_count: number;
-  total_count: number;
-  items: Array<{
-    id: string;
-    amount: number;
-    note: string | null;
-    next_due: string;
-    frequency: string;
-    category_name: string;
-    category_icon: string;
-    category_color: string;
-    subcategory_name: string;
-    already_generated: boolean;
-  }>;
+  total_active: number;
+  generated: ForecastItem[];
+  upcoming: ForecastItem[];
 }
 
-function useForecast(): ForecastData | null | "error" {
+function formatDayMonth(ymd: string): string {
+  const [, mm, dd] = ymd.split("-").map(Number);
+  const day = Number(dd);
+  const month = MONTHS_SHORT[mm - 1] ?? "";
+  return `${day} ${month}`;
+}
+
+function useForecast(): ForecastData | null {
   const templates = useLiveQuery(() => db.recurring_templates.toArray(), []);
-  const expenses = useLiveQuery(
-    () => db.expenses
-      .where("source").equals("recurring")
-      .filter((e) => {
-        const now = new Date();
-        const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-        return e.timestamp.startsWith(ym) && e.deleted === 0;
-      })
-      .toArray(),
-    []
-  );
-
-  if (!templates || !expenses) return null;
-
+  const categories = useLiveQuery(() => db.categories.toArray(), []);
+  const subcategories = useLiveQuery(() => db.subcategories.toArray(), []);
+  // `source` isn't indexed on the expenses table, so we can't use .where("source").
+  // Filter by timestamp (indexed) to narrow to the current month, then filter
+  // source/deleted in JS.
   const now = new Date();
   const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-
-  const generatedSet = new Set(
-    expenses.filter((e) => e.recurring_template_id).map((e) => e.recurring_template_id as string)
+  const expenses = useLiveQuery(
+    () => db.expenses.where("timestamp").startsWith(ym).toArray(),
+    [ym]
   );
 
-  const upcoming = templates.filter(
-    (t) => t.active === 1 && t.next_due.startsWith(ym)
+  if (!templates || !expenses || !categories || !subcategories) return null;
+
+  const catById = new Map<string, string>();
+  for (const c of categories) catById.set(c.id, c.name);
+  const subById = new Map<string, string>();
+  for (const s of subcategories) subById.set(s.id, s.name);
+
+  function labelFor(params: {
+    note: string | null;
+    category_id: string;
+    subcategory_id: string;
+  }): string {
+    if (params.note && params.note.trim()) return params.note.trim();
+    const sub = subById.get(params.subcategory_id);
+    if (sub) return sub;
+    const cat = catById.get(params.category_id);
+    if (cat) return cat;
+    return "—";
+  }
+
+  const generatedExpenses: Expense[] = expenses.filter(
+    (e) => e.source === "recurring" && e.deleted === 0
   );
 
-  const totalRemaining = upcoming
-    .filter((t) => !generatedSet.has(t.id))
-    .reduce((sum, t) => sum + t.amount, 0);
+  const generatedTemplateIds = new Set(
+    generatedExpenses
+      .map((e) => e.recurring_template_id)
+      .filter((id): id is string => !!id)
+  );
+
+  const generated: ForecastItem[] = generatedExpenses
+    .map((e) => ({
+      key: e.id,
+      name: labelFor({
+        note: e.note,
+        category_id: e.category_id,
+        subcategory_id: e.subcategory_id,
+      }),
+      amount: e.amount,
+      date: e.timestamp.slice(0, 10),
+      already_generated: true,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const upcoming: ForecastItem[] = templates
+    .filter(
+      (t) =>
+        t.active === 1 &&
+        t.next_due.startsWith(ym) &&
+        !generatedTemplateIds.has(t.id)
+    )
+    .map((t) => ({
+      key: t.id,
+      name: labelFor({
+        note: t.note,
+        category_id: t.category_id,
+        subcategory_id: t.subcategory_id,
+      }),
+      amount: t.amount,
+      date: t.next_due,
+      already_generated: false,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   return {
-    total_remaining: totalRemaining,
-    upcoming_count: upcoming.filter((t) => !generatedSet.has(t.id)).length,
-    total_count: upcoming.length,
-    items: upcoming.map((t) => ({
-      id: t.id,
-      amount: t.amount,
-      note: t.note,
-      next_due: t.next_due,
-      frequency: t.frequency,
-      category_name: t.category_name ?? "",
-      category_icon: t.category_icon ?? "",
-      category_color: t.category_color ?? "var(--color-accent)",
-      subcategory_name: t.subcategory_name ?? "",
-      already_generated: generatedSet.has(t.id),
-    })),
+    total_remaining: upcoming.reduce((sum, u) => sum + u.amount, 0),
+    upcoming_count: upcoming.length,
+    total_active: templates.filter((t) => t.active === 1).length,
+    generated,
+    upcoming,
   };
 }
 
 function ForecastCard({ forecast }: { forecast: ForecastData }) {
   const now = new Date();
   const month = monthName(now.getMonth());
+  const cardRef = useRef<HTMLDivElement>(null);
+  const hasAnimatedRef = useRef(false);
+
+  // Self-contained mount animation — ensures the card appears regardless of
+  // whether it rendered before or after the screen-level entrance kicked off.
+  useEffect(() => {
+    if (!cardRef.current || hasAnimatedRef.current) return;
+    hasAnimatedRef.current = true;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (animate as any)(
+      cardRef.current,
+      { opacity: [0, 1], y: [10, 0] },
+      { ...springs.gentle }
+    );
+  }, []);
+
+  const hasItems = forecast.generated.length > 0 || forecast.upcoming.length > 0;
 
   return (
     <div
-      data-forecast
-      class="rounded-2xl px-5 py-4 border"
+      ref={cardRef}
+      class="rounded-2xl border"
       style={{
-        backgroundColor: "color-mix(in srgb, var(--color-accent) 10%, transparent)",
-        borderColor: "color-mix(in srgb, var(--color-accent) 20%, transparent)",
+        padding: "16px 20px",
+        backgroundColor: "rgba(108,156,255,0.06)",
+        borderColor: "rgba(108,156,255,0.12)",
         opacity: 0,
         transform: "translateY(10px)",
       }}
     >
-      <p class="text-sm text-text-secondary mb-1">remaining this month</p>
       <p
-        class="font-light mb-1"
-        style={{ fontSize: 32, color: "var(--color-accent)", lineHeight: 1.1 }}
+        style={{
+          fontSize: 12,
+          color: "var(--color-text-tertiary)",
+          marginBottom: 2,
+        }}
+      >
+        remaining this month
+      </p>
+      <p
+        style={{
+          fontSize: 32,
+          fontWeight: 300,
+          color: "var(--color-accent)",
+          lineHeight: 1.1,
+          marginBottom: 4,
+        }}
       >
         EUR {formatMoney(forecast.total_remaining)}
       </p>
-      <p class="text-xs text-text-secondary mb-4">
-        {forecast.upcoming_count} of {forecast.total_count} expenses still due in {month}
+      <p
+        style={{
+          fontSize: 12,
+          color: "var(--color-text-muted)",
+        }}
+      >
+        {forecast.upcoming_count} of {forecast.total_active} expenses still due in {month}
       </p>
 
-      {forecast.items.length > 0 && (
-        <div class="flex flex-col gap-2">
-          {forecast.items.map((item) => (
-            <div
-              key={item.id}
-              class="flex items-center justify-between text-sm"
-              style={{ opacity: item.already_generated ? 0.45 : 1 }}
-            >
-              <span
-                class="text-text-body"
-                style={item.already_generated ? { textDecoration: "line-through" } : {}}
-              >
-                {item.note || item.subcategory_name || item.category_name}
-              </span>
-              <span class="text-text-secondary tabular-nums">
-                {item.next_due.slice(8)} · EUR {formatMoney(item.amount)}
-              </span>
-            </div>
-          ))}
-        </div>
+      {hasItems && (
+        <>
+          <div
+            style={{
+              height: 1,
+              transform: "scaleY(0.5)",
+              transformOrigin: "center",
+              backgroundColor: "rgba(108,156,255,0.1)",
+              marginTop: 12,
+              marginBottom: 12,
+            }}
+          />
+          <div class="flex flex-col">
+            {forecast.generated.map((item) => (
+              <ForecastRow key={item.key} item={item} dimmed />
+            ))}
+            {forecast.generated.length > 0 && forecast.upcoming.length > 0 && (
+              <div style={{ height: 8 }} />
+            )}
+            {forecast.upcoming.map((item) => (
+              <ForecastRow key={item.key} item={item} dimmed={false} />
+            ))}
+          </div>
+        </>
       )}
+    </div>
+  );
+}
+
+function ForecastRow({ item, dimmed }: { item: ForecastItem; dimmed: boolean }) {
+  const nameColor = dimmed ? "var(--color-text-ghost)" : "var(--color-text-body)";
+  const metaColor = dimmed ? "var(--color-text-ghost)" : "var(--color-accent)";
+
+  return (
+    <div
+      class="flex items-center justify-between"
+      style={{ fontSize: 13, paddingTop: 4, paddingBottom: 4 }}
+    >
+      <span class="truncate" style={{ color: nameColor }}>
+        {item.name}
+      </span>
+      <span class="tabular-nums flex-shrink-0" style={{ color: metaColor }}>
+        {formatMoney(item.amount)} · {formatDayMonth(item.date)}
+      </span>
     </div>
   );
 }
@@ -241,7 +343,7 @@ function TemplateRow({
       class="flex items-center gap-3 w-full text-left px-1 py-2.5 cursor-pointer bg-transparent border-0"
     >
       {/* Icon + text — animated together */}
-      <div data-row-text class="flex items-center gap-3 flex-1 min-w-0" style={{ opacity: 0, transform: "translateX(-20px)" }}>
+      <div data-row-text class="flex items-center gap-3 flex-1 min-w-0">
         {/* Category icon */}
         <div
           class="flex-shrink-0 flex items-center justify-center rounded-xl"
@@ -258,7 +360,7 @@ function TemplateRow({
       </div>
 
       {/* Amount */}
-      <span data-row-amount class="text-sm text-text-body tabular-nums" style={{ opacity: 0 }}>
+      <span data-row-amount class="text-sm text-text-body tabular-nums">
         EUR {formatMoney(template.amount)}
       </span>
     </button>
@@ -274,27 +376,11 @@ export default function RecurringScreen() {
 
   const allTemplates = useLiveQuery(() => db.recurring_templates.toArray(), []);
 
-  // Entrance animation: forecast card slides up, then template rows animate
+  // Template row entrance animation. The forecast card owns its own mount
+  // animation (it may mount late after async data loads).
   useEntrance(() => {
     if (!screenRef.current) return;
-    const cleanups: (() => void)[] = [];
-
-    // Phase 1: forecast card fades in + slides up
-    const forecastEl = screenRef.current.querySelector<HTMLElement>("[data-forecast]");
-    if (forecastEl) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const a = (animate as any)(
-        forecastEl,
-        { opacity: [0, 1], y: [10, 0] },
-        { ...springs.gentle }
-      );
-      cleanups.push(() => a.stop());
-    }
-
-    // Phase 2: template rows
-    cleanups.push(animateRowEntrance(screenRef.current));
-
-    return () => { for (const c of cleanups) c(); };
+    return animateRowEntrance(screenRef.current);
   });
 
   async function handleToggle(template: RecurringTemplate) {
@@ -349,7 +435,7 @@ export default function RecurringScreen() {
   return (
     <div ref={screenRef} class="flex flex-col gap-5 px-4 pt-2 safe-pb-lg">
       {/* Forecast card */}
-      {forecast && forecast !== "error" && (
+      {forecast && (
         <ForecastCard forecast={forecast} />
       )}
 
@@ -363,7 +449,7 @@ export default function RecurringScreen() {
           {sections.map((freq) => (
             <div key={freq} class="flex flex-col gap-1">
               <p class="text-xs font-semibold text-text-tertiary tracking-widest px-1 mb-1">
-                {freq}
+                {freq === "monthly" ? "monthly templates" : freq}
               </p>
               {byFrequency[freq].map((t) => (
                 <TemplateRow
@@ -377,19 +463,25 @@ export default function RecurringScreen() {
         </div>
       )}
 
-      {/* Floating add button — fixed to viewport, above bottom nav */}
+      {/* Floating add button — sticky to the bottom-right of the scroll
+          viewport. Scrolls with content naturally; sticks once its natural
+          position would fall below the viewport's bottom threshold (above the
+          BottomNav). Negative top margin so the button hovers over the
+          existing safe-pb-lg padding without pushing layout down further. */}
       <button
         onClick={() => route("/recurring/new")}
-        class="fixed z-30 flex items-center justify-center rounded-full cursor-pointer border-0"
+        class="sticky self-end z-30 flex items-center justify-center rounded-full cursor-pointer border-0"
         style={{
-          right: 16,
-          bottom: "calc(76px + env(safe-area-inset-bottom))",
-          width: 44,
-          height: 44,
+          bottom: "calc(84px + env(safe-area-inset-bottom))",
+          marginTop: -48,
+          marginRight: 0,
+          width: 48,
+          height: 48,
           backgroundColor: "var(--color-accent)",
           color: "var(--color-bg-primary)",
-          boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+          boxShadow: "0 6px 20px rgba(0,0,0,0.5), 0 0 0 1px rgba(108,156,255,0.35)",
         }}
+        aria-label="Add recurring expense"
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 5v14M5 12h14" />

@@ -8,7 +8,6 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { AmountInput, parseCents, formatCentsDE } from "@/components/AmountInput";
 import { CategorySelector } from "@/components/CategorySelector";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { categoryIcons } from "@/icons";
 import { api } from "@/lib/api";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -20,8 +19,11 @@ type Frequency = "monthly" | "weekly" | "yearly";
 export default function RecurringForm({ id: idProp }: { id?: string } = {}) {
   const { route } = useLocation();
   const routeMatch = useRoute();
+  // TabTransitionContainer bypasses preact-iso's <Router>, so there's no
+  // RouteContext.Provider in scope — `routeMatch.params` can be undefined
+  // when we reach /recurring/new without an idProp. Guard the access.
   const id: string | undefined =
-    idProp ?? (routeMatch.params as Record<string, string>)["id"];
+    idProp ?? (routeMatch.params as Record<string, string> | undefined)?.["id"];
   const isEdit = !!id;
 
   // Form state
@@ -37,8 +39,6 @@ export default function RecurringForm({ id: idProp }: { id?: string } = {}) {
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(!isEdit);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  // Identity card is collapsed by default in edit mode, expanded for new
-  const [identityOpen, setIdentityOpen] = useState(!isEdit);
 
   const categories = useLiveQuery(
     () => db.categories.toArray().then((cats) => cats.sort((a, b) => a.sort_order - b.sort_order)),
@@ -145,79 +145,42 @@ export default function RecurringForm({ id: idProp }: { id?: string } = {}) {
   }
 
   const frequencies: Frequency[] = ["monthly", "weekly", "yearly"];
-  const selectedCategory = categories?.find((c) => c.id === categoryId);
-  const selectedSubcategory = subcategories?.find((s) => s.id === subcategoryId);
-  const IdentityIcon = selectedCategory ? categoryIcons[selectedCategory.icon] : null;
-  const identityColor = selectedCategory?.color ?? "var(--color-accent)";
-  const identityAmount = amountStr || "0,00";
 
   return (
     <div class="flex flex-col gap-4 px-4 pt-2 safe-pb-lg">
-      {/* ── Identity card ──────────────────────────────────────────────────── */}
-      <div
-        class="rounded-2xl border"
-        style={{
-          backgroundColor: "var(--color-bg-surface)",
-          borderColor: "color-mix(in srgb, var(--color-text-ghost) 20%, transparent)",
-        }}
-      >
-        {/* Collapsed summary row — clickable in edit mode */}
-        <button
-          onClick={() => isEdit && setIdentityOpen((v) => !v)}
-          disabled={!isEdit}
-          class="flex items-center gap-3 w-full text-left px-4 py-3 cursor-pointer bg-transparent border-0"
-          style={{ cursor: isEdit ? "pointer" : "default" }}
-        >
-          <div
-            class="flex-shrink-0 flex items-center justify-center rounded-xl"
-            style={{ width: 40, height: 40, backgroundColor: `${identityColor}1a` }}
-          >
-            {IdentityIcon && <IdentityIcon color={identityColor} size={20} />}
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm text-text-primary truncate">
-              {selectedCategory && selectedSubcategory
-                ? `${selectedCategory.name} · ${selectedSubcategory.name}`
-                : "select a category"}
-            </p>
-            {note.trim() && (
-              <p class="text-xs text-text-secondary truncate">{note.trim()}</p>
-            )}
-          </div>
-          <span class="text-base font-medium tabular-nums text-text-primary">
-            {identityAmount}
-          </span>
-        </button>
+      {/* Amount — same as the Add screen */}
+      <AmountInput value={amountStr} onChange={setAmountStr} />
 
-        {/* Expanded editor */}
-        {identityOpen && (
-          <div class="flex flex-col gap-4 px-4 pb-4 pt-1 border-t" style={{ borderColor: "color-mix(in srgb, var(--color-text-ghost) 12%, transparent)" }}>
-            <AmountInput value={amountStr} onChange={setAmountStr} />
-            {categories && subcategories ? (
-              <CategorySelector
-                categories={categories}
-                subcategories={subcategories}
-                compact
-                initialCategoryId={categoryId || undefined}
-                confirmedSubcategoryId={subcategoryId || undefined}
-                onSelect={(catId, subId) => {
-                  setCategoryId(catId);
-                  setSubcategoryId(subId);
-                }}
-              />
-            ) : (
-              <div class="h-32 rounded-xl bg-bg-surface animate-pulse" />
-            )}
-            <input
-              type="text"
-              value={note}
-              onInput={(e) => setNote((e.target as HTMLInputElement).value)}
-              placeholder="note (optional)"
-              class="w-full rounded-xl px-4 py-3 text-sm text-text-primary bg-bg-primary border border-text-ghost/20 outline-none placeholder:text-text-tertiary"
-            />
-          </div>
-        )}
-      </div>
+      {/* Category selector — full (non-compact) mode, matches Add screen:
+          multi-sub categories zoom into subcategory pills; single-sub
+          categories stay on the grid and just highlight the card. */}
+      {categories && subcategories ? (
+        <CategorySelector
+          categories={categories}
+          subcategories={subcategories}
+          initialCategoryId={categoryId || undefined}
+          confirmedSubcategoryId={subcategoryId || undefined}
+          onSelect={(catId, subId) => {
+            setCategoryId(catId);
+            setSubcategoryId(subId);
+          }}
+        />
+      ) : (
+        <div class="grid grid-cols-3 gap-3">
+          {Array.from({ length: 9 }).map((_, i) => (
+            <div key={i} class="h-16 rounded-xl bg-bg-surface animate-pulse" />
+          ))}
+        </div>
+      )}
+
+      {/* Note */}
+      <input
+        type="text"
+        value={note}
+        onInput={(e) => setNote((e.target as HTMLInputElement).value)}
+        placeholder="note (optional)"
+        class="w-full rounded-xl px-4 py-3 text-sm text-text-primary bg-bg-surface border border-text-ghost/20 outline-none placeholder:text-text-tertiary"
+      />
 
       {/* ── Schedule card ──────────────────────────────────────────────────── */}
       <div

@@ -75,8 +75,8 @@ export function TrendChart({ trend, selectedYear, selectedMonth, onSelect }: Tre
   return (
     <div
       ref={scrollRef}
-      class="flex flex-row gap-2 overflow-x-auto pb-2"
-      style={{ minHeight: 200, scrollbarWidth: "none" }}
+      class="flex flex-row gap-2 overflow-x-auto"
+      style={{ scrollbarWidth: "none" }}
     >
       {trend.map((item, index) => {
         const isSelected = item.year === selectedYear && item.month === selectedMonth;

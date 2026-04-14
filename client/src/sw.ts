@@ -28,7 +28,7 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("push", (event: PushEvent) => {
   let title = "xpensify";
   let body = "You have a new notification";
-  let icon = "/icons/icon-192.svg";
+  let icon = "/icons/icon-192.png";
 
   if (event.data) {
     try {
@@ -49,7 +49,7 @@ self.addEventListener("push", (event: PushEvent) => {
     self.registration.showNotification(title, {
       body,
       icon,
-      badge: "/icons/icon-192.svg",
+      badge: "/icons/icon-192.png",
       tag: "xpensify-notification",
     })
   );

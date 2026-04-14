@@ -123,8 +123,11 @@ export function AddScreen() {
 
     const amountCents = parseCents(amount);
     if (amountCents <= 0) {
-      // User tapped a subcategory before entering an amount — draw attention to
-      // the amount input with a brief shake instead of silently doing nothing.
+      // Category-first flow: remember the selection so the card/pill stays
+      // highlighted while the user enters the amount, then shake the amount
+      // input to draw attention to the missing field.
+      setPendingCategoryId(categoryId);
+      setPendingSubcategoryId(subcategoryId);
       if (amountRef.current) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (animate as any)(
@@ -181,6 +184,8 @@ export function AddScreen() {
     setAmount("");
     setNote("");
     setDateStr(new Date().toISOString().split("T")[0]);
+    setPendingCategoryId("");
+    setPendingSubcategoryId("");
     setFormKey((k) => k + 1);
 
     setTimeout(() => amountRef.current?.focus(), 100);
@@ -273,8 +278,7 @@ export function AddScreen() {
           subcategories={subcategories}
           onSelect={handleSelect}
           initialCategoryId={editing?.category_id}
-          confirmedSubcategoryId={isEditing ? pendingSubcategoryId : undefined}
-          amountReady={parseCents(amount) > 0 || isEditing}
+          confirmedSubcategoryId={pendingSubcategoryId || undefined}
         />
       ) : (
         <div class="grid grid-cols-3 gap-3">

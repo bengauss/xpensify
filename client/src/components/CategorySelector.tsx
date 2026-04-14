@@ -55,14 +55,20 @@ export function CategorySelector({
   compact = false,
   confirmedSubcategoryId,
 }: CategorySelectorProps) {
+  // Single-subcategory categories never drill down. If the initial category is
+  // one of those, open on the grid (with the card highlighted via
+  // confirmedSubcategoryId) rather than zooming into a one-pill view.
+  const initialHasSingleSub = initialCategoryId
+    ? subcategories.filter((s) => s.category_id === initialCategoryId).length === 1
+    : false;
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
-    initialCategoryId ?? null
+    initialCategoryId && !initialHasSingleSub ? initialCategoryId : null
   );
 
   const cardRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const gridRef = useRef<HTMLDivElement>(null);
   const pillsRef = useRef<HTMLDivElement>(null);
-  const needsMountReveal = useRef(!initialCategoryId);
+  const needsMountReveal = useRef(!selectedCategoryId);
   const lastSelectedIndex = useRef<number | undefined>(undefined);
   const pendingBackReveal = useRef(false);
   const hideTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -162,6 +168,9 @@ export function CategorySelector({
   function handleCategoryTap(category: Category) {
     const subs = subcategories.filter((s) => s.category_id === category.id);
 
+    // Single-subcategory categories don't drill down — the only pill would just
+    // mirror the category. Fire onSelect so the parent can highlight the card
+    // via confirmedSubcategoryId and/or commit if the rest of the form is ready.
     if (subs.length === 1) {
       onSelect(category.id, subs[0].id);
       return;

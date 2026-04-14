@@ -238,7 +238,10 @@ export default function AnalyticsScreen() {
   const isLess = diff <= 0;
 
   return (
-    <div class="flex flex-col gap-4 px-4 pt-2 safe-pb">
+    <div
+      class="flex flex-col gap-4 px-4 pt-2"
+      style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 72px)" }}
+    >
 
       {/* Month selector */}
       <div class="flex items-center justify-between">
@@ -362,8 +365,11 @@ export default function AnalyticsScreen() {
 
           {/* Trend chart */}
           <div
-            class="rounded-xl p-4"
-            style={{ backgroundColor: "var(--color-bg-surface)" }}
+            class="rounded-xl"
+            style={{
+              backgroundColor: "var(--color-bg-surface)",
+              padding: "16px 16px 12px 16px",
+            }}
           >
             <span
               class="tracking-wider block mb-3"

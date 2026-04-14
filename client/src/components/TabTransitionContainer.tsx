@@ -149,6 +149,12 @@ export function TabTransitionContainer() {
         clearTimeout(fallbackTimer);
         inFlightRef.current = null;
 
+        // Clear inline transforms so the layers don't create a `transform`
+        // containing block — otherwise `position: fixed` descendants (floating
+        // action buttons) get trapped inside the layer instead of the viewport.
+        if (outLayer) outLayer.style.transform = "";
+        if (inLayer) inLayer.style.transform = "";
+
         // Update state: new layer is active, old content unmounted
         setActiveIdx(newIdx);
         setSlots((s) => {

@@ -208,7 +208,7 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
       style={{ WebkitTapHighlightColor: "transparent", paddingTop: 10, paddingBottom: 10 }}
     >
       {/* Icon + text — animated together */}
-      <div data-row-text class="flex items-center gap-3 flex-1 min-w-0" style={{ opacity: 0, transform: "translateX(-20px)" }}>
+      <div data-row-text class="flex items-center gap-3 flex-1 min-w-0">
         {/* Category icon + user badge */}
         <div class="flex-shrink-0 relative" style={{ width: 36, height: 36 }}>
           <div
@@ -280,7 +280,7 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
       </div>
 
       {/* Amount — no currency prefix */}
-      <span data-row-amount class="flex-shrink-0 text-base font-medium tabular-nums" style={{ color: "var(--color-text-primary)", opacity: 0 }}>
+      <span data-row-amount class="flex-shrink-0 text-base font-medium tabular-nums" style={{ color: "var(--color-text-primary)" }}>
         {formatMoney(expense.amount)}
       </span>
     </button>
@@ -297,11 +297,11 @@ interface DayHeaderProps {
 function DayHeader({ dateKey, total }: DayHeaderProps) {
   return (
     <div data-row class="flex flex-col gap-1 pt-5 pb-1">
-      <div data-row-text class="flex items-center justify-between px-1" style={{ opacity: 0, transform: "translateX(-20px)" }}>
+      <div data-row-text class="flex items-center justify-between px-1">
         <span class="text-sm font-semibold tracking-wider" style={{ color: "var(--color-text-tertiary)" }}>
           {formatDateLabel(dateKey)}
         </span>
-        <span data-row-amount class="text-sm tabular-nums" style={{ color: "var(--color-text-tertiary)", opacity: 0 }}>
+        <span data-row-amount class="text-sm tabular-nums" style={{ color: "var(--color-text-tertiary)" }}>
           {formatEur(total)}
         </span>
       </div>
@@ -473,12 +473,6 @@ export default function HistoryScreen() {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Entrance animation: text slides in, then amounts fade in
-  useEntrance(() => {
-    if (!listRef.current) return;
-    return animateRowEntrance(listRef.current);
-  });
-
   // On mount: if a filter is set from Analytics drill-down, pre-populate search
   useEffect(() => {
     const f = historyFilter.value;
@@ -499,6 +493,14 @@ export default function HistoryScreen() {
 
   const categories = useLiveQuery(() => db.categories.toArray(), []);
   const subcategories = useLiveQuery(() => db.subcategories.toArray(), []);
+
+  // Entrance animation: text slides in, then amounts fade in.
+  // Re-run when rows are added (infinite scroll, filter change, initial data
+  // load) so new rows get marked revealed instead of staying CSS-hidden.
+  useEntrance(() => {
+    if (!listRef.current) return;
+    return animateRowEntrance(listRef.current);
+  }, [visibleDays, searchQuery, expenses?.length]);
 
   // Build lookup maps
   const categoryMap = new Map<string, Category>(
