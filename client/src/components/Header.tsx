@@ -12,8 +12,8 @@ export function Header({ onSettingsClick }: HeaderProps) {
     >
       <div class="flex items-center gap-2">
         <svg
-          width="20"
-          height="20"
+          width="22"
+          height="22"
           viewBox="0 0 100 100"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"

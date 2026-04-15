@@ -90,6 +90,28 @@ body {
   min-height: 0;
 }
 
+/* Pull-to-refresh indicator. Positioned absolutely near the top of the
+   transition container; the gesture hook drives transform/opacity. */
+.ptr-indicator {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  margin-left: -18px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-bg-surface);
+  border-radius: 9999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  z-index: 10;
+  pointer-events: none;
+}
+.ptr-indicator [data-ptr-spinner] {
+  transition: color 120ms ease-out;
+}
+
 .transition-layer {
   position: absolute;
   inset: 0;

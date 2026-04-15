@@ -7,6 +7,7 @@ import {
   isTransitioning,
   completeTransition,
 } from "@/lib/transitions";
+import { useTabGestures } from "@/lib/gestures";
 
 // Keep AddScreen (the default landing) eager; lazy-load everything else to
 // shrink the main bundle on cold start.
@@ -42,7 +43,7 @@ interface Slot {
 }
 
 export function TabTransitionContainer() {
-  const { path } = useLocation();
+  const { path, route } = useLocation();
 
   const [slots, setSlots] = useState<(Slot | null)[]>([
     { path, key: 0 },
@@ -50,13 +51,25 @@ export function TabTransitionContainer() {
   ]);
   const [activeIdx, setActiveIdx] = useState(0);
 
+  const containerRef = useRef<HTMLElement>(null);
   const layer0Ref = useRef<HTMLDivElement>(null);
   const layer1Ref = useRef<HTMLDivElement>(null);
   const layerRefs = [layer0Ref, layer1Ref];
+  const ptrIndicatorRef = useRef<HTMLDivElement>(null);
+  const pathRef = useRef(path);
+  pathRef.current = path;
 
   const prevPathRef = useRef(path);
   const nextKeyRef = useRef(1);
   const activeIdxRef = useRef(activeIdx);
+
+  useTabGestures(
+    containerRef,
+    () => layerRefs[activeIdxRef.current].current,
+    () => pathRef.current,
+    route,
+    ptrIndicatorRef,
+  );
   const inFlightRef = useRef<{
     oldIdx: number;
     newIdx: number;
@@ -201,7 +214,29 @@ export function TabTransitionContainer() {
   }
 
   return (
-    <main class="transition-container">
+    <main ref={containerRef} class="transition-container">
+      <div
+        ref={ptrIndicatorRef}
+        class="ptr-indicator"
+        aria-hidden="true"
+        style={{ transform: "translateY(-100%)", opacity: 0 }}
+      >
+        <svg
+          data-ptr-spinner
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          style={{ color: "var(--color-text-tertiary)" }}
+        >
+          <path d="M21 12a9 9 0 1 1-6.2-8.55" />
+          <polyline points="21 3 21 9 15 9" />
+        </svg>
+      </div>
       {[0, 1].map((i) => {
         const slot = slots[i];
         const isActive = activeIdx === i;

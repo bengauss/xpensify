@@ -13,9 +13,9 @@ const outDir = resolve(__dirname, "../client/public/icons");
 mkdirSync(outDir, { recursive: true });
 
 const sizes = [
-  { name: "icon-192.png", size: 192, padding: 38 },
-  { name: "icon-512.png", size: 512, padding: 102 },
-  { name: "apple-touch-icon.png", size: 180, padding: 36 },
+  { name: "icon-192.png", size: 192, padding: 14 },
+  { name: "icon-512.png", size: 512, padding: 38 },
+  { name: "apple-touch-icon.png", size: 180, padding: 14 },
 ];
 
 async function main() {

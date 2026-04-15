@@ -45,34 +45,15 @@ function AuthGate() {
 function AuthenticatedShell() {
   const { route } = useLocation();
 
-  // iOS Safari PWA cold-start: viewport height / safe-area insets are
-  // sometimes miscalculated on launch, leaving the bottom nav floating
-  // above the home indicator until a user interaction forces a reflow.
-  // Dispatch a sequence of resize events so layout settles without input.
-  useEffect(() => {
-    const isStandalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      // @ts-expect-error iOS-only non-standard API
-      window.navigator.standalone === true;
-    if (!isStandalone) return;
-    const delays = [0, 50, 150, 400, 900];
-    const timers = delays.map((d) =>
-      window.setTimeout(() => {
-        void document.body.offsetHeight;
-        window.dispatchEvent(new Event("resize"));
-      }, d),
-    );
-    return () => timers.forEach(clearTimeout);
-  }, []);
-
+  // Cap the app column at 480px on iPad/laptop. Fixed children (BottomNav,
+  // Toast, edit save bar) apply their own `max-w-[480px] mx-auto` so they
+  // align with the column. We deliberately do NOT set a transform on the
+  // shell: a transformed ancestor promotes itself to the containing block
+  // for `position: fixed` descendants, and iOS Safari PWA cold-start
+  // mis-measures that ancestor — leaving the bottom nav floating above the
+  // home indicator until the first touch triggers a reflow.
   return (
-    // Cap the app column at 480px on iPad/laptop. `transform: translateZ(0)`
-    // establishes a containing block so fixed children (BottomNav, Toast, edit
-    // save bar) stay within the column instead of spanning the viewport.
-    <div
-      class="flex h-dvh flex-col bg-bg-primary overflow-hidden mx-auto w-full max-w-[480px]"
-      style={{ transform: "translateZ(0)" }}
-    >
+    <div class="flex h-dvh flex-col bg-bg-primary overflow-hidden mx-auto w-full max-w-[480px]">
       <Header onSettingsClick={() => route("/settings")} />
       <TabTransitionContainer />
       <BottomNav />

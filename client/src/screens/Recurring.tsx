@@ -8,7 +8,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { categoryIcons } from "@/icons";
 import { api } from "@/lib/api";
 import { useEntrance, animateRowEntrance } from "@/lib/entrance";
-import { formatMoney, MONTHS_SHORT } from "@/lib/format";
+import { formatMoney, formatEur, MONTHS_SHORT } from "@/lib/format";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -347,21 +347,25 @@ function TemplateRow({
         {/* Category icon */}
         <div
           class="flex-shrink-0 flex items-center justify-center rounded-xl"
-          style={{ width: 34, height: 34, backgroundColor: `${color}1a` }}
+          style={{ width: 36, height: 36, backgroundColor: `${color}1a` }}
         >
-          {IconComponent && <IconComponent color={color} size={18} />}
+          {IconComponent && <IconComponent color={color} size={20} />}
         </div>
 
         {/* Labels */}
         <div class="flex-1 min-w-0">
-          <p class="text-sm text-text-primary truncate">{label}</p>
-          <p class="text-xs text-text-secondary">{scheduleText(template)}</p>
+          <p class="text-base text-text-primary truncate">{label}</p>
+          <p class="text-sm text-text-secondary">{scheduleText(template)}</p>
         </div>
       </div>
 
       {/* Amount */}
-      <span data-row-amount class="text-sm text-text-body tabular-nums">
-        EUR {formatMoney(template.amount)}
+      <span
+        data-row-amount
+        class="flex-shrink-0 text-base font-medium tabular-nums"
+        style={{ color: "var(--color-text-primary)" }}
+      >
+        {formatMoney(template.amount)}
       </span>
     </button>
   );
@@ -446,20 +450,37 @@ export default function RecurringScreen() {
         </p>
       ) : (
         <div class="flex flex-col gap-5">
-          {sections.map((freq) => (
-            <div key={freq} class="flex flex-col gap-1">
-              <p class="text-xs font-semibold text-text-tertiary tracking-widest px-1 mb-1">
-                {freq === "monthly" ? "monthly templates" : freq}
-              </p>
-              {byFrequency[freq].map((t) => (
-                <TemplateRow
-                  key={t.id}
-                  template={t}
-                  onTap={() => route(`/recurring/edit/${t.id}`)}
-                />
-              ))}
-            </div>
-          ))}
+          {sections.map((freq) => {
+            const total = byFrequency[freq].reduce((s, t) => s + t.amount, 0);
+            return (
+              <div key={freq} class="flex flex-col gap-1">
+                <div class="flex flex-col gap-1 pb-1">
+                  <div class="flex items-center justify-between px-1">
+                    <span
+                      class="text-sm font-semibold tracking-wider"
+                      style={{ color: "var(--color-text-tertiary)" }}
+                    >
+                      {freq}
+                    </span>
+                    <span
+                      class="text-sm tabular-nums"
+                      style={{ color: "var(--color-text-tertiary)" }}
+                    >
+                      {formatEur(total)}
+                    </span>
+                  </div>
+                  <div class="h-px w-full bg-accent opacity-30" />
+                </div>
+                {byFrequency[freq].map((t) => (
+                  <TemplateRow
+                    key={t.id}
+                    template={t}
+                    onTap={() => route(`/recurring/edit/${t.id}`)}
+                  />
+                ))}
+              </div>
+            );
+          })}
         </div>
       )}
 

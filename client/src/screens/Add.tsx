@@ -293,7 +293,7 @@ export function AddScreen() {
       {/* Edit-mode save bar — fixed above the tab bar */}
       {isEditing && (
         <div
-          class="fixed left-0 right-0 z-40 px-4"
+          class="fixed left-0 right-0 mx-auto max-w-[480px] z-40 px-4"
           style={{
             bottom: "calc(68px + env(safe-area-inset-bottom))",
             backgroundColor: "var(--color-bg-primary)",
