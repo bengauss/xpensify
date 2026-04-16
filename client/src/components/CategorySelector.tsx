@@ -117,12 +117,15 @@ export function CategorySelector({
       // the flex flow doesn't push it below during the fade. Without this the
       // header briefly appears at the bottom of the invisible grid and then
       // snaps up when the grid collapses — the "bottom flash" regression.
+      // Background must stay transparent: the parent screen already provides
+      // the dark surface, and an opaque overlay here would paint a black box
+      // over the still-fading grid before the FLIP'd icon arrives.
       if (selected && tapped) {
         selected.style.position = "absolute";
         selected.style.top = "0";
         selected.style.left = "0";
         selected.style.right = "0";
-        selected.style.backgroundColor = "var(--color-bg-primary)";
+        selected.style.zIndex = "10";
       }
 
       grid.style.transition = "opacity 150ms ease";
@@ -166,7 +169,7 @@ export function CategorySelector({
           selected.style.top = "";
           selected.style.left = "";
           selected.style.right = "";
-          selected.style.backgroundColor = "";
+          selected.style.zIndex = "";
         }
         tappedRectRef.current = null;
 
