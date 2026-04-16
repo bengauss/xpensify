@@ -12,7 +12,8 @@ interface AmountInputProps {
 
 /**
  * Normalize user input to en-US format: thousands separator comma, decimal period.
- * Strips all non-digit/separator chars, treats period as the decimal separator.
+ * Accepts either "." or "," as the decimal separator so users on German iOS
+ * keypads (which only expose ",") can enter decimals the same as en-US users.
  */
 function formatAmount(raw: string): string {
   if (!raw) return "";
@@ -21,13 +22,28 @@ function formatAmount(raw: string): string {
   let cleaned = raw.replace(/[^\d.,]/g, "");
   if (!cleaned) return "";
 
-  // Strip thousands commas (all commas), period is the decimal separator
-  // This means "1,500" gets interpreted as 1500 (en-US thousands)
-  const noCommas = cleaned.replace(/,/g, "");
-  const parts = noCommas.split(".");
-  let integerPart = parts[0];
-  const hasDot = parts.length > 1;
-  let decimalPart = hasDot ? parts[1] : "";
+  let integerPart: string;
+  let decimalPart: string;
+  let hasDecimal: boolean;
+
+  if (cleaned.includes(".")) {
+    // Period present → it's the decimal separator (en-US), commas are thousands
+    const noCommas = cleaned.replace(/,/g, "");
+    const dotIdx = noCommas.indexOf(".");
+    integerPart = noCommas.slice(0, dotIdx);
+    decimalPart = noCommas.slice(dotIdx + 1).replace(/\./g, "");
+    hasDecimal = true;
+  } else if (cleaned.includes(",")) {
+    // No period but comma(s) → last comma is decimal, earlier commas are stray/thousands
+    const lastComma = cleaned.lastIndexOf(",");
+    integerPart = cleaned.slice(0, lastComma).replace(/,/g, "");
+    decimalPart = cleaned.slice(lastComma + 1);
+    hasDecimal = true;
+  } else {
+    integerPart = cleaned;
+    decimalPart = "";
+    hasDecimal = false;
+  }
 
   // Limit decimal to 2 digits
   decimalPart = decimalPart.slice(0, 2);
@@ -38,7 +54,7 @@ function formatAmount(raw: string): string {
   // Add thousands separators
   integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
-  return hasDot ? `${integerPart}.${decimalPart}` : integerPart;
+  return hasDecimal ? `${integerPart}.${decimalPart}` : integerPart;
 }
 
 /** Parse an en-US formatted string to a JS number. */
