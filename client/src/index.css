@@ -213,20 +213,6 @@ body {
   animation: syncIndicatorEnter 200ms ease-out;
 }
 
-/* ── Just-saved glow in History ────────────────────────────────────────── */
-@keyframes justSavedGlow {
-  0% {
-    background-color: rgba(108, 156, 255, 0.08);
-  }
-  100% {
-    background-color: transparent;
-  }
-}
-.just-saved-glow {
-  animation: justSavedGlow 1500ms ease-out forwards;
-  border-radius: 12px;
-}
-
 /* ── Reduced-motion: collapse everything to near-instant ──────────────── */
 @media (prefers-reduced-motion: reduce) {
   .transition-layer {

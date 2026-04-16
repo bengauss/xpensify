@@ -14,7 +14,6 @@ import { formatMoneyWhole, monthKey } from "@/lib/format";
 import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
 import { editingExpense } from "@/lib/editing";
 import { useEntrance } from "@/lib/entrance";
-import { markSaved } from "@/lib/lastSaved";
 import { usePressScale } from "@/lib/usePressScale";
 
 // ── Discretionary spend helpers ──────────────────────────────────────────────
@@ -187,9 +186,8 @@ export function AddScreen() {
     const todayStr = new Date().toISOString().split("T")[0];
     const timestamp = dateStr === todayStr ? now : `${dateStr}T12:00:00.000Z`;
 
-    const expenseId = crypto.randomUUID();
     await db.expenses.add({
-      id: expenseId,
+      id: crypto.randomUUID(),
       user_id: userId,
       category_id: categoryId,
       subcategory_id: subcategoryId,
@@ -205,9 +203,6 @@ export function AddScreen() {
       created_at: now,
       updated_at: now,
     });
-
-    // Glow this row briefly if the user navigates to History within 3s.
-    markSaved(expenseId);
 
     if (amountRef.current) {
       // Motion springs with multi-keyframe arrays can re-run physics per
@@ -265,11 +260,8 @@ export function AddScreen() {
       sync_status: "pending",
     });
 
-    // Mark this row so History's ExpenseRow applies the just-saved-glow on
-    // arrival — same mechanism used for new adds. No toast/banner on edit
-    // save; the glowing row in History IS the confirmation.
-    markSaved(editing.id);
-
+    // No toast or banner on edit — the user sees the updated row in History
+    // immediately, which is its own confirmation.
     editingExpense.value = null;
     sync().catch(console.error);
     route("/history");

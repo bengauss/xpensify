@@ -11,9 +11,8 @@ import { parseCents, formatCents } from "@/components/AmountInput";
 import { sync } from "@/sync/engine";
 import { historyFilter } from "@/lib/filters";
 import { useEntrance, animateRowEntrance } from "@/lib/entrance";
-import { dissolveRow, DISSOLVE_FILTER_ID } from "@/lib/dissolve";
+import { fadeRemoveRow } from "@/lib/dissolve";
 import { usePressScale } from "@/lib/usePressScale";
-import { lastSaved, isWithinGlowWindow } from "@/lib/lastSaved";
 import { formatMoney, formatEur, dateKey as toDateKey, todayKey, MONTHS_SHORT } from "@/lib/format";
 import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
 
@@ -195,15 +194,6 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
 
   const press = usePressScale<HTMLButtonElement>(0.97);
 
-  // Determine once at mount whether this row was the expense just saved on the
-  // Add screen. Using `.peek()` avoids re-subscribing every row to the signal;
-  // the signal changes twice per save (set + clear) and we don't need rows to
-  // re-render on those flips. The CSS class runs the 1.5s glow animation.
-  const [showGlow] = useState<boolean>(() => {
-    const saved = lastSaved.peek();
-    return !!saved && saved.id === expense.id && isWithinGlowWindow(saved);
-  });
-
   return (
     <button
       ref={press.ref}
@@ -213,7 +203,7 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
       onPointerDown={press.onPointerDown}
       onPointerUp={press.onPointerUp}
       onPointerCancel={press.onPointerCancel}
-      class={`w-full text-left flex items-center gap-3 px-1 rounded-xl ${showGlow ? "just-saved-glow" : ""}`}
+      class="w-full text-left flex items-center gap-3 px-1 rounded-xl"
       style={{ WebkitTapHighlightColor: "transparent", paddingTop: 10, paddingBottom: 10 }}
     >
       {/* Icon + text — animated together */}
@@ -406,14 +396,16 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
     );
     onClose();
     if (rowEl) {
-      await dissolveRow(rowEl);
+      await fadeRemoveRow(rowEl);
     }
     await db.expenses.update(expense.id, {
       deleted: 1,
       sync_status: "pending",
       updated_at: new Date().toISOString(),
     });
-    sync().catch(console.error);
+    // Defer sync so the re-render triggered by any server-stamped timestamps
+    // can't race the fade-out and snap the list layout.
+    setTimeout(() => sync().catch(console.error), 1200);
   }
 
   function handleEdit() {
@@ -689,16 +681,6 @@ export default function HistoryScreen() {
 
   return (
     <div class="flex flex-col min-h-0 px-4 pt-2 safe-pb">
-      {/* SVG filter for row dissolve animation */}
-      <svg width="0" height="0" style={{ position: "absolute", pointerEvents: "none" }} aria-hidden="true">
-        <defs>
-          <filter id={DISSOLVE_FILTER_ID} x="-20%" y="-20%" width="140%" height="140%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="0" result="noise" />
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="G" />
-          </filter>
-        </defs>
-      </svg>
-
       {/* Search bar */}
       <div class="pt-2 pb-3 sticky top-0 z-10" style={{ backgroundColor: "var(--color-bg-primary)" }}>
         <SearchBar value={searchQuery} onChange={setSearchQuery} />

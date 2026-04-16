@@ -84,7 +84,6 @@ export function AmountInput({ value, onChange, inputRef, celebrateRef }: AmountI
   const resolvedRef = (inputRef ?? internalRef) as { current: HTMLInputElement | null };
   const measureRef = useRef<HTMLSpanElement>(null);
   const pillRef = useRef<HTMLDivElement>(null);
-  const checkRef = useRef<HTMLSpanElement>(null);
   const [inputWidth, setInputWidth] = useState(64);
 
   /** When non-null, overrides the displayed input value during a celebrate roll. */
@@ -109,44 +108,26 @@ export function AmountInput({ value, onChange, inputRef, celebrateRef }: AmountI
 
     celebrateRef.current = {
       celebrate: (fromCents: number) => {
-        // Reduced motion — skip all visuals; parent will clear state immediately.
+        // Reduced motion — skip visuals; parent clears state immediately.
         if (shouldReduceMotion()) {
           setStatusMsg("saved");
           setTimeout(() => setStatusMsg(""), 800);
           return Promise.resolve();
         }
 
-        // 1. Flash the pill bg to a soft accent-success tint, then back.
-        //    --color-bg-surface = #1a1a22, --color-success = #34c759.
+        // Hold a soft green tint on the pill for the duration of the roll.
+        // Fade-in, hold, fade-out all run on a single CSS transition so the
+        // background doesn't pulse — it simply turns green and stays green
+        // until the number lands at 0.00.
         if (pillRef.current) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (animate as any)(
-            pillRef.current,
-            {
-              backgroundColor: [
-                "rgb(26, 26, 34)",
-                "rgba(52, 199, 89, 0.18)",
-                "rgb(26, 26, 34)",
-              ],
-            },
-            { duration: 0.45, ease: [0.22, 1, 0.36, 1] },
-          );
-        }
-
-        // 2. Fade the ✓ in, hold, fade out (synced with the flash).
-        if (checkRef.current) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (animate as any)(
-            checkRef.current,
-            { opacity: [0, 1, 1, 0], scale: [0.6, 1, 1, 0.9] },
-            { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
-          );
+          pillRef.current.style.transition = "background-color 200ms ease-out";
+          pillRef.current.style.backgroundColor = "rgba(52, 199, 89, 0.18)";
         }
 
         setStatusMsg("saved");
         setTimeout(() => setStatusMsg(""), 800);
 
-        // 3. Number roll from fromCents → 0, updating rollingText each frame.
+        // Number roll from fromCents → 0, updating rollingText each frame.
         return new Promise<void>((resolve) => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (animate as any)(fromCents, 0, {
@@ -157,6 +138,11 @@ export function AmountInput({ value, onChange, inputRef, celebrateRef }: AmountI
             },
             onComplete: () => {
               setRollingText(null);
+              // Release the inline bg override — the `bg-bg-surface` class
+              // resumes. Same transition duration so fade-out matches fade-in.
+              if (pillRef.current) {
+                pillRef.current.style.backgroundColor = "";
+              }
               resolve();
             },
           });
@@ -200,27 +186,6 @@ export function AmountInput({ value, onChange, inputRef, celebrateRef }: AmountI
         ref={pillRef}
         class="relative inline-flex items-baseline gap-2 rounded-xl bg-bg-surface px-6 py-4"
       >
-        {/* Checkmark — absolutely positioned inside the pill's left padding.
-            Starts invisible; celebrate() fades it in/out. */}
-        <span
-          ref={checkRef}
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            left: 10,
-            top: "50%",
-            transform: "translateY(-50%) scale(0.6)",
-            opacity: 0,
-            color: "var(--color-success)",
-            fontSize: 20,
-            fontWeight: 700,
-            lineHeight: 1,
-            pointerEvents: "none",
-          }}
-        >
-          ✓
-        </span>
-
         <span class="text-3xl sm:text-[40px] font-light leading-none text-text-secondary select-none">
           EUR
         </span>
