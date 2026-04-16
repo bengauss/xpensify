@@ -121,20 +121,21 @@ export function sendWeeklySummaries(): void {
   startOfWeek.setDate(now.getDate() - now.getDay());
   const weekStart = startOfWeek.toISOString().split("T")[0];
 
+  const row = db
+    .prepare(
+      `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses
+       WHERE deleted = 0
+         AND source != 'recurring'
+         AND date(timestamp) >= ?`
+    )
+    .get(weekStart) as { total: number };
+
+  const totalFormatted = (row.total / 100).toFixed(2);
+
   for (const { user_id } of users) {
-    const row = db
-      .prepare(
-        `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses
-         WHERE user_id = ? AND deleted = 0
-           AND date(timestamp) >= ?`
-      )
-      .get(user_id, weekStart) as { total: number };
-
-    const totalFormatted = (row.total / 100).toFixed(2);
-
     sendToUser(user_id, {
       title: "xpensify weekly summary",
-      body: `You spent $${totalFormatted} this week.`,
+      body: `€${totalFormatted} spent on discretionary expenses this week.`,
     }).catch((err) =>
       console.error(`[notifications] sendWeeklySummaries error for ${user_id}:`, err)
     );
