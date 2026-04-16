@@ -11,6 +11,7 @@ import { parseCents, formatCents } from "@/components/AmountInput";
 import { sync } from "@/sync/engine";
 import { historyFilter } from "@/lib/filters";
 import { useEntrance, animateRowEntrance } from "@/lib/entrance";
+import { dissolveRow, DISSOLVE_FILTER_ID } from "@/lib/dissolve";
 import { usePressScale } from "@/lib/usePressScale";
 import { lastSaved, isWithinGlowWindow } from "@/lib/lastSaved";
 import { formatMoney, formatEur, dateKey as toDateKey, todayKey, MONTHS_SHORT } from "@/lib/format";
@@ -207,6 +208,7 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
     <button
       ref={press.ref}
       data-row
+      data-expense-id={expense.id}
       onClick={onTap}
       onPointerDown={press.onPointerDown}
       onPointerUp={press.onPointerUp}
@@ -399,13 +401,19 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
   }
 
   async function handleDelete() {
+    const rowEl = document.querySelector<HTMLElement>(
+      `[data-expense-id="${expense.id}"]`
+    );
+    onClose();
+    if (rowEl) {
+      await dissolveRow(rowEl);
+    }
     await db.expenses.update(expense.id, {
       deleted: 1,
       sync_status: "pending",
       updated_at: new Date().toISOString(),
     });
     sync().catch(console.error);
-    onClose();
   }
 
   function handleEdit() {
@@ -681,6 +689,16 @@ export default function HistoryScreen() {
 
   return (
     <div class="flex flex-col min-h-0 px-4 pt-2 safe-pb">
+      {/* SVG filter for row dissolve animation */}
+      <svg width="0" height="0" style={{ position: "absolute", pointerEvents: "none" }} aria-hidden="true">
+        <defs>
+          <filter id={DISSOLVE_FILTER_ID} x="-20%" y="-20%" width="140%" height="140%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="0" result="noise" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="G" />
+          </filter>
+        </defs>
+      </svg>
+
       {/* Search bar */}
       <div class="pt-2 pb-3 sticky top-0 z-10" style={{ backgroundColor: "var(--color-bg-primary)" }}>
         <SearchBar value={searchQuery} onChange={setSearchQuery} />
