@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "preact/hooks";
+import { useRef, useEffect, useState, useLayoutEffect } from "preact/hooks";
 import { useLocation } from "preact-iso";
 import { animate } from "motion";
 import { springs } from "@/lib/animations";
@@ -217,6 +217,9 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
   const month = monthName(now.getMonth());
   const cardRef = useRef<HTMLDivElement>(null);
   const hasAnimatedRef = useRef(false);
+  const listRef = useRef<HTMLDivElement>(null);
+  const prevHeightRef = useRef<number | null>(null);
+  const [paidExpanded, setPaidExpanded] = useState(false);
 
   // Self-contained mount animation — ensures the card appears regardless of
   // whether it rendered before or after the screen-level entrance kicked off.
@@ -231,7 +234,40 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
     );
   }, []);
 
-  const hasItems = forecast.generated.length > 0 || forecast.upcoming.length > 0;
+  // Height animation on expand/collapse. Measure-before-commit pattern so the
+  // row list smoothly transitions between compact and full views.
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!el || prevHeightRef.current === null) return;
+    const fromH = prevHeightRef.current;
+    const toH = el.offsetHeight;
+    prevHeightRef.current = null;
+    if (fromH === toH) return;
+
+    el.style.overflow = "hidden";
+    el.style.height = `${fromH}px`;
+    void el.offsetHeight;
+    el.style.transition = "height 260ms cubic-bezier(0.4,0,0.2,1)";
+    el.style.height = `${toH}px`;
+    const cleanup = () => {
+      el.style.transition = "";
+      el.style.height = "";
+      el.style.overflow = "";
+      el.removeEventListener("transitionend", cleanup);
+    };
+    el.addEventListener("transitionend", cleanup);
+  }, [paidExpanded]);
+
+  const paidCount = forecast.generated.length;
+  const hasPaid = paidCount > 0;
+  const hasUpcoming = forecast.upcoming.length > 0;
+  const hasItems = hasPaid || hasUpcoming;
+  const showGenerated = paidExpanded && hasPaid;
+
+  function togglePaid() {
+    if (listRef.current) prevHeightRef.current = listRef.current.offsetHeight;
+    setPaidExpanded((e) => !e);
+  }
 
   return (
     <div
@@ -286,17 +322,33 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
               marginBottom: 12,
             }}
           />
-          <div class="flex flex-col">
-            {forecast.generated.map((item) => (
+          <div ref={listRef} class="flex flex-col">
+            {showGenerated && forecast.generated.map((item) => (
               <ForecastRow key={item.key} item={item} dimmed />
             ))}
-            {forecast.generated.length > 0 && forecast.upcoming.length > 0 && (
-              <div style={{ height: 8 }} />
-            )}
+            {showGenerated && hasUpcoming && <div style={{ height: 8 }} />}
             {forecast.upcoming.map((item) => (
               <ForecastRow key={item.key} item={item} dimmed={false} />
             ))}
           </div>
+          {hasPaid && (
+            <button
+              onClick={togglePaid}
+              class="w-full text-left bg-transparent border-0 cursor-pointer"
+              style={{
+                marginTop: 10,
+                padding: 0,
+                fontSize: 12,
+                color: "var(--color-text-hint)",
+                WebkitTapHighlightColor: "transparent",
+              }}
+              aria-expanded={paidExpanded}
+            >
+              {paidExpanded
+                ? "hide already paid"
+                : `show ${paidCount} already paid ${paidCount === 1 ? "expense" : "expenses"}`}
+            </button>
+          )}
         </>
       )}
     </div>
