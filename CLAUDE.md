@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 xpensify is an offline-first PWA for household expense tracking. Two users (Alice and Bob) share a dataset across devices. The primary design goal is **speed of expense entry** (<5 seconds). Local-first via IndexedDB with sync-on-use to a server.
 
+## Target Devices
+
+End users run this as an installed PWA in **iOS Safari** on **iPhone 15 Pro Max** and **iPhone 16 Pro**. Optimize UI, gestures, safe-area handling, and performance for those devices only — no need to accommodate desktop, Android, or older iPhones. Mind iOS Safari PWA quirks (cold-start fixed-element bugs, safe-area insets, input-focus zoom, no tap-to-zoom) documented under **Gotchas**.
+
 ## Architecture
 
 - **client/** — Preact 10.x + TypeScript SPA. Vite dev server on port 5173, proxies `/api` to server.
