@@ -21,10 +21,6 @@ const MONTH_NAMES = [
   "july", "august", "september", "october", "november", "december",
 ];
 
-function daysInMonth(year: number, month: number): number {
-  return new Date(year, month, 0).getDate();
-}
-
 function formatPct(a: number, b: number): string {
   if (b === 0) return "—";
   const diff = ((a - b) / b) * 100;
@@ -148,9 +144,9 @@ export default function AnalyticsScreen() {
   }, []);
 
   const totalRef = useRef<HTMLSpanElement>(null);
-  const avgRef = useRef<HTMLSpanElement>(null);
+  const ytdRef = useRef<HTMLSpanElement>(null);
   const prevTotalRef = useRef<number>(-1);
-  const prevAvgRef = useRef<number>(-1);
+  const prevYtdRef = useRef<number>(-1);
   const cancelAnims = useRef<(() => void)[]>([]);
   const [entranceReady, setEntranceReady] = useState(false);
 
@@ -264,10 +260,26 @@ export default function AnalyticsScreen() {
     }
     trend.sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
 
-    const days = daysInMonth(selectedYear, selectedMonth);
-    const dailyAvg = days > 0 ? Math.round(currentTotal / days) : 0;
+    // Year-to-date — scoped, current year Jan 1 → today, compared to
+    // previous year Jan 1 → same day-of-year.
+    const today = new Date();
+    const todayYmd = today.toISOString().slice(0, 10);
+    const currentYear = today.getFullYear();
+    const prevYmd = `${currentYear - 1}${todayYmd.slice(4)}`;
 
-    return { currentTotal, prevTotal, breakdown, topNotes, trend, dailyAvg };
+    let ytd = 0;
+    let prevYtd = 0;
+    for (const e of scoped) {
+      const ymd = e.timestamp.slice(0, 10);
+      const yr = ymd.slice(0, 4);
+      if (yr === String(currentYear) && ymd <= todayYmd) {
+        ytd += e.amount;
+      } else if (yr === String(currentYear - 1) && ymd <= prevYmd) {
+        prevYtd += e.amount;
+      }
+    }
+
+    return { currentTotal, prevTotal, breakdown, topNotes, trend, ytd, prevYtd };
   }, [
     allExpenses,
     selectedYear,
@@ -286,34 +298,34 @@ export default function AnalyticsScreen() {
     cancelAnims.current = [];
 
     const newTotal = analytics.currentTotal;
-    const newAvg = analytics.dailyAvg;
+    const newYtd = analytics.ytd;
     const oldTotal = prevTotalRef.current < 0 ? 0 : prevTotalRef.current;
-    const oldAvg = prevAvgRef.current < 0 ? 0 : prevAvgRef.current;
+    const oldYtd = prevYtdRef.current < 0 ? 0 : prevYtdRef.current;
 
     if (totalRef.current) {
       cancelAnims.current.push(
         rollNumber(totalRef.current, oldTotal, newTotal, 400, 0)
       );
     }
-    if (avgRef.current) {
+    if (ytdRef.current) {
       cancelAnims.current.push(
-        rollNumber(avgRef.current, oldAvg, newAvg, 400, 100)
+        rollNumber(ytdRef.current, oldYtd, newYtd, 400, 100)
       );
     }
 
     prevTotalRef.current = newTotal;
-    prevAvgRef.current = newAvg;
+    prevYtdRef.current = newYtd;
 
     return () => {
       for (const cancel of cancelAnims.current) cancel();
       cancelAnims.current = [];
     };
-  }, [analytics?.currentTotal, analytics?.dailyAvg, entranceReady]);
+  }, [analytics?.currentTotal, analytics?.ytd, entranceReady]);
 
   // Reset roll baseline when drill changes so the next roll starts from 0
   useEffect(() => {
     prevTotalRef.current = -1;
-    prevAvgRef.current = -1;
+    prevYtdRef.current = -1;
   }, [drill?.categoryId, drill?.subcategoryId]);
 
   // ── Crossfade content on drill-level change ───────────────────────────────
@@ -396,12 +408,16 @@ export default function AnalyticsScreen() {
   const monthLabel = `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
   const prevMonthName = MONTH_NAMES[prevYearMonth(selectedYear, selectedMonth).month - 1];
 
-  const days = daysInMonth(selectedYear, selectedMonth);
   const currentTotal = analytics?.currentTotal ?? 0;
   const prevTotal = analytics?.prevTotal ?? 0;
   const diff = currentTotal - prevTotal;
   const pct = formatPct(currentTotal, prevTotal);
   const isLess = diff <= 0;
+
+  const ytd = analytics?.ytd ?? 0;
+  const prevYtd = analytics?.prevYtd ?? 0;
+  const ytdPct = formatPct(ytd, prevYtd);
+  const ytdIsLess = ytd - prevYtd <= 0;
 
   const drillCategory = drill?.categoryId
     ? allCategories.find((c) => c.id === drill.categoryId)
@@ -426,6 +442,7 @@ export default function AnalyticsScreen() {
         : "";
 
   const totalCardLabel = scopeLabel ? `${scopeLabel} this month` : "total spent";
+  const ytdCardLabel = scopeLabel ? `${scopeLabel} ytd` : "year to date";
   const barsHeader = drillLevel === 2 ? "by subcategory" : drillLevel === 3 ? "top notes" : "by category";
 
   return (
@@ -479,15 +496,6 @@ export default function AnalyticsScreen() {
         onBack={handleBack}
       />
 
-      {/* Loading state */}
-      {!allExpenses && (
-        <div class="flex items-center justify-center py-12">
-          <span class="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-            loading…
-          </span>
-        </div>
-      )}
-
       {/* Content — crossfades on drill change */}
       {analytics && (
         <div ref={contentRef} class="flex flex-col gap-4">
@@ -527,18 +535,27 @@ export default function AnalyticsScreen() {
               style={{ backgroundColor: "var(--color-bg-surface)" }}
             >
               <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                daily average
+                {ytdCardLabel}
               </span>
               <span
-                ref={avgRef}
+                ref={ytdRef}
                 class="tabular-nums"
                 style={{ fontSize: 28, fontWeight: 300, color: "var(--color-text-primary)" }}
               >
                 {formatMoney(0)}
               </span>
-              <span style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>
-                over {days} days
-              </span>
+              {prevYtd > 0 && (
+                <span
+                  style={{ fontSize: 13, color: ytdIsLess ? "var(--color-success)" : "var(--color-danger)" }}
+                >
+                  {ytdIsLess ? "↓" : "↑"} {ytdPct} vs last year
+                </span>
+              )}
+              {prevYtd === 0 && (
+                <span style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>
+                  no prev. data
+                </span>
+              )}
             </div>
           </div>
 
