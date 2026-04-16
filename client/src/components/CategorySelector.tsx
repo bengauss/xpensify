@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "preact/hooks";
+import { useState, useRef, useLayoutEffect } from "preact/hooks";
 import { animate } from "motion";
 import { springs } from "@/lib/animations";
 import { categoryIcons } from "@/icons";
@@ -68,10 +68,17 @@ export function CategorySelector({
   const cardRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const gridRef = useRef<HTMLDivElement>(null);
   const pillsRef = useRef<HTMLDivElement>(null);
+  const selectedSectionRef = useRef<HTMLDivElement>(null);
+  const headerIconRef = useRef<HTMLDivElement>(null);
+  const headerTextRef = useRef<HTMLSpanElement>(null);
   const needsMountReveal = useRef(!selectedCategoryId);
   const lastSelectedIndex = useRef<number | undefined>(undefined);
   const pendingBackReveal = useRef(false);
   const hideTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Rect of the tapped card at the moment of tap — drives the FLIP zoom of the
+  // header icon from the tapped card's position into its natural header slot.
+  // Null when the drill-down is not user-driven (initial edit-mode mount).
+  const tappedRectRef = useRef<DOMRect | null>(null);
 
   const selectedCategory = selectedCategoryId
     ? categories.find((c) => c.id === selectedCategoryId) ?? null
@@ -91,23 +98,77 @@ export function CategorySelector({
     }
   });
 
-  // Animate grid out + pills in when selectedCategoryId changes (non-compact)
-  useEffect(() => {
+  // Animate grid out + pills in when selectedCategoryId changes (non-compact).
+  // useLayoutEffect so the FLIP measurement + style writes happen before paint;
+  // otherwise the header icon flickers at its natural position for one frame
+  // before snapping to the inverse transform.
+  useLayoutEffect(() => {
     if (compact || !gridRef.current) return;
 
     if (selectedCategoryId) {
-      // Fade out grid, then show pills
       const grid = gridRef.current;
       const pillsContainer = pillsRef.current;
+      const selected = selectedSectionRef.current;
+      const icon = headerIconRef.current;
+      const text = headerTextRef.current;
+      const tapped = tappedRectRef.current;
+
+      // User-tap path: overlay the selected section absolutely over the grid so
+      // the flex flow doesn't push it below during the fade. Without this the
+      // header briefly appears at the bottom of the invisible grid and then
+      // snaps up when the grid collapses — the "bottom flash" regression.
+      if (selected && tapped) {
+        selected.style.position = "absolute";
+        selected.style.top = "0";
+        selected.style.left = "0";
+        selected.style.right = "0";
+        selected.style.backgroundColor = "var(--color-bg-primary)";
+      }
 
       grid.style.transition = "opacity 150ms ease";
       grid.style.opacity = "0";
       grid.style.pointerEvents = "none";
 
+      // FLIP: translate + scale the header icon from the tapped card's rect to
+      // its natural header rect, so the card visually zooms into place.
+      if (icon && tapped) {
+        const iconRect = icon.getBoundingClientRect();
+        const dx = (tapped.left + tapped.width / 2) - (iconRect.left + iconRect.width / 2);
+        const dy = (tapped.top + tapped.height / 2) - (iconRect.top + iconRect.height / 2);
+        const scale = Math.max(tapped.width, tapped.height) / Math.max(iconRect.width, 1);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (animate as any)(
+          icon,
+          { x: [dx, 0], y: [dy, 0], scale: [scale, 1] },
+          { type: "spring", stiffness: 380, damping: 30 }
+        );
+      }
+
+      if (text && tapped) {
+        text.style.opacity = "0";
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (animate as any)(
+          text,
+          { opacity: [0, 1], y: [6, 0] },
+          { ...springs.gentle, delay: 0.08 }
+        );
+      }
+
       if (hideTimeout.current) clearTimeout(hideTimeout.current);
       hideTimeout.current = setTimeout(() => {
         hideTimeout.current = null;
         grid.style.display = "none";
+
+        // Release the overlay styles so the selected section drops into normal
+        // flow — the grid is display:none now, so no layout shift.
+        if (selected) {
+          selected.style.position = "";
+          selected.style.top = "";
+          selected.style.left = "";
+          selected.style.right = "";
+          selected.style.backgroundColor = "";
+        }
+        tappedRectRef.current = null;
 
         // Animate pills cascading in
         if (pillsContainer) {
@@ -193,6 +254,9 @@ export function CategorySelector({
         gridRef.current.querySelectorAll<HTMLButtonElement>("[data-card]")
       );
       const tappedRect = tappedEl.getBoundingClientRect();
+      // Capture the tapped rect so the layout effect can FLIP-zoom the header
+      // icon from this position into its natural slot.
+      tappedRectRef.current = tappedRect;
 
       allCards.forEach((card) => {
         if (card === tappedEl) return;
@@ -291,7 +355,7 @@ export function CategorySelector({
 
   // ── Full mode render ───────────────────────────────────────────────────────
   return (
-    <div class="flex flex-col gap-4">
+    <div class="relative flex flex-col gap-4">
       {/* Grid */}
       <div ref={gridRef} class="grid grid-cols-3 gap-3">
         {sortedCategories.map((cat) => {
@@ -333,13 +397,14 @@ export function CategorySelector({
 
       {/* Selected category header + pills */}
       {selectedCategory && (
-        <div class="flex flex-col items-center gap-4">
+        <div ref={selectedSectionRef} class="flex flex-col items-center gap-4">
           {/* Header — tap to go back */}
           <button
             onClick={handleBackToGrid}
             class="flex flex-col items-center gap-2 cursor-pointer"
           >
             <div
+              ref={headerIconRef}
               class="flex items-center justify-center w-12 h-12 rounded-full"
               style={{ backgroundColor: `${selectedCategory.color}1a` }}
             >
@@ -351,6 +416,7 @@ export function CategorySelector({
               })()}
             </div>
             <span
+              ref={headerTextRef}
               class="text-[15px] font-semibold"
               style={{ color: selectedCategory.color }}
             >
