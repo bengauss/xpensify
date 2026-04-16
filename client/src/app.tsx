@@ -53,7 +53,10 @@ function AuthenticatedShell() {
   // mis-measures that ancestor — leaving the bottom nav floating above the
   // home indicator until the first touch triggers a reflow.
   return (
-    <div class="flex h-dvh flex-col bg-bg-primary overflow-hidden mx-auto w-full max-w-[480px]">
+    <div
+      class="flex flex-col bg-bg-primary overflow-hidden mx-auto w-full max-w-[480px]"
+      style={{ height: "var(--app-h, 100dvh)" }}
+    >
       <Header onSettingsClick={() => route("/settings")} />
       <TabTransitionContainer />
       <BottomNav />

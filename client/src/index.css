@@ -70,14 +70,14 @@ body {
   margin: 0;
   background-color: var(--color-bg-primary);
   color: var(--color-text-body);
-  min-height: 100dvh;
+  min-height: var(--app-h, 100dvh);
   overflow-x: hidden;
   width: 100%;
   max-width: 100vw;
 }
 
 #app {
-  min-height: 100dvh;
+  min-height: var(--app-h, 100dvh);
   overflow-x: hidden;
 }
 
@@ -128,14 +128,16 @@ body {
   pointer-events: auto;
 }
 
-/* Bottom padding that accounts for the fixed tab bar + home indicator safe area.
-   Use on scrollable screen content (instead of pb-24/pb-28). */
+/* Bottom padding for scrollable screen content. The BottomNav is a flex
+   sibling (not position: fixed) so screens don't need to clear it — just
+   a modest breathing space. Home-indicator safe-area is handled by the
+   nav's own padding. */
 .safe-pb {
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
+  padding-bottom: 16px;
 }
 
 .safe-pb-lg {
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 112px);
+  padding-bottom: 24px;
 }
 
 /* ── Row entrance default state ──────────────────────────────────────────

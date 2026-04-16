@@ -486,14 +486,15 @@ export default function RecurringScreen() {
 
       {/* Floating add button — sticky to the bottom-right of the scroll
           viewport. Scrolls with content naturally; sticks once its natural
-          position would fall below the viewport's bottom threshold (above the
-          BottomNav). Negative top margin so the button hovers over the
-          existing safe-pb-lg padding without pushing layout down further. */}
+          position would fall below the scroll viewport's bottom (which is
+          just above the flex-laid-out BottomNav). Negative top margin so
+          the button hovers over the existing bottom padding without pushing
+          layout down further. */}
       <button
         onClick={() => route("/recurring/new")}
         class="sticky self-end z-30 flex items-center justify-center rounded-full cursor-pointer border-0"
         style={{
-          bottom: "calc(84px + env(safe-area-inset-bottom))",
+          bottom: 16,
           marginTop: -48,
           marginRight: 0,
           width: 48,

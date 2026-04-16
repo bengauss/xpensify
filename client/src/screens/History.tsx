@@ -328,19 +328,15 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
   const IconComponent = categoryIcons[iconKey] ?? categoryIcons["other"];
   const color = category?.color ?? "#868e96";
 
-  // Optimistic local state for quick-edit fields — persists to Dexie on commit,
-  // but we don't depend on live-query round-trip for the visible value.
+  // Quick-edit inputs are always rendered (never swapped in on tap). That way
+  // the first tap lands on a real <input> and focuses it within the user
+  // gesture — iOS won't open the keyboard if focus() fires after a React
+  // re-render, because by then the gesture window has closed.
   const [amountCents, setAmountCents] = useState(expense.amount);
+  const [amountText, setAmountText] = useState(formatCentsDE(expense.amount));
   const [note, setNote] = useState(expense.note ?? "");
   const [expenseDateKey, setExpenseDateKey] = useState(toDateKey(expense.timestamp));
 
-  const [editingAmount, setEditingAmount] = useState(false);
-  const [editingNote, setEditingNote] = useState(false);
-  const [amountDraft, setAmountDraft] = useState("");
-  const [noteDraft, setNoteDraft] = useState("");
-
-  const amountInputRef = useRef<HTMLInputElement>(null);
-  const noteInputRef = useRef<HTMLInputElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
 
   async function persist(partial: Partial<Expense>) {
@@ -352,40 +348,26 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
     sync().catch(console.error);
   }
 
-  // Amount edit
-  function startAmountEdit() {
-    setAmountDraft(formatCentsDE(amountCents));
-    setEditingAmount(true);
-    // Focus after render
-    setTimeout(() => {
-      amountInputRef.current?.focus();
-      amountInputRef.current?.select();
-    }, 0);
-  }
   function commitAmount() {
-    const cents = parseCents(amountDraft);
-    setEditingAmount(false);
-    if (cents === 0 || cents === amountCents) return;
+    const cents = parseCents(amountText);
+    if (cents === 0) {
+      // Invalid / empty — revert to last-good value
+      setAmountText(formatCentsDE(amountCents));
+      return;
+    }
+    const normalized = formatCentsDE(cents);
+    setAmountText(normalized);
+    if (cents === amountCents) return;
     setAmountCents(cents);
     persist({ amount: cents });
   }
 
-  // Note edit
-  function startNoteEdit() {
-    setNoteDraft(note);
-    setEditingNote(true);
-    setTimeout(() => {
-      noteInputRef.current?.focus();
-      noteInputRef.current?.select();
-    }, 0);
-  }
-  function commitNote() {
-    setEditingNote(false);
-    const trimmed = noteDraft.trim();
+  function commitNote(next: string) {
+    const trimmed = next.trim();
     const newVal: string | null = trimmed === "" ? null : trimmed;
     const curVal: string | null = note === "" ? null : note;
-    if (newVal === curVal) return;
     setNote(trimmed);
+    if (newVal === curVal) return;
     persist({ note: newVal });
   }
 
@@ -421,7 +403,12 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
   }
 
   function handleEdit() {
-    editingExpense.value = { ...expense, amount: amountCents, note: note === "" ? null : note, timestamp: `${expenseDateKey}T${expense.timestamp.split("T")[1] ?? "12:00:00.000Z"}` };
+    editingExpense.value = {
+      ...expense,
+      amount: amountCents,
+      note: note === "" ? null : note,
+      timestamp: `${expenseDateKey}T${expense.timestamp.split("T")[1] ?? "12:00:00.000Z"}`,
+    };
     onClose();
     route("/");
   }
@@ -438,31 +425,20 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
         >
           <IconComponent color={color} size={28} />
         </div>
-        {editingAmount ? (
-          <input
-            ref={amountInputRef}
-            type="text"
-            inputMode="decimal"
-            value={amountDraft}
-            onInput={(e) => setAmountDraft((e.target as HTMLInputElement).value)}
-            onBlur={commitAmount}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
-              else if (e.key === "Escape") { setEditingAmount(false); }
-            }}
-            class="text-3xl font-semibold tabular-nums bg-transparent text-center outline-none border-0 p-0"
-            style={{ color, width: "auto", minWidth: 120, caretColor: color }}
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={startAmountEdit}
-            class="text-3xl font-semibold tabular-nums bg-transparent border-0 p-0 cursor-text"
-            style={{ color, WebkitTapHighlightColor: "transparent" }}
-          >
-            {formatMoney(amountCents)}
-          </button>
-        )}
+        <input
+          type="text"
+          inputMode="decimal"
+          value={amountText}
+          size={Math.max(5, amountText.length)}
+          onInput={(e) => setAmountText((e.target as HTMLInputElement).value)}
+          onFocus={(e) => (e.target as HTMLInputElement).select()}
+          onBlur={commitAmount}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+          }}
+          class="text-3xl font-semibold tabular-nums bg-transparent text-center outline-none border-0 p-0"
+          style={{ color, caretColor: color, WebkitTapHighlightColor: "transparent" }}
+        />
         <div class="text-sm" style={{ color: "var(--color-text-secondary)" }}>
           {category?.name ?? "—"}
           {subcategory && (
@@ -497,40 +473,24 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
           />
         </div>
 
-        {/* Note — always shown; tap to edit, placeholder when empty */}
+        {/* Note — always rendered as an input so first tap focuses it */}
         <div
           class="flex items-center justify-between gap-3 px-4 py-3"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
         >
           <span class="text-sm flex-shrink-0" style={{ color: "var(--color-text-secondary)" }}>note</span>
-          {editingNote ? (
-            <input
-              ref={noteInputRef}
-              type="text"
-              value={noteDraft}
-              onInput={(e) => setNoteDraft((e.target as HTMLInputElement).value)}
-              onBlur={commitNote}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
-                else if (e.key === "Escape") setEditingNote(false);
-              }}
-              placeholder="add a note…"
-              class="flex-1 min-w-0 bg-transparent text-sm text-right outline-none border-0 p-0"
-              style={{ color: "var(--color-text-primary)" }}
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={startNoteEdit}
-              class="flex-1 min-w-0 bg-transparent border-0 p-0 text-sm text-right truncate cursor-text"
-              style={{
-                color: note ? "var(--color-text-primary)" : "var(--color-text-muted)",
-                WebkitTapHighlightColor: "transparent",
-              }}
-            >
-              {note || "add a note…"}
-            </button>
-          )}
+          <input
+            type="text"
+            value={note}
+            onInput={(e) => setNote((e.target as HTMLInputElement).value)}
+            onBlur={(e) => commitNote((e.target as HTMLInputElement).value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+            }}
+            placeholder="add a note…"
+            class="flex-1 min-w-0 bg-transparent text-sm text-right outline-none border-0 p-0"
+            style={{ color: "var(--color-text-primary)", WebkitTapHighlightColor: "transparent" }}
+          />
         </div>
 
         {/* Logged by */}

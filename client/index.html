@@ -11,6 +11,25 @@
     <link rel="icon" type="image/png" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <title>xpensify</title>
+    <script>
+      // Set --app-h to window.innerHeight BEFORE the first paint so the shell
+      // has the correct height on iOS Safari PWA cold start (where dvh/svh can
+      // lag until the first touch event).
+      (function () {
+        function set() {
+          document.documentElement.style.setProperty(
+            "--app-h",
+            window.innerHeight + "px"
+          );
+        }
+        set();
+        window.addEventListener("resize", set);
+        window.addEventListener("orientationchange", set);
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener("resize", set);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>
