@@ -56,8 +56,7 @@ function AuthenticatedShell() {
   // home indicator until the first touch triggers a reflow.
   return (
     <div
-      class="flex flex-col bg-bg-primary overflow-hidden mx-auto w-full max-w-[480px]"
-      style={{ height: "100dvh", minHeight: "100svh" }}
+      class="flex flex-col bg-bg-primary overflow-hidden mx-auto w-full max-w-[480px] h-full"
     >
       <Header onSettingsClick={() => route("/settings")} />
       <TabTransitionContainer />
