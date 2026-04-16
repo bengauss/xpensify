@@ -239,15 +239,16 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
     }
   }, []);
 
-  // Chained mount entrance: card fade+rise → number count-up → row stagger
-  // → toggle fade. Re-runs on forecast updates but the guard ensures the
-  // full animation only plays once; later runs just sync the displayed value.
-  useEffect(() => {
-    if (!cardRef.current) return;
-    if (hasAnimatedRef.current) {
-      setDisplayedAmount(forecast.total_remaining);
-      return;
-    }
+  // Keep the latest forecast accessible from inside the one-shot entrance
+  // callback below without re-running the entrance on every data update.
+  const forecastRef = useRef(forecast);
+  forecastRef.current = forecast;
+
+  // Chained entrance: card fade+rise → number count-up → row stagger → toggle
+  // fade. Piggybacks on `useEntrance` so it waits for any pending tab
+  // transition + the shared MOUNT_DELAY — same cadence as other screens.
+  useEntrance(() => {
+    if (!cardRef.current || hasAnimatedRef.current) return;
     hasAnimatedRef.current = true;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -261,7 +262,7 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
     );
 
     // 2. Number count-up — starts as the card is rising.
-    const target = forecast.total_remaining;
+    const target = forecastRef.current.total_remaining;
     if (target > 0) {
       ANIM(0, target, {
         duration: 0.9,
@@ -301,6 +302,12 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
         { duration: 0.3, delay, ease: [0.22, 1, 0.36, 1] }
       );
     }
+  });
+
+  // After the entrance has played, keep the displayed amount in sync with
+  // forecast updates (sync, live-query data refreshes, etc.).
+  useEffect(() => {
+    if (hasAnimatedRef.current) setDisplayedAmount(forecast.total_remaining);
   }, [forecast.total_remaining]);
 
   // Height animation on expand/collapse. Measure-before-commit pattern so the
