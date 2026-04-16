@@ -4,14 +4,13 @@ import { durations, getReducedMotionOverride } from "@/lib/animations";
 import { db } from "@/db/local";
 import type { Expense } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { AmountInput, parseCents, formatCents } from "@/components/AmountInput";
+import { AmountInput, parseCents, formatCents, type AmountInputCelebrateApi } from "@/components/AmountInput";
 import { CategorySelector } from "@/components/CategorySelector";
 import { NoteInput } from "@/components/NoteInput";
-import { Toast } from "@/components/Toast";
 import { currentUser } from "@/lib/auth";
 import { sync } from "@/sync/engine";
 import { useLocation } from "preact-iso";
-import { formatMoney, formatMoneyWhole, monthKey } from "@/lib/format";
+import { formatMoneyWhole, monthKey } from "@/lib/format";
 import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
 import { editingExpense } from "@/lib/editing";
 import { useEntrance } from "@/lib/entrance";
@@ -77,7 +76,6 @@ export function AddScreen() {
   const [dateStr, setDateStr] = useState(
     editing ? editing.timestamp.split("T")[0] : new Date().toISOString().split("T")[0]
   );
-  const [toast, setToast] = useState({ visible: false, message: "" });
   // Pending category/subcategory selection — only used in edit mode, so the user
   // can change multiple fields before committing via the save button.
   const [pendingCategoryId, setPendingCategoryId] = useState<string>(editing?.category_id ?? "");
@@ -88,6 +86,10 @@ export function AddScreen() {
 
   const amountRef = useRef<HTMLInputElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
+  // Imperative handle exposed by AmountInput for the save-celebration
+  // (flash + checkmark + roll to 0). Fire-and-forget; returns a promise that
+  // resolves when the roll lands so we can defer clearing the amount state.
+  const amountCelebrateRef = useRef<AmountInputCelebrateApi | null>(null);
 
   // Entrance wrappers — refs populated via data-add-reveal + data-revealed.
   const amountWrapRef = useRef<HTMLDivElement>(null);
@@ -173,13 +175,13 @@ export function AddScreen() {
 
     const userId = currentUser.value?.id;
     if (!userId) {
-      // Auth not yet loaded — refuse to save rather than persist a row with empty user_id
-      setToast({ visible: true, message: "not logged in — refresh and try again" });
+      // Auth not yet loaded — refuse to save rather than persist a row with
+      // empty user_id. Silent — extremely rare edge case; the form just
+      // doesn't submit.
       return;
     }
 
     const now = new Date().toISOString();
-    const sub = subcategories?.find((s) => s.id === subcategoryId);
 
     // Use real time for today, noon for backdated entries
     const todayStr = new Date().toISOString().split("T")[0];
@@ -218,19 +220,29 @@ export function AddScreen() {
       );
     }
 
-    setToast({ visible: true, message: `✓ ${formatCents(amountCents)} → ${sub?.name ?? "expense"}` });
-
     sync().catch(console.error);
 
-    // Reset form
+    // Clear the form state NOW so a rapid double-tap on another pill can't
+    // re-enter handleSelect with the same amount (parseCents("") returns 0
+    // and the guard above bails out). The celebrate roll overlays the empty
+    // input via its own rollingText state — the user still sees the number
+    // ticking down past the (invisibly) cleared value.
+    const fromCents = amountCents;
     setAmount("");
     setNote("");
     setDateStr(new Date().toISOString().split("T")[0]);
     setPendingCategoryId("");
     setPendingSubcategoryId("");
-    setFormKey((k) => k + 1);
 
-    setTimeout(() => amountRef.current?.focus(), 100);
+    const celebration = amountCelebrateRef.current?.celebrate(fromCents)
+      ?? Promise.resolve();
+
+    celebration.then(() => {
+      // Bump CategorySelector key after the roll so the grid reset + cascade
+      // plays once the celebration has finished.
+      setFormKey((k) => k + 1);
+      setTimeout(() => amountRef.current?.focus(), 50);
+    });
   }
 
   async function handleSaveEdit() {
@@ -242,7 +254,6 @@ export function AddScreen() {
     const now = new Date().toISOString();
     const todayStr = new Date().toISOString().split("T")[0];
     const timestamp = dateStr === todayStr ? now : `${dateStr}T12:00:00.000Z`;
-    const sub = subcategories?.find((s) => s.id === pendingSubcategoryId);
 
     await db.expenses.update(editing.id, {
       amount: amountCents,
@@ -254,7 +265,11 @@ export function AddScreen() {
       sync_status: "pending",
     });
 
-    setToast({ visible: true, message: `✓ EUR ${formatMoney(amountCents)} → ${sub?.name ?? "expense"} updated` });
+    // Mark this row so History's ExpenseRow applies the just-saved-glow on
+    // arrival — same mechanism used for new adds. No toast/banner on edit
+    // save; the glowing row in History IS the confirmation.
+    markSaved(editing.id);
+
     editingExpense.value = null;
     sync().catch(console.error);
     route("/history");
@@ -267,17 +282,12 @@ export function AddScreen() {
 
   return (
     <div class={`flex flex-col gap-4 px-4 pt-2 ${isEditing ? "pb-40" : "safe-pb"}`}>
-      <Toast
-        message={toast.message}
-        visible={toast.visible}
-        onDone={() => setToast({ visible: false, message: "" })}
-      />
-
       <div ref={amountWrapRef} data-add-reveal>
         <AmountInput
           value={amount}
           onChange={setAmount}
           inputRef={amountRef}
+          celebrateRef={amountCelebrateRef}
         />
       </div>
 
