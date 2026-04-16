@@ -57,7 +57,7 @@ function AuthenticatedShell() {
   return (
     <div
       class="flex flex-col bg-bg-primary overflow-hidden mx-auto w-full max-w-[480px]"
-      style={{ height: "var(--app-h, 100dvh)" }}
+      style={{ height: "100dvh", minHeight: "100svh" }}
     >
       <Header onSettingsClick={() => route("/settings")} />
       <TabTransitionContainer />

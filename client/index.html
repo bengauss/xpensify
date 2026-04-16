@@ -26,25 +26,6 @@
       #app { min-height: 100dvh; }
     </style>
     <link rel="modulepreload" href="/src/main.tsx" />
-    <script>
-      // Set --app-h to window.innerHeight BEFORE the first paint so the shell
-      // has the correct height on iOS Safari PWA cold start (where dvh/svh can
-      // lag until the first touch event).
-      (function () {
-        function set() {
-          document.documentElement.style.setProperty(
-            "--app-h",
-            window.innerHeight + "px"
-          );
-        }
-        set();
-        window.addEventListener("resize", set);
-        window.addEventListener("orientationchange", set);
-        if (window.visualViewport) {
-          window.visualViewport.addEventListener("resize", set);
-        }
-      })();
-    </script>
   </head>
   <body>
     <div id="app"></div>

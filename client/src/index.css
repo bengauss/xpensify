@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: #0c0d12;
+  overscroll-behavior: none;
+}
+
+#app {
+  height: 100%;
+}
+
 @theme {
   /* Backgrounds */
   --color-bg-primary: #0c0d12;
@@ -67,17 +79,14 @@ html {
 }
 
 body {
-  margin: 0;
   background-color: var(--color-bg-primary);
   color: var(--color-text-body);
-  min-height: var(--app-h, 100dvh);
   overflow-x: hidden;
   width: 100%;
   max-width: 100vw;
 }
 
 #app {
-  min-height: var(--app-h, 100dvh);
   overflow-x: hidden;
 }
 
