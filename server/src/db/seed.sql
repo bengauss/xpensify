@@ -1,19 +1,19 @@
 -- Categories
 INSERT OR REPLACE INTO categories (id, name, icon, color, sort_order) VALUES
   ('cat-food', 'food', 'food', '#ff6b6b', 1),
-  ('cat-living', 'living', 'living', '#74c0fc', 2),
-  ('cat-household', 'household', 'household', '#ffa94d', 3),
-  ('cat-charlie', 'charlie', 'charlie', '#fcc419', 4),
-  ('cat-health', 'health', 'health', '#9775fa', 5),
-  ('cat-transportation', 'transportation', 'transportation', '#69db7c', 6),
-  ('cat-subscriptions', 'subscriptions', 'subscriptions', '#66d9e8', 7),
-  ('cat-apparel', 'apparel', 'apparel', '#f783ac', 8),
-  ('cat-entertainment', 'entertainment', 'entertainment', '#e599f7', 9),
-  ('cat-insurance', 'insurance', 'insurance', '#ff8787', 10),
-  ('cat-electronics', 'electronics', 'electronics', '#ffd43b', 11),
-  ('cat-education', 'education', 'education', '#63e6be', 12),
-  ('cat-travel', 'travel', 'travel', '#38d9a9', 13),
-  ('cat-gift', 'gift', 'gift', '#e599f7', 14),
+  ('cat-household', 'household', 'household', '#ffd43b', 2),
+  ('cat-health', 'health', 'health', '#69db7c', 3),
+  ('cat-apparel', 'apparel', 'apparel', '#f783ac', 4),
+  ('cat-transportation', 'transportation', 'transportation', '#74c0fc', 5),
+  ('cat-charlie', 'charlie', 'charlie', '#9775fa', 6),
+  ('cat-entertainment', 'entertainment', 'entertainment', '#e599f7', 7),
+  ('cat-education', 'education', 'education', '#63e6be', 8),
+  ('cat-electronics', 'electronics', 'electronics', '#66d9e8', 9),
+  ('cat-travel', 'travel', 'travel', '#38d9a9', 10),
+  ('cat-gift', 'gift', 'gift', '#ff8787', 11),
+  ('cat-insurance', 'insurance', 'insurance', '#fcc419', 12),
+  ('cat-living', 'living', 'living', '#ffa94d', 13),
+  ('cat-subscriptions', 'subscriptions', 'subscriptions', '#66d9e8', 14),
   ('cat-other', 'other', 'other', '#868e96', 15);
 
 -- Subcategories
