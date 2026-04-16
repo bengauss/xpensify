@@ -5,7 +5,7 @@ import { springs } from "@/lib/animations";
 import { db } from "@/db/local";
 import type { RecurringTemplate } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { AmountInput, parseCents, formatCentsDE } from "@/components/AmountInput";
+import { AmountInput, parseCents, formatCents } from "@/components/AmountInput";
 import { CategorySelector } from "@/components/CategorySelector";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { api } from "@/lib/api";
@@ -51,7 +51,7 @@ export default function RecurringForm({ id: idProp }: { id?: string } = {}) {
     if (!isEdit || !id) return;
     db.recurring_templates.get(id).then((t: RecurringTemplate | undefined) => {
       if (!t) { route("/recurring"); return; }
-      setAmountStr(formatCentsDE(t.amount));
+      setAmountStr(formatCents(t.amount));
       setCategoryId(t.category_id);
       setSubcategoryId(t.subcategory_id);
       setNote(t.note ?? "");

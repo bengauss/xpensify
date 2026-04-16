@@ -5,7 +5,7 @@ import { springs } from "@/lib/animations";
 import { db } from "@/db/local";
 import type { Expense } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { AmountInput, parseCents, formatCentsDE } from "@/components/AmountInput";
+import { AmountInput, parseCents, formatCents } from "@/components/AmountInput";
 import { CategorySelector } from "@/components/CategorySelector";
 import { NoteInput } from "@/components/NoteInput";
 import { Toast } from "@/components/Toast";
@@ -71,7 +71,7 @@ export function AddScreen() {
   const isEditing = !!editing;
   const { path, route } = useLocation();
 
-  const [amount, setAmount] = useState(editing ? formatCentsDE(editing.amount) : "");
+  const [amount, setAmount] = useState(editing ? formatCents(editing.amount) : "");
   const [note, setNote] = useState(editing?.note ?? "");
   const [dateStr, setDateStr] = useState(
     editing ? editing.timestamp.split("T")[0] : new Date().toISOString().split("T")[0]
@@ -176,7 +176,7 @@ export function AddScreen() {
       animate(amountRef.current, { scale: [1, 0.97, 1] }, springs.bouncy);
     }
 
-    setToast({ visible: true, message: `✓ ${formatCentsDE(amountCents)} → ${sub?.name ?? "expense"}` });
+    setToast({ visible: true, message: `✓ ${formatCents(amountCents)} → ${sub?.name ?? "expense"}` });
 
     sync().catch(console.error);
 

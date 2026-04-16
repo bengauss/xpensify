@@ -9,7 +9,7 @@ import { categoryIcons } from "@/icons";
 import { DetailSheet } from "@/components/DetailSheet";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { editingExpense } from "@/screens/Add";
-import { parseCents, formatCentsDE } from "@/components/AmountInput";
+import { parseCents, formatCents } from "@/components/AmountInput";
 import { sync } from "@/sync/engine";
 import { historyFilter } from "@/lib/filters";
 import { useEntrance, animateRowEntrance } from "@/lib/entrance";
@@ -333,7 +333,7 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
   // gesture — iOS won't open the keyboard if focus() fires after a React
   // re-render, because by then the gesture window has closed.
   const [amountCents, setAmountCents] = useState(expense.amount);
-  const [amountText, setAmountText] = useState(formatCentsDE(expense.amount));
+  const [amountText, setAmountText] = useState(formatCents(expense.amount));
   const [note, setNote] = useState(expense.note ?? "");
   const [expenseDateKey, setExpenseDateKey] = useState(toDateKey(expense.timestamp));
 
@@ -352,10 +352,10 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
     const cents = parseCents(amountText);
     if (cents === 0) {
       // Invalid / empty — revert to last-good value
-      setAmountText(formatCentsDE(amountCents));
+      setAmountText(formatCents(amountCents));
       return;
     }
-    const normalized = formatCentsDE(cents);
+    const normalized = formatCents(cents);
     setAmountText(normalized);
     if (cents === amountCents) return;
     setAmountCents(cents);

@@ -8,26 +8,26 @@ interface AmountInputProps {
   inputRef?: Ref<HTMLInputElement>;
 }
 
-// ── Formatting helpers (de-DE: "1.234,56") ──────────────────────────────────
+// ── Formatting helpers (en-US: "1,234.56") ──────────────────────────────────
 
 /**
- * Normalize user input to de-DE format: thousands separator dot, decimal comma.
- * Strips all non-digit/separator chars, treats last comma OR dot as decimal.
+ * Normalize user input to en-US format: thousands separator comma, decimal period.
+ * Strips all non-digit/separator chars, treats period as the decimal separator.
  */
-function formatDE(raw: string): string {
+function formatAmount(raw: string): string {
   if (!raw) return "";
 
   // Keep only digits, dots, commas
   let cleaned = raw.replace(/[^\d.,]/g, "");
   if (!cleaned) return "";
 
-  // Strip thousands dots (all dots), comma is the decimal separator
-  // This means "1.500" gets interpreted as 1500 (de-DE thousands)
-  const noDots = cleaned.replace(/\./g, "");
-  const parts = noDots.split(",");
+  // Strip thousands commas (all commas), period is the decimal separator
+  // This means "1,500" gets interpreted as 1500 (en-US thousands)
+  const noCommas = cleaned.replace(/,/g, "");
+  const parts = noCommas.split(".");
   let integerPart = parts[0];
-  const hasComma = parts.length > 1;
-  let decimalPart = hasComma ? parts[1] : "";
+  const hasDot = parts.length > 1;
+  let decimalPart = hasDot ? parts[1] : "";
 
   // Limit decimal to 2 digits
   decimalPart = decimalPart.slice(0, 2);
@@ -36,15 +36,15 @@ function formatDE(raw: string): string {
   integerPart = integerPart.replace(/^0+(?=\d)/, "") || "0";
 
   // Add thousands separators
-  integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
-  return hasComma ? `${integerPart},${decimalPart}` : integerPart;
+  return hasDot ? `${integerPart}.${decimalPart}` : integerPart;
 }
 
-/** Parse a de-DE formatted string to a JS number. */
-function parseDE(formatted: string): number {
+/** Parse an en-US formatted string to a JS number. */
+function parseAmount(formatted: string): number {
   if (!formatted) return NaN;
-  return parseFloat(formatted.replace(/\./g, "").replace(",", "."));
+  return parseFloat(formatted.replace(/,/g, ""));
 }
 
 export function AmountInput({ value, onChange, inputRef }: AmountInputProps) {
@@ -66,22 +66,22 @@ export function AmountInput({ value, onChange, inputRef }: AmountInputProps) {
 
   function handleInput(e: Event) {
     const raw = (e.target as HTMLInputElement).value;
-    onChange(formatDE(raw));
+    onChange(formatAmount(raw));
   }
 
   function handleBlur() {
     if (!value) return;
-    const n = parseDE(value);
+    const n = parseAmount(value);
     if (!isNaN(n)) {
-      // Format to 2 decimals in de-DE
+      // Format to 2 decimals in en-US
       const fixed = n.toFixed(2); // "4.00"
       const [int, dec] = fixed.split(".");
-      const intFormatted = int.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-      onChange(`${intFormatted},${dec}`);
+      const intFormatted = int.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      onChange(`${intFormatted}.${dec}`);
     }
   }
 
-  const displayText = value || "0,00";
+  const displayText = value || "0.00";
 
   return (
     <div class="flex flex-col items-center gap-2">
@@ -98,7 +98,7 @@ export function AmountInput({ value, onChange, inputRef }: AmountInputProps) {
             value={value}
             onInput={handleInput}
             onBlur={handleBlur}
-            placeholder="0,00"
+            placeholder="0.00"
             class="
               w-full
               bg-transparent
@@ -123,16 +123,16 @@ export function AmountInput({ value, onChange, inputRef }: AmountInputProps) {
   );
 }
 
-/** Parse a de-DE formatted amount string to integer cents. Returns 0 for invalid input. */
+/** Parse an en-US formatted amount string to integer cents. Returns 0 for invalid input. */
 export function parseCents(raw: string): number {
-  const n = parseDE(raw);
+  const n = parseAmount(raw);
   return isNaN(n) || n <= 0 ? 0 : Math.round(n * 100);
 }
 
-/** Format integer cents as a de-DE string (e.g. 145000 → "1.450,00") for AmountInput initial values. */
-export function formatCentsDE(cents: number): string {
+/** Format integer cents as an en-US string (e.g. 145000 → "1,450.00") for AmountInput initial values. */
+export function formatCents(cents: number): string {
   const fixed = (cents / 100).toFixed(2); // "1450.00"
   const [int, dec] = fixed.split(".");
-  const intFormatted = int.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  return `${intFormatted},${dec}`;
+  const intFormatted = int.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${intFormatted}.${dec}`;
 }
