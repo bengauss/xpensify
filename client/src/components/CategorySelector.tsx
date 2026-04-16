@@ -128,12 +128,45 @@ export function CategorySelector({
         selected.style.zIndex = "10";
       }
 
-      // Deliberately no container-level opacity fade: on WebKit, fading the
-      // whole grid at once paints a uniform dark bar across the cards as the
-      // body surface bleeds through. The per-card staggered fade in
-      // handleCategoryTap already dissolves cards individually from the tap
-      // outward; the grid stays opaque until display:none snaps it away.
+      // Stagger-fade the non-tapped cards from the tapped position outward.
+      // Must run here (not in the tap handler) because Preact's re-render
+      // after setState rewrites the JSX style object and clobbers any
+      // imperatively-set card.style.opacity. useLayoutEffect runs after the
+      // re-render but before paint, so the inline opacity sticks.
+      //
+      // No container-level fade: on WebKit, fading the whole grid as one
+      // layer paints a uniform dark bar as body bg bleeds through. Per-card
+      // fades dissolve cards individually, so there's never a uniform dark
+      // rectangle — only a growing wave of gaps from the tap outward.
       grid.style.pointerEvents = "none";
+
+      if (tapped) {
+        const tappedEl = selectedCategoryId
+          ? cardRefs.current.get(selectedCategoryId)
+          : null;
+        const allCards = Array.from(
+          grid.querySelectorAll<HTMLButtonElement>("[data-card]")
+        );
+        allCards.forEach((card) => {
+          if (card === tappedEl) {
+            // The FLIP icon launches from this card's center, so hide the
+            // card synchronously — the icon visually replaces it and then
+            // flies to the header, rather than leaving a rooted duplicate.
+            card.style.transition = "";
+            card.style.opacity = "0";
+            return;
+          }
+          const rect = card.getBoundingClientRect();
+          const dx = rect.left - tapped.left;
+          const dy = rect.top - tapped.top;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          // Short stagger so the farthest cards finish fading before the
+          // hide timeout (~350ms) snaps the grid away.
+          const delay = Math.round(dist / 20) * 10;
+          card.style.transition = `opacity 150ms ease ${delay}ms`;
+          card.style.opacity = "0";
+        });
+      }
 
       // FLIP: translate + scale the header icon from the tapped card's rect to
       // its natural header rect, so the card visually zooms into place.
@@ -214,6 +247,9 @@ export function CategorySelector({
         // styles reliably. Explicitly clear them so revealGrid can take over.
         const cards = grid.querySelectorAll<HTMLButtonElement>("[data-card]");
         cards.forEach((card) => {
+          // Clear the stagger-fade transition left behind on the drill-down
+          // path so it can't interfere with motion's reveal animation.
+          card.style.transition = "";
           card.style.opacity = "0";
           card.style.transform = "scale(0.85)";
         });
@@ -256,29 +292,11 @@ export function CategorySelector({
     // Store this category's grid index for the return reveal
     lastSelectedIndex.current = sortedCategories.findIndex((c) => c.id === category.id);
 
-    // Staggered fade-out of other cards by visual distance
+    // Capture the tapped rect so the layout effect can FLIP-zoom the header
+    // icon from this position and stagger-fade the surrounding cards.
     const tappedEl = cardRefs.current.get(category.id);
-    if (tappedEl && gridRef.current) {
-      const allCards = Array.from(
-        gridRef.current.querySelectorAll<HTMLButtonElement>("[data-card]")
-      );
-      const tappedRect = tappedEl.getBoundingClientRect();
-      // Capture the tapped rect so the layout effect can FLIP-zoom the header
-      // icon from this position into its natural slot.
-      tappedRectRef.current = tappedRect;
-
-      allCards.forEach((card) => {
-        if (card === tappedEl) return;
-        const rect = card.getBoundingClientRect();
-        const dx = rect.left - tappedRect.left;
-        const dy = rect.top - tappedRect.top;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        // Shorter stagger than before so the farthest cards finish fading by
-        // the time the hide timeout snaps the grid away (~350ms).
-        const delay = Math.round(dist / 20) * 10;
-        card.style.transition = `opacity 150ms ease ${delay}ms`;
-        card.style.opacity = "0";
-      });
+    if (tappedEl) {
+      tappedRectRef.current = tappedEl.getBoundingClientRect();
     }
 
     setSelectedCategoryId(category.id);
