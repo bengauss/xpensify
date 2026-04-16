@@ -20,7 +20,7 @@ export function BottomNav() {
   return (
     <nav
       class="flex-shrink-0 z-40 flex items-center justify-around border-t border-text-ghost/10 bg-bg-primary px-2 pt-2"
-      style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 4px)" }}
+      style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}
     >
       {tabs.map((tab) => {
         const active = path === tab.path;
