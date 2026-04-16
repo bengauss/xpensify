@@ -153,15 +153,7 @@ export default function AnalyticsScreen() {
   useEntrance(() => { setEntranceReady(true); });
 
   const allExpenses = useLiveQuery(
-    () => {
-      const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth() - 24, 1).toISOString();
-      return db.expenses
-        .where("timestamp")
-        .aboveOrEqual(start)
-        .filter((e) => e.deleted === 0)
-        .toArray();
-    },
+    () => db.expenses.filter((e) => e.deleted === 0).toArray(),
     []
   );
   const allCategories = CATEGORIES;
@@ -260,21 +252,29 @@ export default function AnalyticsScreen() {
     }
     trend.sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
 
-    // Year-to-date — scoped, current year Jan 1 → today, compared to
-    // previous year Jan 1 → same day-of-year.
-    const today = new Date();
-    const todayYmd = today.toISOString().slice(0, 10);
-    const currentYear = today.getFullYear();
-    const prevYmd = `${currentYear - 1}${todayYmd.slice(4)}`;
+    // Year-to-date — scoped to the selected year Jan 1 → cutoff, compared
+    // to the previous year Jan 1 → same cutoff. Cutoff is today when the
+    // selected month is the in-progress calendar month; otherwise it's the
+    // last day of the selected month (i.e. the month is finished).
+    const localNow = new Date();
+    const isCurrentCalendarMonth =
+      selectedYear === localNow.getFullYear() &&
+      selectedMonth === localNow.getMonth() + 1;
+    const cutoffYmd = isCurrentCalendarMonth
+      ? localNow.toISOString().slice(0, 10)
+      : `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(
+          new Date(selectedYear, selectedMonth, 0).getDate()
+        ).padStart(2, "0")}`;
+    const prevCutoffYmd = `${selectedYear - 1}${cutoffYmd.slice(4)}`;
 
     let ytd = 0;
     let prevYtd = 0;
     for (const e of scoped) {
       const ymd = e.timestamp.slice(0, 10);
       const yr = ymd.slice(0, 4);
-      if (yr === String(currentYear) && ymd <= todayYmd) {
+      if (yr === String(selectedYear) && ymd <= cutoffYmd) {
         ytd += e.amount;
-      } else if (yr === String(currentYear - 1) && ymd <= prevYmd) {
+      } else if (yr === String(selectedYear - 1) && ymd <= prevCutoffYmd) {
         prevYtd += e.amount;
       }
     }
