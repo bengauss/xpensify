@@ -97,7 +97,10 @@ export function AddScreen() {
   // Edit-bar press feedback (previously inline on each button).
   const saveEditPress = usePressScale<HTMLButtonElement>(0.97);
   const cancelEditPress = usePressScale<HTMLButtonElement>(0.97);
-  const datePress = usePressScale<HTMLButtonElement>(0.98);
+  // Intentionally no press-scale on the date button: animating transform on
+  // the click target during pointerup breaks the iOS user-activation chain
+  // that `HTMLInputElement.showPicker()` relies on, so the native calendar
+  // never opens. Keep it plain click-only.
 
   // Re-focus input when navigating back to Add tab
   useEffect(() => {
@@ -284,19 +287,13 @@ export function AddScreen() {
         data-add-reveal
         class="flex items-center justify-between px-1"
       >
-        {/* Date — tappable to open picker; "editing · …" prefix in edit mode */}
+        {/* Date — tappable to open picker; "editing · …" prefix in edit mode.
+            No press-scale here on purpose — see comment next to the refs. */}
         <div class="relative">
           <button
-            ref={datePress.ref}
-            onPointerDown={datePress.onPointerDown}
-            onPointerUp={datePress.onPointerUp}
-            onPointerCancel={datePress.onPointerCancel}
             onClick={() => dateInputRef.current?.showPicker()}
             class="text-xs bg-transparent border-0 cursor-pointer p-0"
-            style={{
-              color: isEditing ? "var(--color-text-secondary)" : "var(--color-text-tertiary)",
-              WebkitTapHighlightColor: "transparent",
-            }}
+            style={{ color: isEditing ? "var(--color-text-secondary)" : "var(--color-text-tertiary)" }}
           >
             {isEditing ? `editing · ${dateLabel}` : dateLabel}
           </button>
