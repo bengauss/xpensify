@@ -12,6 +12,7 @@ import {
 import { CategoryBars } from "@/components/CategoryBars";
 import { TrendChart } from "@/components/TrendChart";
 import { formatMoney } from "@/lib/format";
+import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -167,11 +168,11 @@ export default function AnalyticsScreen() {
     },
     []
   );
-  const allCategories = useLiveQuery(() => db.categories.toArray(), []);
-  const allSubcategories = useLiveQuery(() => db.subcategories.toArray(), []);
+  const allCategories = CATEGORIES;
+  const allSubcategories = SUBCATEGORIES;
 
   const analytics = useMemo(() => {
-    if (!allExpenses || !allCategories || !allSubcategories) return null;
+    if (!allExpenses) return null;
 
     const catMap = new Map(allCategories.map((c) => [c.id, c]));
     const subMap = new Map(allSubcategories.map((s) => [s.id, s]));
@@ -269,8 +270,6 @@ export default function AnalyticsScreen() {
     return { currentTotal, prevTotal, breakdown, topNotes, trend, dailyAvg };
   }, [
     allExpenses,
-    allCategories,
-    allSubcategories,
     selectedYear,
     selectedMonth,
     drill?.categoryId,
@@ -375,7 +374,7 @@ export default function AnalyticsScreen() {
   }
 
   function handleViewInHistory() {
-    if (!drill || !allCategories || !allSubcategories) return;
+    if (!drill) return;
     const cat = allCategories.find((c) => c.id === drill.categoryId);
     if (!cat) return;
     const monthStr = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
@@ -405,10 +404,10 @@ export default function AnalyticsScreen() {
   const isLess = diff <= 0;
 
   const drillCategory = drill?.categoryId
-    ? allCategories?.find((c) => c.id === drill.categoryId)
+    ? allCategories.find((c) => c.id === drill.categoryId)
     : null;
   const drillSubcategory = drill?.subcategoryId
-    ? allSubcategories?.find((s) => s.id === drill.subcategoryId)
+    ? allSubcategories.find((s) => s.id === drill.subcategoryId)
     : null;
   const drillColor = drillCategory?.color ?? "var(--color-accent)";
 
@@ -481,7 +480,7 @@ export default function AnalyticsScreen() {
       />
 
       {/* Loading state */}
-      {(!allExpenses || !allCategories || !allSubcategories) && (
+      {!allExpenses && (
         <div class="flex items-center justify-center py-12">
           <span class="text-sm" style={{ color: "var(--color-text-secondary)" }}>
             loading…

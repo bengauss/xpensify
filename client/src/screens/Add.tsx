@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useMemo } from "preact/hooks";
-import { signal } from "@preact/signals";
 import { animate } from "motion";
 import { springs } from "@/lib/animations";
 import { db } from "@/db/local";
@@ -13,6 +12,8 @@ import { currentUser } from "@/lib/auth";
 import { sync } from "@/sync/engine";
 import { useLocation } from "preact-iso";
 import { formatMoney, formatMoneyWhole, monthKey } from "@/lib/format";
+import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
+import { editingExpense } from "@/lib/editing";
 
 // ── Discretionary spend helpers ──────────────────────────────────────────────
 
@@ -63,9 +64,6 @@ function computeDiscretionary(expenses: Expense[] | undefined) {
   return { current: currentTotal, avg: roundToHundred(avg) };
 }
 
-/** Signal used by History detail sheet to put Add screen into edit mode */
-export const editingExpense = signal<Expense | null>(null);
-
 export function AddScreen() {
   const editing = editingExpense.value;
   const isEditing = !!editing;
@@ -95,10 +93,8 @@ export function AddScreen() {
     }
   }, [path]);
 
-  const categories = useLiveQuery(() =>
-    db.categories.toArray().then((cats) => cats.sort((a, b) => a.sort_order - b.sort_order))
-  );
-  const subcategories = useLiveQuery(() => db.subcategories.toArray());
+  const categories = CATEGORIES;
+  const subcategories = SUBCATEGORIES;
 
   // Discretionary spend counter — only queries the last 4 months via the
   // timestamp index. Full-table scans aren't needed for this widget.
@@ -111,7 +107,6 @@ export function AddScreen() {
 
   const today = new Date();
   const dateLabel = formatDateLabel(dateStr, today);
-  const dataReady = categories && categories.length > 0 && subcategories && subcategories.length > 0;
 
   async function handleSelect(categoryId: string, subcategoryId: string) {
     // In edit mode, tapping a subcategory only selects it — commit happens via save button.
@@ -271,22 +266,14 @@ export function AddScreen() {
       </div>
 
       {/* Category selector */}
-      {dataReady ? (
-        <CategorySelector
-          key={formKey}
-          categories={categories}
-          subcategories={subcategories}
-          onSelect={handleSelect}
-          initialCategoryId={editing?.category_id}
-          confirmedSubcategoryId={pendingSubcategoryId || undefined}
-        />
-      ) : (
-        <div class="grid grid-cols-3 gap-3">
-          {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} class="h-16 rounded-xl bg-bg-surface animate-pulse" />
-          ))}
-        </div>
-      )}
+      <CategorySelector
+        key={formKey}
+        categories={categories}
+        subcategories={subcategories}
+        onSelect={handleSelect}
+        initialCategoryId={editing?.category_id}
+        confirmedSubcategoryId={pendingSubcategoryId || undefined}
+      />
 
       <NoteInput value={note} onChange={setNote} />
 

@@ -4,11 +4,11 @@ import { animate } from "motion";
 import { springs } from "@/lib/animations";
 import { db } from "@/db/local";
 import type { RecurringTemplate } from "@/db/local";
-import { useLiveQuery } from "@/lib/useLiveQuery";
 import { AmountInput, parseCents, formatCents } from "@/components/AmountInput";
 import { CategorySelector } from "@/components/CategorySelector";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { api } from "@/lib/api";
+import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -40,11 +40,8 @@ export default function RecurringForm({ id: idProp }: { id?: string } = {}) {
   const [loaded, setLoaded] = useState(!isEdit);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  const categories = useLiveQuery(
-    () => db.categories.toArray().then((cats) => cats.sort((a, b) => a.sort_order - b.sort_order)),
-    []
-  );
-  const subcategories = useLiveQuery(() => db.subcategories.toArray(), []);
+  const categories = CATEGORIES;
+  const subcategories = SUBCATEGORIES;
 
   // Load template data for edit mode
   useEffect(() => {
@@ -154,24 +151,16 @@ export default function RecurringForm({ id: idProp }: { id?: string } = {}) {
       {/* Category selector — full (non-compact) mode, matches Add screen:
           multi-sub categories zoom into subcategory pills; single-sub
           categories stay on the grid and just highlight the card. */}
-      {categories && subcategories ? (
-        <CategorySelector
-          categories={categories}
-          subcategories={subcategories}
-          initialCategoryId={categoryId || undefined}
-          confirmedSubcategoryId={subcategoryId || undefined}
-          onSelect={(catId, subId) => {
-            setCategoryId(catId);
-            setSubcategoryId(subId);
-          }}
-        />
-      ) : (
-        <div class="grid grid-cols-3 gap-3">
-          {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} class="h-16 rounded-xl bg-bg-surface animate-pulse" />
-          ))}
-        </div>
-      )}
+      <CategorySelector
+        categories={categories}
+        subcategories={subcategories}
+        initialCategoryId={categoryId || undefined}
+        confirmedSubcategoryId={subcategoryId || undefined}
+        onSelect={(catId, subId) => {
+          setCategoryId(catId);
+          setSubcategoryId(subId);
+        }}
+      />
 
       {/* Note */}
       <input

@@ -9,6 +9,7 @@ import { categoryIcons } from "@/icons";
 import { api } from "@/lib/api";
 import { useEntrance, animateRowEntrance } from "@/lib/entrance";
 import { formatMoney, formatEur, MONTHS_SHORT } from "@/lib/format";
+import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -128,8 +129,6 @@ function formatDayMonth(ymd: string): string {
 
 function useForecast(): ForecastData | null {
   const templates = useLiveQuery(() => db.recurring_templates.toArray(), []);
-  const categories = useLiveQuery(() => db.categories.toArray(), []);
-  const subcategories = useLiveQuery(() => db.subcategories.toArray(), []);
   // `source` isn't indexed on the expenses table, so we can't use .where("source").
   // Filter by timestamp (indexed) to narrow to the current month, then filter
   // source/deleted in JS.
@@ -140,12 +139,12 @@ function useForecast(): ForecastData | null {
     [ym]
   );
 
-  if (!templates || !expenses || !categories || !subcategories) return null;
+  if (!templates || !expenses) return null;
 
   const catById = new Map<string, string>();
-  for (const c of categories) catById.set(c.id, c.name);
+  for (const c of CATEGORIES) catById.set(c.id, c.name);
   const subById = new Map<string, string>();
-  for (const s of subcategories) subById.set(s.id, s.name);
+  for (const s of SUBCATEGORIES) subById.set(s.id, s.name);
 
   function labelFor(params: {
     note: string | null;

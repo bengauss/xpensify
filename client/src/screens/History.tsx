@@ -8,12 +8,13 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { categoryIcons } from "@/icons";
 import { DetailSheet } from "@/components/DetailSheet";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { editingExpense } from "@/screens/Add";
+import { editingExpense } from "@/lib/editing";
 import { parseCents, formatCents } from "@/components/AmountInput";
 import { sync } from "@/sync/engine";
 import { historyFilter } from "@/lib/filters";
 import { useEntrance, animateRowEntrance } from "@/lib/entrance";
 import { formatMoney, formatEur, dateKey as toDateKey, todayKey, MONTHS_SHORT } from "@/lib/format";
+import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -604,8 +605,8 @@ export default function HistoryScreen() {
     []
   );
 
-  const categories = useLiveQuery(() => db.categories.toArray(), []);
-  const subcategories = useLiveQuery(() => db.subcategories.toArray(), []);
+  const categories = CATEGORIES;
+  const subcategories = SUBCATEGORIES;
 
   // Entrance animation: text slides in, then amounts fade in.
   // Re-run when rows are added (infinite scroll, filter change, initial data
@@ -617,13 +618,13 @@ export default function HistoryScreen() {
 
   // Build lookup maps
   const categoryMap = new Map<string, Category>(
-    (categories ?? []).map((c) => [c.id, c])
+    categories.map((c) => [c.id, c])
   );
   const subcategoryMap = new Map<string, Subcategory>(
-    (subcategories ?? []).map((s) => [s.id, s])
+    subcategories.map((s) => [s.id, s])
   );
 
-  if (!expenses || !categories || !subcategories) {
+  if (!expenses) {
     return (
       <div class="flex flex-1 items-center justify-center px-4">
         <p class="text-sm" style={{ color: "var(--color-text-secondary)" }}>loading…</p>

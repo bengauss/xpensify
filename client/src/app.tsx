@@ -1,13 +1,15 @@
 import { LocationProvider, useLocation } from "preact-iso";
 import { useEffect } from "preact/hooks";
+import { lazy, Suspense } from "preact/compat";
 import { signal } from "@preact/signals";
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
-import { LoginScreen } from "@/screens/Login";
 import { checkAuth, currentUser } from "@/lib/auth";
 import { startSyncScheduler, stopSyncScheduler } from "@/sync/scheduler";
 import { TabTransitionContainer } from "@/components/TabTransitionContainer";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+const LoginScreen = lazy(() => import("@/screens/Login"));
 
 /** True once checkAuth() has resolved (regardless of result) */
 const authChecked = signal(false);
@@ -69,7 +71,13 @@ function AppRoutes() {
   const { path } = useLocation();
 
   if (!authChecked.value) return null;
-  if (path === "/login") return <LoginScreen />;
+  if (path === "/login") {
+    return (
+      <Suspense fallback={null}>
+        <LoginScreen />
+      </Suspense>
+    );
+  }
   return <AuthenticatedShell />;
 }
 

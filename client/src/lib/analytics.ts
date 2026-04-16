@@ -1,4 +1,5 @@
 import { db as defaultDb } from "@/db/local";
+import { CATEGORIES } from "@/lib/categories";
 
 export interface CategoryBreakdownItem {
   category_id: string;
@@ -37,8 +38,7 @@ export async function getCategoryBreakdown(
     .filter((e) => e.deleted === 0 && e.timestamp.startsWith(ym))
     .toArray();
 
-  const categories = await db.categories.toArray();
-  const catMap = new Map(categories.map((c) => [c.id, c]));
+  const catMap = new Map(CATEGORIES.map((c) => [c.id, c]));
 
   const totals = new Map<string, number>();
   for (const e of expenses) {

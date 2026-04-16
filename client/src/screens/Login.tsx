@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "preact/hooks";
 import { useLocation } from "preact-iso";
 import { login } from "@/lib/auth";
 
-export function LoginScreen() {
+export default function LoginScreen() {
   const { route } = useLocation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");

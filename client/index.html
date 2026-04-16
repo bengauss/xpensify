@@ -11,6 +11,21 @@
     <link rel="icon" type="image/png" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <title>xpensify</title>
+    <style>
+      :root {
+        --color-bg-primary: #0c0d12;
+        --color-accent: #6c9cff;
+        --color-text-body: #c8c8d0;
+      }
+      html, body {
+        background: #0c0d12;
+        color: #c8c8d0;
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+      }
+      #app { min-height: 100dvh; }
+    </style>
+    <link rel="modulepreload" href="/src/main.tsx" />
     <script>
       // Set --app-h to window.innerHeight BEFORE the first paint so the shell
       // has the correct height on iOS Safari PWA cold start (where dvh/svh can
