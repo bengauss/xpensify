@@ -128,8 +128,11 @@ export function CategorySelector({
         selected.style.zIndex = "10";
       }
 
-      grid.style.transition = "opacity 150ms ease";
-      grid.style.opacity = "0";
+      // Deliberately no container-level opacity fade: on WebKit, fading the
+      // whole grid at once paints a uniform dark bar across the cards as the
+      // body surface bleeds through. The per-card staggered fade in
+      // handleCategoryTap already dissolves cards individually from the tap
+      // outward; the grid stays opaque until display:none snaps it away.
       grid.style.pointerEvents = "none";
 
       // FLIP: translate + scale the header icon from the tapped card's rect to
@@ -158,6 +161,9 @@ export function CategorySelector({
       }
 
       if (hideTimeout.current) clearTimeout(hideTimeout.current);
+      // Hold the grid through the FLIP spring so the flying icon never sails
+      // over an empty body surface. The spring settles around 350ms; after
+      // that we snap the grid away and hand over to the pills cascade.
       hideTimeout.current = setTimeout(() => {
         hideTimeout.current = null;
         grid.style.display = "none";
@@ -186,7 +192,7 @@ export function CategorySelector({
             );
           });
         }
-      }, 200);
+      }, 350);
     } else {
       // Reverse: show grid
       if (hideTimeout.current) {
@@ -267,7 +273,9 @@ export function CategorySelector({
         const dx = rect.left - tappedRect.left;
         const dy = rect.top - tappedRect.top;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const delay = Math.round(dist / 20) * 15;
+        // Shorter stagger than before so the farthest cards finish fading by
+        // the time the hide timeout snaps the grid away (~350ms).
+        const delay = Math.round(dist / 20) * 10;
         card.style.transition = `opacity 150ms ease ${delay}ms`;
         card.style.opacity = "0";
       });
