@@ -2,6 +2,7 @@ import { db } from "@/db/local";
 import type { RecurringTemplate } from "@/db/local";
 import { syncStatus } from "@/sync/status";
 import { api } from "@/lib/api";
+import { logout } from "@/lib/auth";
 
 export async function sync(): Promise<void> {
   // Don't stack syncs
@@ -24,7 +25,9 @@ export async function sync(): Promise<void> {
   }
 
   if (res.status === 401) {
-    window.location.href = "/login";
+    // Session expired. Wipe local state so a different user signing in
+    // on this device doesn't send pending expenses under the new identity.
+    await logout();
     return;
   }
 

@@ -162,9 +162,24 @@ const auth = new Hono<{ Variables: Variables }>()
     }
 
     const newHash = await bcrypt.hash(new_password, 12);
-    db.prepare(
-      `UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`
-    ).run(newHash, userId);
+
+    // Invalidate every existing session for this user, then issue a fresh one
+    // for the current tab. Any other logged-in device has to sign in again.
+    const sessionId = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + SESSION_MAX_AGE * 1000).toISOString();
+
+    const rotate = db.transaction(() => {
+      db.prepare(
+        `UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`
+      ).run(newHash, userId);
+      db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(userId);
+      db.prepare(
+        `INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)`
+      ).run(sessionId, userId, expiresAt);
+    });
+    rotate();
+
+    c.header("Set-Cookie", buildSessionCookie(sessionId));
 
     return c.json({ ok: true });
   });

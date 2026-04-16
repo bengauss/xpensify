@@ -2,6 +2,28 @@ import { Hono } from "hono";
 import db from "../db/connection.js";
 import { authMiddleware, type Variables } from "../middleware/auth.js";
 
+const ALLOWED_PUSH_HOST_SUFFIXES = [
+  ".push.services.mozilla.com",
+  "fcm.googleapis.com",
+  "updates.push.services.microsoft.com",
+  ".notify.windows.com",
+  ".push.apple.com",
+];
+
+function isAllowedPushEndpoint(endpoint: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:") return false;
+  const host = url.hostname.toLowerCase();
+  return ALLOWED_PUSH_HOST_SUFFIXES.some((suffix) =>
+    suffix.startsWith(".") ? host.endsWith(suffix) : host === suffix
+  );
+}
+
 const push = new Hono<{ Variables: Variables }>()
   // Apply auth to all routes
   .use("*", authMiddleware)
@@ -26,9 +48,13 @@ const push = new Hono<{ Variables: Variables }>()
       return c.json({ error: "endpoint, keys.p256dh, and keys.auth are required" }, 400);
     }
 
-    // Upsert: delete existing subscription for this endpoint then re-insert (atomic)
+    if (!isAllowedPushEndpoint(endpoint)) {
+      return c.json({ error: "endpoint is not an allowed push service" }, 400);
+    }
+
+    // Upsert: delete existing subscription (scoped to this user) then re-insert (atomic)
     const upsertSubscription = db.transaction(() => {
-      db.prepare(`DELETE FROM push_subscriptions WHERE endpoint = ?`).run(endpoint);
+      db.prepare(`DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?`).run(endpoint, userId);
       const id = crypto.randomUUID();
       db.prepare(
         `INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth)
