@@ -219,20 +219,89 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
   const hasAnimatedRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const prevHeightRef = useRef<number | null>(null);
+  const toggleBtnRef = useRef<HTMLButtonElement>(null);
   const [paidExpanded, setPaidExpanded] = useState(false);
+  const [displayedAmount, setDisplayedAmount] = useState(0);
 
-  // Self-contained mount animation — ensures the card appears regardless of
-  // whether it rendered before or after the screen-level entrance kicked off.
+  // Pin inner-element hidden state BEFORE first paint so nothing flashes at
+  // its final value between render and the JS-driven animation kickoff.
+  useLayoutEffect(() => {
+    if (hasAnimatedRef.current) return;
+    if (listRef.current) {
+      const rows = listRef.current.querySelectorAll<HTMLElement>("[data-forecast-row]");
+      rows.forEach((row) => {
+        row.style.opacity = "0";
+        row.style.transform = "translateY(6px)";
+      });
+    }
+    if (toggleBtnRef.current) {
+      toggleBtnRef.current.style.opacity = "0";
+    }
+  }, []);
+
+  // Chained mount entrance: card fade+rise → number count-up → row stagger
+  // → toggle fade. Re-runs on forecast updates but the guard ensures the
+  // full animation only plays once; later runs just sync the displayed value.
   useEffect(() => {
-    if (!cardRef.current || hasAnimatedRef.current) return;
+    if (!cardRef.current) return;
+    if (hasAnimatedRef.current) {
+      setDisplayedAmount(forecast.total_remaining);
+      return;
+    }
     hasAnimatedRef.current = true;
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (animate as any)(
+    const ANIM = animate as any;
+
+    // 1. Card fade + rise.
+    ANIM(
       cardRef.current,
       { opacity: [0, 1], y: [10, 0] },
-      { ...springs.gentle }
+      { duration: 0.4, ease: [0.22, 1, 0.36, 1] }
     );
-  }, []);
+
+    // 2. Number count-up — starts as the card is rising.
+    const target = forecast.total_remaining;
+    if (target > 0) {
+      ANIM(0, target, {
+        duration: 0.9,
+        delay: 0.15,
+        ease: [0.16, 1, 0.3, 1],
+        onUpdate: (v: number) => setDisplayedAmount(v),
+        onComplete: () => setDisplayedAmount(target),
+      });
+    } else {
+      setDisplayedAmount(0);
+    }
+
+    // 3. Row stagger — begins after the count-up has visually landed.
+    const ROW_START = 0.6;
+    const ROW_STAGGER = 0.05;
+    let rowCount = 0;
+    if (listRef.current) {
+      const rows = Array.from(
+        listRef.current.querySelectorAll<HTMLElement>("[data-forecast-row]")
+      );
+      rowCount = rows.length;
+      rows.forEach((row, i) => {
+        ANIM(
+          row,
+          { opacity: [0, 1], y: [6, 0] },
+          { duration: 0.35, delay: ROW_START + i * ROW_STAGGER, ease: [0.22, 1, 0.36, 1] }
+        );
+      });
+    }
+
+    // 4. Toggle button tails the rows.
+    if (toggleBtnRef.current) {
+      const delay = ROW_START + rowCount * ROW_STAGGER + 0.05;
+      ANIM(
+        toggleBtnRef.current,
+        { opacity: [0, 1] },
+        { duration: 0.3, delay, ease: [0.22, 1, 0.36, 1] }
+      );
+    }
+  }, [forecast.total_remaining]);
 
   // Height animation on expand/collapse. Measure-before-commit pattern so the
   // row list smoothly transitions between compact and full views.
@@ -299,7 +368,7 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
           marginBottom: 4,
         }}
       >
-        EUR {formatMoney(forecast.total_remaining)}
+        EUR {formatMoney(Math.round(displayedAmount))}
       </p>
       <p
         style={{
@@ -333,6 +402,7 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
           </div>
           {hasPaid && (
             <button
+              ref={toggleBtnRef}
               onClick={togglePaid}
               class="w-full text-left bg-transparent border-0 cursor-pointer"
               style={{
@@ -361,6 +431,7 @@ function ForecastRow({ item, dimmed }: { item: ForecastItem; dimmed: boolean }) 
 
   return (
     <div
+      data-forecast-row
       class="flex items-center justify-between"
       style={{ fontSize: 13, paddingTop: 4, paddingBottom: 4 }}
     >
