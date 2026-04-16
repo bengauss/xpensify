@@ -194,6 +194,12 @@ Three stages in `Dockerfile`:
 
 `docker-compose.yml` mounts `./data:/app/data` for the SQLite file, attaches to the external `web` network (Caddy lives in a sibling stack named `flowdx`, not in this repo).
 
+### Build performance
+
+- Dockerfile header is `# syntax=docker/dockerfile:1.7` so BuildKit cache-mount syntax works. Every `npm ci` uses `--mount=type=cache,target=/root/.npm,sharing=locked` plus `--prefer-offline --no-audit --no-fund`. A `package-lock.json` bump still busts the layer, but npm's on-disk cache survives, so the re-install copies from disk instead of re-downloading from the registry.
+- Cold build on the VPS is ~40s; fully cached rebuild is ~1s. The single largest step is client `tsc && vite build` (~16s).
+- The VPS runs a **weekly Docker prune** via root's crontab: `0 4 * * 0 docker buildx prune -f --keep-storage 5GB && docker image prune -af --filter "until=168h"`, logged to `./data/docker-prune.log`. The original trigger was disk pressure (85% full) from 84 GB of accumulated buildx cache silently slowing overlay2 writes. Don't remove this cron without replacing it — the cache grows unbounded otherwise.
+
 ## Gotchas
 
 - **Preact re-renders clobber inline JSX styles** — If JSX sets `style={{ opacity: 0 }}` and then motion imperatively sets `el.style.opacity = "1"`, the NEXT re-render (new data, state change, list growth) re-applies the JSX inline style and hides the element again. For animated reveals, keep the default hidden state in a CSS rule gated on a data-attribute that JS adds (e.g. `[data-revealed]`). Never rely on JSX inline `opacity: 0` as a "until animated" marker — it regresses on every re-render. See [lib/entrance.ts](client/src/lib/entrance.ts) for the reference implementation.
