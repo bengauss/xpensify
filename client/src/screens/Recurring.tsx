@@ -536,11 +536,7 @@ export default function RecurringScreen() {
   }
 
   if (!allTemplates) {
-    return (
-      <div class="flex flex-1 items-center justify-center px-4">
-        <p class="text-text-secondary text-sm">loading...</p>
-      </div>
-    );
+    return <div class="flex flex-1" />;
   }
 
   const byFrequency: Record<string, RecurringTemplate[]> = {

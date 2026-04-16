@@ -625,11 +625,7 @@ export default function HistoryScreen() {
   );
 
   if (!expenses) {
-    return (
-      <div class="flex flex-1 items-center justify-center px-4">
-        <p class="text-sm" style={{ color: "var(--color-text-secondary)" }}>loading…</p>
-      </div>
-    );
+    return <div class="flex flex-1" />;
   }
 
   // Filter and group
