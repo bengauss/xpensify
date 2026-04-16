@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "preact/hooks";
 import { animate } from "motion";
-import { springs } from "@/lib/animations";
+import { durations, getReducedMotionOverride } from "@/lib/animations";
 import { db } from "@/db/local";
 import type { Expense } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -14,6 +14,9 @@ import { useLocation } from "preact-iso";
 import { formatMoney, formatMoneyWhole, monthKey } from "@/lib/format";
 import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
 import { editingExpense } from "@/lib/editing";
+import { useEntrance } from "@/lib/entrance";
+import { markSaved } from "@/lib/lastSaved";
+import { usePressScale } from "@/lib/usePressScale";
 
 // ── Discretionary spend helpers ──────────────────────────────────────────────
 
@@ -86,12 +89,42 @@ export function AddScreen() {
   const amountRef = useRef<HTMLInputElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
 
+  // Entrance wrappers — refs populated via data-add-reveal + data-revealed.
+  const amountWrapRef = useRef<HTMLDivElement>(null);
+  const dateLineRef = useRef<HTMLDivElement>(null);
+  const noteWrapRef = useRef<HTMLDivElement>(null);
+
+  // Edit-bar press feedback (previously inline on each button).
+  const saveEditPress = usePressScale<HTMLButtonElement>(0.97);
+  const cancelEditPress = usePressScale<HTMLButtonElement>(0.97);
+  const datePress = usePressScale<HTMLButtonElement>(0.98);
+
   // Re-focus input when navigating back to Add tab
   useEffect(() => {
     if (path === "/") {
       setTimeout(() => amountRef.current?.focus(), 50);
     }
   }, [path]);
+
+  // Chained column entrance: amount → date line → note. The CategorySelector
+  // runs its own cascade, which kicks in roughly where the static rows settle.
+  useEntrance(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ANIM = animate as any;
+    const opts = { ...durations.soft, ...getReducedMotionOverride() };
+
+    const reveal = (el: HTMLElement | null, delayS: number) => {
+      if (!el) return;
+      ANIM(el, { opacity: [0, 1], y: [-8, 0] }, { ...opts, delay: delayS });
+      el.setAttribute("data-revealed", "1");
+    };
+
+    reveal(amountWrapRef.current, 0);
+    reveal(dateLineRef.current, 0.03);
+    // Note tails the last visible category card; CategorySelector cascade runs
+    // ~80ms + ~300ms cards ≈ 0.38s, so start note near the end of that window.
+    reveal(noteWrapRef.current, 0.35);
+  });
 
   const categories = CATEGORIES;
   const subcategories = SUBCATEGORIES;
@@ -128,7 +161,7 @@ export function AddScreen() {
         (animate as any)(
           amountRef.current,
           { x: [0, -8, 8, -6, 6, -3, 0] },
-          { duration: 0.4 }
+          { duration: 0.4, ...getReducedMotionOverride() }
         );
       }
       setTimeout(() => amountRef.current?.focus(), 0);
@@ -149,8 +182,9 @@ export function AddScreen() {
     const todayStr = new Date().toISOString().split("T")[0];
     const timestamp = dateStr === todayStr ? now : `${dateStr}T12:00:00.000Z`;
 
+    const expenseId = crypto.randomUUID();
     await db.expenses.add({
-      id: crypto.randomUUID(),
+      id: expenseId,
       user_id: userId,
       category_id: categoryId,
       subcategory_id: subcategoryId,
@@ -167,8 +201,18 @@ export function AddScreen() {
       updated_at: now,
     });
 
+    // Glow this row briefly if the user navigates to History within 3s.
+    markSaved(expenseId);
+
     if (amountRef.current) {
-      animate(amountRef.current, { scale: [1, 0.97, 1] }, springs.bouncy);
+      // Motion springs with multi-keyframe arrays can re-run physics per
+      // segment and skip unpredictably; use a clean duration bounce.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (animate as any)(
+        amountRef.current,
+        { scale: [1, 0.97, 1] },
+        { duration: 0.3, ease: [0.22, 1, 0.36, 1], ...getReducedMotionOverride() },
+      );
     }
 
     setToast({ visible: true, message: `✓ ${formatCents(amountCents)} → ${sub?.name ?? "expense"}` });
@@ -226,20 +270,33 @@ export function AddScreen() {
         onDone={() => setToast({ visible: false, message: "" })}
       />
 
-      <AmountInput
-        value={amount}
-        onChange={setAmount}
-        inputRef={amountRef}
-      />
+      <div ref={amountWrapRef} data-add-reveal>
+        <AmountInput
+          value={amount}
+          onChange={setAmount}
+          inputRef={amountRef}
+        />
+      </div>
 
       {/* Date label + discretionary counter */}
-      <div class="flex items-center justify-between px-1">
+      <div
+        ref={dateLineRef}
+        data-add-reveal
+        class="flex items-center justify-between px-1"
+      >
         {/* Date — tappable to open picker; "editing · …" prefix in edit mode */}
         <div class="relative">
           <button
+            ref={datePress.ref}
+            onPointerDown={datePress.onPointerDown}
+            onPointerUp={datePress.onPointerUp}
+            onPointerCancel={datePress.onPointerCancel}
             onClick={() => dateInputRef.current?.showPicker()}
             class="text-xs bg-transparent border-0 cursor-pointer p-0"
-            style={{ color: isEditing ? "var(--color-text-secondary)" : "var(--color-text-tertiary)" }}
+            style={{
+              color: isEditing ? "var(--color-text-secondary)" : "var(--color-text-tertiary)",
+              WebkitTapHighlightColor: "transparent",
+            }}
           >
             {isEditing ? `editing · ${dateLabel}` : dateLabel}
           </button>
@@ -275,7 +332,9 @@ export function AddScreen() {
         confirmedSubcategoryId={pendingSubcategoryId || undefined}
       />
 
-      <NoteInput value={note} onChange={setNote} />
+      <div ref={noteWrapRef} data-add-reveal>
+        <NoteInput value={note} onChange={setNote} />
+      </div>
 
       {/* Edit-mode save bar — fixed above the tab bar */}
       {isEditing && (
@@ -288,10 +347,11 @@ export function AddScreen() {
         >
           <div class="grid grid-cols-2 pt-2 pb-3" style={{ gap: 10 }}>
             <button
+              ref={saveEditPress.ref}
+              onPointerDown={saveEditPress.onPointerDown}
+              onPointerUp={saveEditPress.onPointerUp}
+              onPointerCancel={saveEditPress.onPointerCancel}
               onClick={handleSaveEdit}
-              onPointerDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
-              onPointerUp={(e) => { animate(e.currentTarget, { scale: 1 }, springs.snappy); }}
-              onPointerLeave={(e) => { animate(e.currentTarget, { scale: 1 }, springs.snappy); }}
               class="flex items-center justify-center text-sm font-medium text-white cursor-pointer border-0"
               style={{
                 height: 48,
@@ -303,10 +363,11 @@ export function AddScreen() {
               save
             </button>
             <button
+              ref={cancelEditPress.ref}
+              onPointerDown={cancelEditPress.onPointerDown}
+              onPointerUp={cancelEditPress.onPointerUp}
+              onPointerCancel={cancelEditPress.onPointerCancel}
               onClick={handleCancelEdit}
-              onPointerDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
-              onPointerUp={(e) => { animate(e.currentTarget, { scale: 1 }, springs.snappy); }}
-              onPointerLeave={(e) => { animate(e.currentTarget, { scale: 1 }, springs.snappy); }}
               class="flex items-center justify-center text-sm font-medium cursor-pointer border-0"
               style={{
                 height: 48,

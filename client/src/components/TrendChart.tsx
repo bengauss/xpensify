@@ -1,6 +1,8 @@
-import { useRef, useEffect } from "preact/hooks";
+import { useRef, useLayoutEffect, useEffect } from "preact/hooks";
 import { animate } from "motion";
 import type { MonthlyTrendItem } from "@/lib/analytics";
+import { springs, stagger, getReducedMotionOverride } from "@/lib/animations";
+import { usePressScale } from "@/lib/usePressScale";
 
 interface TrendChartProps {
   trend: MonthlyTrendItem[];
@@ -35,6 +37,7 @@ export function TrendChart({
   const selectedColor = accentColor ?? "var(--color-accent)";
   const scrollRef = useRef<HTMLDivElement>(null);
   const barRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const dataKey = trend.map((t) => `${t.year}-${t.month}:${t.total}`).join("|") +
     `|${selectedYear}-${selectedMonth}|${selectedColor}`;
@@ -50,26 +53,60 @@ export function TrendChart({
     }
   }, []);
 
-  // Animate bars when data changes
-  useEffect(() => {
+  // Animate bars when data changes.
+  //
+  // First render: animate each visible bar from 0 → target with a stagger.
+  //   Off-screen bars snap to target immediately so we don't burn ~720ms
+  //   of staggered motion on bars no one sees.
+  // Subsequent data changes (month select, drill scope change): animate
+  //   current → target with no stagger — motion reads the inline height left
+  //   over from the previous animation and interpolates between months.
+  useLayoutEffect(() => {
     if (dataKey === prevKeyRef.current) return;
+    const isFirstRender = prevKeyRef.current === "";
     prevKeyRef.current = dataKey;
 
+    const scrollEl = scrollRef.current;
+    const scrollLeft = scrollEl?.scrollLeft ?? 0;
+    const clientWidth = scrollEl?.clientWidth ?? Number.MAX_SAFE_INTEGER;
+    // Give a small buffer so bars peeking at the edge also stagger.
+    const visibleStart = scrollLeft - 24;
+    const visibleEnd = scrollLeft + clientWidth + 24;
+
+    let visibleIdx = 0;
     barRefs.current.forEach((barEl, index) => {
       if (!barEl) return;
       const item = trend[index];
       if (!item) return;
       const targetPx = maxTotal > 0 ? (item.total / maxTotal) * BAR_MAX_HEIGHT : 0;
-      animate(
-        barEl,
-        { height: ["0px", `${targetPx}px`] },
-        {
-          type: "spring",
-          stiffness: 200,
-          damping: 20,
-          delay: index * 0.03,
+
+      const btn = buttonRefs.current[index];
+      const leftPos = btn?.offsetLeft ?? 0;
+      const isVisible = leftPos >= visibleStart && leftPos <= visibleEnd;
+
+      if (isFirstRender) {
+        barEl.setAttribute("data-revealed", "1");
+        if (isVisible) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (animate as any)(
+            barEl,
+            { height: ["0px", `${targetPx}px`] },
+            { ...springs.data, delay: visibleIdx * stagger.bar, ...getReducedMotionOverride() },
+          );
+          visibleIdx++;
+        } else {
+          // Snap off-screen bars to target so scrolling them into view shows
+          // a finished state rather than a frozen 0-px stub.
+          barEl.style.height = `${targetPx}px`;
         }
-      );
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (animate as any)(
+          barEl,
+          { height: `${targetPx}px` },
+          { ...springs.data, ...getReducedMotionOverride() },
+        );
+      }
     });
   }, [dataKey]);
 
@@ -89,50 +126,92 @@ export function TrendChart({
     >
       {trend.map((item, index) => {
         const isSelected = item.year === selectedYear && item.month === selectedMonth;
-        const targetPx = maxTotal > 0 ? (item.total / maxTotal) * BAR_MAX_HEIGHT : 0;
-
         return (
-          <button
+          <TrendBar
             key={`${item.year}-${item.month}`}
-            onClick={() => onSelect(item.year, item.month)}
-            class="flex flex-col items-center flex-shrink-0"
-            style={{ width: 48, WebkitTapHighlightColor: "transparent" }}
-          >
-            {/* Value label on top */}
-            <span
-              class="text-[10px] tabular-nums mb-1"
-              style={{ color: isSelected ? selectedColor : "var(--color-text-secondary)" }}
-            >
-              {formatTrendLabel(item.total)}
-            </span>
-
-            {/* Bar area — fixed height container, bar grows from bottom */}
-            <div
-              class="flex items-end w-full"
-              style={{ height: BAR_MAX_HEIGHT, flex: "none" }}
-            >
-              <div
-                ref={(el) => { barRefs.current[index] = el; }}
-                class="w-full rounded-t-sm"
-                style={{
-                  height: `${targetPx}px`,
-                  backgroundColor: isSelected ? selectedColor : "#4a4a52",
-                  willChange: "height",
-                  minHeight: item.total > 0 ? 2 : 0,
-                }}
-              />
-            </div>
-
-            {/* Month label below */}
-            <span
-              class="text-[10px] mt-1"
-              style={{ color: isSelected ? selectedColor : "var(--color-text-tertiary)" }}
-            >
-              {monthLabel(item.year, item.month)}
-            </span>
-          </button>
+            item={item}
+            isSelected={isSelected}
+            selectedColor={selectedColor}
+            barMaxHeight={BAR_MAX_HEIGHT}
+            onSelect={onSelect}
+            buttonRefCallback={(el) => { buttonRefs.current[index] = el; }}
+            barRefCallback={(el) => { barRefs.current[index] = el; }}
+          />
         );
       })}
     </div>
+  );
+}
+
+interface TrendBarProps {
+  item: MonthlyTrendItem;
+  isSelected: boolean;
+  selectedColor: string;
+  barMaxHeight: number;
+  onSelect: (year: number, month: number) => void;
+  buttonRefCallback: (el: HTMLButtonElement | null) => void;
+  barRefCallback: (el: HTMLDivElement | null) => void;
+}
+
+function TrendBar({
+  item,
+  isSelected,
+  selectedColor,
+  barMaxHeight,
+  onSelect,
+  buttonRefCallback,
+  barRefCallback,
+}: TrendBarProps) {
+  const press = usePressScale<HTMLButtonElement>(0.97);
+
+  return (
+    <button
+      ref={(el) => {
+        buttonRefCallback(el);
+        (press.ref as { current: HTMLButtonElement | null }).current = el;
+      }}
+      onClick={() => onSelect(item.year, item.month)}
+      onPointerDown={press.onPointerDown}
+      onPointerUp={press.onPointerUp}
+      onPointerCancel={press.onPointerCancel}
+      class="flex flex-col items-center flex-shrink-0"
+      style={{ width: 48, WebkitTapHighlightColor: "transparent" }}
+    >
+      {/* Value label on top */}
+      <span
+        class="text-[10px] tabular-nums mb-1"
+        style={{ color: isSelected ? selectedColor : "var(--color-text-secondary)" }}
+      >
+        {formatTrendLabel(item.total)}
+      </span>
+
+      {/* Bar area — fixed height container, bar grows from bottom */}
+      <div
+        class="flex items-end w-full"
+        style={{ height: barMaxHeight, flex: "none" }}
+      >
+        {/* Bar height is owned by motion; CSS default (data-trend-bar
+            without data-revealed) hides at 0 so the first paint doesn't
+            flash the full target before motion kicks in. */}
+        <div
+          ref={barRefCallback}
+          data-trend-bar
+          class="w-full rounded-t-sm"
+          style={{
+            backgroundColor: isSelected ? selectedColor : "#4a4a52",
+            willChange: "height",
+            minHeight: item.total > 0 ? 2 : 0,
+          }}
+        />
+      </div>
+
+      {/* Month label below */}
+      <span
+        class="text-[10px] mt-1"
+        style={{ color: isSelected ? selectedColor : "var(--color-text-tertiary)" }}
+      >
+        {monthLabel(item.year, item.month)}
+      </span>
+    </button>
   );
 }

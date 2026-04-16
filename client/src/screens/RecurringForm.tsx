@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { useLocation, useRoute } from "preact-iso";
 import { animate } from "motion";
-import { springs } from "@/lib/animations";
+import { springs, durations, getReducedMotionOverride } from "@/lib/animations";
 import { db } from "@/db/local";
 import type { RecurringTemplate } from "@/db/local";
 import { AmountInput, parseCents, formatCents } from "@/components/AmountInput";
@@ -9,6 +9,7 @@ import { CategorySelector } from "@/components/CategorySelector";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { api } from "@/lib/api";
 import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
+import { usePressScale } from "@/lib/usePressScale";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -66,15 +67,26 @@ export default function RecurringForm({ id: idProp }: { id?: string } = {}) {
 
   useEffect(() => {
     if (!knobRef.current) return;
-    animate(knobRef.current, { x: active ? 16 : 0 }, springs.toggle);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (animate as any)(
+      knobRef.current,
+      { x: active ? 16 : 0 },
+      { ...springs.toggle, ...getReducedMotionOverride() },
+    );
     if (trackRef.current) {
-      animate(
+      // Track color uses duration + ease — color has no mass, so spring
+      // physics on it reads as a lagging overshoot.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (animate as any)(
         trackRef.current,
         { backgroundColor: active ? "var(--color-accent)" : "var(--color-text-ghost)" },
-        springs.toggle
+        { ...durations.exit, ...getReducedMotionOverride() },
       );
     }
   }, [active]);
+
+  const savePress = usePressScale<HTMLButtonElement>(0.97);
+  const deletePress = usePressScale<HTMLButtonElement>(0.97);
 
   async function handleSave() {
     const amountCents = parseCents(amountStr);
@@ -274,6 +286,10 @@ export default function RecurringForm({ id: idProp }: { id?: string } = {}) {
       ) : (
         <div class={`grid ${isEdit ? "grid-cols-2" : "grid-cols-1"} gap-3 pt-1`}>
           <button
+            ref={savePress.ref}
+            onPointerDown={savePress.onPointerDown}
+            onPointerUp={savePress.onPointerUp}
+            onPointerCancel={savePress.onPointerCancel}
             onClick={handleSave}
             disabled={saving}
             class="flex items-center justify-center text-sm font-medium text-white cursor-pointer border-0"
@@ -282,12 +298,17 @@ export default function RecurringForm({ id: idProp }: { id?: string } = {}) {
               borderRadius: 14,
               backgroundColor: "var(--color-accent)",
               opacity: saving ? 0.6 : 1,
+              WebkitTapHighlightColor: "transparent",
             }}
           >
             {saving ? "saving..." : "save"}
           </button>
           {isEdit && (
             <button
+              ref={deletePress.ref}
+              onPointerDown={deletePress.onPointerDown}
+              onPointerUp={deletePress.onPointerUp}
+              onPointerCancel={deletePress.onPointerCancel}
               onClick={() => setConfirmingDelete(true)}
               class="flex items-center justify-center text-sm font-medium cursor-pointer border-0"
               style={{
@@ -295,6 +316,7 @@ export default function RecurringForm({ id: idProp }: { id?: string } = {}) {
                 borderRadius: 14,
                 backgroundColor: "rgba(255,55,95,0.12)",
                 color: "var(--color-danger)",
+                WebkitTapHighlightColor: "transparent",
               }}
             >
               delete

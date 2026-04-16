@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "preact/hooks";
 import { useLocation } from "preact-iso";
-import { animate } from "motion";
-import { springs } from "@/lib/animations";
 import { db } from "@/db/local";
 import type { Expense, Category, Subcategory } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -13,6 +11,8 @@ import { parseCents, formatCents } from "@/components/AmountInput";
 import { sync } from "@/sync/engine";
 import { historyFilter } from "@/lib/filters";
 import { useEntrance, animateRowEntrance } from "@/lib/entrance";
+import { usePressScale } from "@/lib/usePressScale";
+import { lastSaved, isWithinGlowWindow } from "@/lib/lastSaved";
 import { formatMoney, formatEur, dateKey as toDateKey, todayKey, MONTHS_SHORT } from "@/lib/format";
 import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
 
@@ -192,21 +192,26 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
   const isRecurring = expense.source === "recurring";
   const isPending = expense.sync_status === "pending";
 
+  const press = usePressScale<HTMLButtonElement>(0.97);
+
+  // Determine once at mount whether this row was the expense just saved on the
+  // Add screen. Using `.peek()` avoids re-subscribing every row to the signal;
+  // the signal changes twice per save (set + clear) and we don't need rows to
+  // re-render on those flips. The CSS class runs the 1.5s glow animation.
+  const [showGlow] = useState<boolean>(() => {
+    const saved = lastSaved.peek();
+    return !!saved && saved.id === expense.id && isWithinGlowWindow(saved);
+  });
+
   return (
     <button
+      ref={press.ref}
       data-row
       onClick={onTap}
-      onPointerDown={(e) => {
-        const el = e.currentTarget;
-        el.style.transform = "scale(0.98)";
-      }}
-      onPointerUp={(e) => {
-        animate(e.currentTarget, { scale: 1 }, springs.snappy);
-      }}
-      onPointerLeave={(e) => {
-        animate(e.currentTarget, { scale: 1 }, springs.snappy);
-      }}
-      class="w-full text-left flex items-center gap-3 px-1 rounded-xl"
+      onPointerDown={press.onPointerDown}
+      onPointerUp={press.onPointerUp}
+      onPointerCancel={press.onPointerCancel}
+      class={`w-full text-left flex items-center gap-3 px-1 rounded-xl ${showGlow ? "just-saved-glow" : ""}`}
       style={{ WebkitTapHighlightColor: "transparent", paddingTop: 10, paddingBottom: 10 }}
     >
       {/* Icon + text — animated together */}
@@ -415,6 +420,8 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
   }
 
   const userStyle = getUserStyle(expense.user_id);
+  const editPress = usePressScale<HTMLButtonElement>(0.97);
+  const deletePress = usePressScale<HTMLButtonElement>(0.97);
 
   return (
     <div class="flex flex-col gap-4">
@@ -528,10 +535,11 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
       ) : (
         <div class="grid grid-cols-2 mt-1" style={{ gap: 10 }}>
           <button
+            ref={editPress.ref}
+            onPointerDown={editPress.onPointerDown}
+            onPointerUp={editPress.onPointerUp}
+            onPointerCancel={editPress.onPointerCancel}
             onClick={handleEdit}
-            onPointerDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
-            onPointerUp={(e) => { animate(e.currentTarget, { scale: 1 }, springs.snappy); }}
-            onPointerLeave={(e) => { animate(e.currentTarget, { scale: 1 }, springs.snappy); }}
             class="flex items-center justify-center text-sm font-medium cursor-pointer border-0"
             style={{
               height: 48,
@@ -544,10 +552,11 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
             edit
           </button>
           <button
+            ref={deletePress.ref}
+            onPointerDown={deletePress.onPointerDown}
+            onPointerUp={deletePress.onPointerUp}
+            onPointerCancel={deletePress.onPointerCancel}
             onClick={() => setShowConfirm(true)}
-            onPointerDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
-            onPointerUp={(e) => { animate(e.currentTarget, { scale: 1 }, springs.snappy); }}
-            onPointerLeave={(e) => { animate(e.currentTarget, { scale: 1 }, springs.snappy); }}
             class="flex items-center justify-center text-sm font-medium cursor-pointer border-0"
             style={{
               height: 48,

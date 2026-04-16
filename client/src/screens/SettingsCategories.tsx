@@ -6,6 +6,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { categoryIcons } from "@/icons";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { api } from "@/lib/api";
+import { usePressScale } from "@/lib/usePressScale";
 
 function CategoryRow({
   category,
@@ -28,6 +29,10 @@ function CategoryRow({
   const [editVal, setEditVal] = useState(category.name);
 
   const IconComponent = categoryIcons[category.icon] ?? categoryIcons["other"];
+  const upPress = usePressScale<HTMLButtonElement>(0.92);
+  const downPress = usePressScale<HTMLButtonElement>(0.92);
+  const editPress = usePressScale<HTMLButtonElement>(0.92);
+  const deletePress = usePressScale<HTMLButtonElement>(0.92);
 
   function commitEdit() {
     const trimmed = editVal.trim();
@@ -57,15 +62,15 @@ function CategoryRow({
         <span class="flex-1 text-sm text-text-primary">{category.name}</span>
       )}
 
-      <button onClick={onMoveUp} disabled={isFirst} class="text-text-secondary hover:text-text-primary disabled:opacity-20 p-1.5 text-base leading-none" title="move up">↑</button>
-      <button onClick={onMoveDown} disabled={isLast} class="text-text-secondary hover:text-text-primary disabled:opacity-20 p-1.5 text-base leading-none" title="move down">↓</button>
-      <button onClick={() => { setEditVal(category.name); setEditing(true); }} class="text-text-secondary hover:text-accent p-1.5" title="edit">
+      <button ref={upPress.ref} onPointerDown={upPress.onPointerDown} onPointerUp={upPress.onPointerUp} onPointerCancel={upPress.onPointerCancel} onClick={onMoveUp} disabled={isFirst} class="text-text-secondary hover:text-text-primary disabled:opacity-20 p-1.5 text-base leading-none" title="move up" style={{ WebkitTapHighlightColor: "transparent" }}>↑</button>
+      <button ref={downPress.ref} onPointerDown={downPress.onPointerDown} onPointerUp={downPress.onPointerUp} onPointerCancel={downPress.onPointerCancel} onClick={onMoveDown} disabled={isLast} class="text-text-secondary hover:text-text-primary disabled:opacity-20 p-1.5 text-base leading-none" title="move down" style={{ WebkitTapHighlightColor: "transparent" }}>↓</button>
+      <button ref={editPress.ref} onPointerDown={editPress.onPointerDown} onPointerUp={editPress.onPointerUp} onPointerCancel={editPress.onPointerCancel} onClick={() => { setEditVal(category.name); setEditing(true); }} class="text-text-secondary hover:text-accent p-1.5" title="edit" style={{ WebkitTapHighlightColor: "transparent" }}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
         </svg>
       </button>
-      <button onClick={onDelete} class="text-text-secondary hover:text-red-400 p-1.5" title="delete">
+      <button ref={deletePress.ref} onPointerDown={deletePress.onPointerDown} onPointerUp={deletePress.onPointerUp} onPointerCancel={deletePress.onPointerCancel} onClick={onDelete} class="text-text-secondary hover:text-red-400 p-1.5" title="delete" style={{ WebkitTapHighlightColor: "transparent" }}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />

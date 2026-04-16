@@ -2,6 +2,7 @@ import { useRef, useEffect, useState, useLayoutEffect } from "preact/hooks";
 import { animate } from "motion";
 import type { CategoryBreakdownItem } from "@/lib/analytics";
 import { formatMoney } from "@/lib/format";
+import { springs, stagger, getReducedMotionOverride } from "@/lib/animations";
 
 interface CategoryBarsProps {
   breakdown: CategoryBreakdownItem[];
@@ -63,74 +64,73 @@ export function CategoryBars({
     el.addEventListener("transitionend", cleanup);
   }, [expanded]);
 
-  useEffect(() => {
+  // useLayoutEffect so imperative style writes land before paint — avoids a
+  // 0% flash on re-renders where Preact would otherwise commit the JSX default
+  // before motion takes over.
+  useLayoutEffect(() => {
     if (!enabled) return;
 
-    // Data changed (month switch, new expenses) → full reset + re-animate.
-    if (dataSig !== dataSigRef.current) {
+    const dataChanged = dataSig !== dataSigRef.current;
+    if (dataChanged) {
       dataSigRef.current = dataSig;
-      animatedIdsRef.current.clear();
-
+      // Stop in-flight bar animations — fresh calls below pick up from current width.
       for (const a of activeAnims.current) a.stop();
       activeAnims.current = [];
-      for (const t of fadeTimers.current) clearTimeout(t);
-      fadeTimers.current = [];
-
-      // Reset inline state on every rendered row so the animation starts clean.
-      for (let i = 0; i < barRefs.current.length; i++) {
-        const bar = barRefs.current[i];
-        if (bar) bar.style.width = "0%";
-        const amt = amountRefs.current[i];
-        if (amt) {
-          amt.style.transition = "none";
-          amt.style.opacity = "0";
-          amt.style.transform = "translateY(6px)";
-        }
-      }
     }
 
-    // Animate only rows whose category hasn't been animated yet. This means
-    // expanding the list doesn't retract + re-animate the already-visible top 6.
-    let pendingIdx = 0;
-    const pendingCount = items.filter((it) => !animatedIdsRef.current.has(it.category_id)).length;
-    const barsSettleBase = pendingCount * 30 + 350;
-    const staggerMs = 40;
+    let newCategoryIdx = 0;
+    const newCategoryCount = items.filter((it) => !animatedIdsRef.current.has(it.category_id)).length;
+    const barsSettleBase = newCategoryCount * 30 + 350;
+    const amountStaggerMs = 40;
 
     for (let index = 0; index < items.length; index++) {
       const item = items[index];
-      if (animatedIdsRef.current.has(item.category_id)) continue;
-      animatedIdsRef.current.add(item.category_id);
-
       const bar = barRefs.current[index];
+      const amt = amountRefs.current[index];
+      const targetPct = maxTotal > 0 ? (item.total / maxTotal) * 100 : 0;
+      const firstTime = !animatedIdsRef.current.has(item.category_id);
+
       if (bar) {
-        const targetPct = maxTotal > 0 ? (item.total / maxTotal) * 100 : 0;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const anim = (animate as any)(
-          bar,
-          { width: ["0%", `${targetPct}%`] },
-          {
-            type: "spring",
-            stiffness: 200,
-            damping: 20,
-            delay: pendingIdx * 0.03,
-          }
-        );
-        activeAnims.current.push(anim);
+        if (firstTime) {
+          bar.setAttribute("data-revealed", "1");
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const anim = (animate as any)(
+            bar,
+            { width: ["0%", `${targetPct}%`] },
+            { ...springs.data, delay: newCategoryIdx * stagger.bar, ...getReducedMotionOverride() },
+          );
+          activeAnims.current.push(anim);
+        } else {
+          // Animate current → new. Motion reads the inline width set by the
+          // previous animation; no reset to 0 between months.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const anim = (animate as any)(
+            bar,
+            { width: `${targetPct}%` },
+            { ...springs.data, ...getReducedMotionOverride() },
+          );
+          activeAnims.current.push(anim);
+        }
       }
 
-      const amt = amountRefs.current[index];
-      if (amt) {
-        const reverseIndex = pendingCount - 1 - pendingIdx;
-        const delay = barsSettleBase + reverseIndex * staggerMs;
+      if (amt && firstTime) {
+        // Amount stagger is intentionally reversed (top row fades last) as a
+        // design choice — see animation review #9.
+        const reverseIndex = newCategoryCount - 1 - newCategoryIdx;
+        const delay = barsSettleBase + reverseIndex * amountStaggerMs;
         const timer = window.setTimeout(() => {
           amt.style.transition = "opacity 200ms ease-out, transform 200ms ease-out";
           amt.style.opacity = "1";
           amt.style.transform = "translateY(0)";
+          amt.setAttribute("data-revealed", "1");
         }, delay);
         fadeTimers.current.push(timer);
       }
 
-      pendingIdx++;
+      if (firstTime) {
+        animatedIdsRef.current.add(item.category_id);
+        newCategoryIdx++;
+      }
     }
 
     return () => {
@@ -179,11 +179,14 @@ export function CategoryBars({
               class="flex-1 overflow-hidden"
               style={{ height: 20, borderRadius: 6 }}
             >
+              {/* Bar fill — width is owned by motion; CSS default (data-bar-fill
+                  without data-revealed) hides at 0% until the first animation
+                  marks it revealed. */}
               <div
                 ref={(el) => { barRefs.current[index] = el; }}
+                data-bar-fill
                 class="h-full"
                 style={{
-                  width: "0%",
                   borderRadius: 6,
                   backgroundColor: item.category_color,
                   willChange: "width",
@@ -191,9 +194,11 @@ export function CategoryBars({
               />
             </div>
 
-            {/* Amount — starts hidden, staggered fade+slide from bottom to top */}
+            {/* Amount — opacity + transform owned by CSS (data-bar-amount)
+                until the fade-in completes and flips data-revealed. */}
             <span
               ref={(el) => { amountRefs.current[index] = el; }}
+              data-bar-amount
               class="flex-shrink-0 tabular-nums text-right"
               style={{
                 minWidth: 70,
@@ -201,8 +206,6 @@ export function CategoryBars({
                 fontSize: 14,
                 fontWeight: 500,
                 color: "var(--color-text-primary)",
-                opacity: 0,
-                transform: "translateY(6px)",
               }}
             >
               {formatMoney(item.total)}

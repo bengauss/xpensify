@@ -1,6 +1,6 @@
-import { useRef, useEffect } from "preact/hooks";
+import { useRef, useEffect, useState } from "preact/hooks";
 import { animate } from "motion";
-import { springs } from "@/lib/animations";
+import { springs, durations, getReducedMotionOverride, shouldReduceMotion } from "@/lib/animations";
 
 interface ConfirmDialogProps {
   onConfirm: () => void;
@@ -14,17 +14,41 @@ export function ConfirmDialog({
   message = "are you sure?",
 }: ConfirmDialogProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [closing, setClosing] = useState(false);
 
   useEffect(() => {
     if (containerRef.current) {
       // Entrance spring animation
-      animate(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (animate as any)(
         containerRef.current,
         { opacity: [0, 1], scale: [0.95, 1] },
-        springs.snappy
+        { ...springs.snappy, ...getReducedMotionOverride() },
       );
     }
   }, []);
+
+  function dismiss(action: () => void) {
+    if (closing) return;
+    setClosing(true);
+    const el = containerRef.current;
+    if (!el || shouldReduceMotion()) {
+      action();
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anim = (animate as any)(
+      el,
+      { opacity: [1, 0], scale: [1, 0.95] },
+      { ...durations.exit, ...getReducedMotionOverride() },
+    );
+    const fire = () => action();
+    if (anim && anim.finished && typeof anim.finished.then === "function") {
+      anim.finished.then(fire).catch(fire);
+    } else {
+      fire();
+    }
+  }
 
   return (
     <div
@@ -37,14 +61,14 @@ export function ConfirmDialog({
       </span>
       <div class="flex gap-3">
         <button
-          onClick={onCancel}
+          onClick={() => dismiss(onCancel)}
           class="text-sm px-3 py-1.5 rounded-lg"
           style={{ color: "var(--color-text-secondary)" }}
         >
           cancel
         </button>
         <button
-          onClick={onConfirm}
+          onClick={() => dismiss(onConfirm)}
           class="text-sm px-3 py-1.5 rounded-lg font-medium"
           style={{
             color: "var(--color-danger)",

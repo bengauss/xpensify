@@ -1,12 +1,11 @@
 import { useState, useRef, useLayoutEffect } from "preact/hooks";
 import { animate } from "motion";
-import { springs } from "@/lib/animations";
+import { springs, stagger, getReducedMotionOverride } from "@/lib/animations";
 import { categoryIcons } from "@/icons";
 import { useEntrance } from "@/lib/entrance";
 import type { Category, Subcategory } from "@/db/local";
 
 const GRID_COLS = 3;
-const STAGGER_MS = 30;
 
 /** Staggered reveal: fade in + scale up cards from an origin position in the grid */
 function revealGrid(gridEl: HTMLDivElement, originIndex?: number) {
@@ -15,19 +14,23 @@ function revealGrid(gridEl: HTMLDivElement, originIndex?: number) {
     const row = Math.floor(i / GRID_COLS);
     const col = i % GRID_COLS;
 
-    let delay: number;
+    let delayUnits: number;
     if (originIndex !== undefined) {
       const oRow = Math.floor(originIndex / GRID_COLS);
       const oCol = originIndex % GRID_COLS;
-      delay = (Math.abs(row - oRow) + Math.abs(col - oCol)) * STAGGER_MS;
+      delayUnits = Math.abs(row - oRow) + Math.abs(col - oCol);
     } else {
-      delay = (row + col) * STAGGER_MS;
+      delayUnits = row + col;
     }
 
     card.style.opacity = "0";
     card.style.transform = "scale(0.85)";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const anim = animate(card, { opacity: 1, scale: 1 }, { ...springs.snappy, delay: delay / 1000 }) as any;
+    const anim = (animate as any)(
+      card,
+      { opacity: 1, scale: 1 },
+      { ...springs.snappy, delay: delayUnits * stagger.bar, ...getReducedMotionOverride() },
+    );
     anim.then(() => {
       card.style.opacity = "1";
       card.style.transform = "";
@@ -74,7 +77,8 @@ export function CategorySelector({
   const needsMountReveal = useRef(!selectedCategoryId);
   const lastSelectedIndex = useRef<number | undefined>(undefined);
   const pendingBackReveal = useRef(false);
-  const hideTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Cancel function for the in-flight drill-down settle handoff. */
+  const pendingCleanupRef = useRef<(() => void) | null>(null);
   // Rect of the tapped card at the moment of tap — drives the FLIP zoom of the
   // header icon from the tapped card's position into its natural header slot.
   // Null when the drill-down is not user-driven (initial edit-mode mount).
@@ -161,7 +165,7 @@ export function CategorySelector({
           const dy = rect.top - tapped.top;
           const dist = Math.sqrt(dx * dx + dy * dy);
           // Short stagger so the farthest cards finish fading before the
-          // hide timeout (~350ms) snaps the grid away.
+          // icon spring settles and we snap the grid away.
           const delay = Math.round(dist / 20) * 10;
           card.style.transition = `opacity 150ms ease ${delay}ms`;
           card.style.opacity = "0";
@@ -170,16 +174,18 @@ export function CategorySelector({
 
       // FLIP: translate + scale the header icon from the tapped card's rect to
       // its natural header rect, so the card visually zooms into place.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let iconAnim: any = null;
       if (icon && tapped) {
         const iconRect = icon.getBoundingClientRect();
         const dx = (tapped.left + tapped.width / 2) - (iconRect.left + iconRect.width / 2);
         const dy = (tapped.top + tapped.height / 2) - (iconRect.top + iconRect.height / 2);
         const scale = Math.max(tapped.width, tapped.height) / Math.max(iconRect.width, 1);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (animate as any)(
+        iconAnim = (animate as any)(
           icon,
           { x: [dx, 0], y: [dy, 0], scale: [scale, 1] },
-          { type: "spring", stiffness: 380, damping: 30 }
+          { ...springs.zoom, ...getReducedMotionOverride() },
         );
       }
 
@@ -189,16 +195,18 @@ export function CategorySelector({
         (animate as any)(
           text,
           { opacity: [0, 1], y: [6, 0] },
-          { ...springs.gentle, delay: 0.08 }
+          { ...springs.gentle, delay: 0.08, ...getReducedMotionOverride() },
         );
       }
 
-      if (hideTimeout.current) clearTimeout(hideTimeout.current);
-      // Hold the grid through the FLIP spring so the flying icon never sails
-      // over an empty body surface. The spring settles around 350ms; after
-      // that we snap the grid away and hand over to the pills cascade.
-      hideTimeout.current = setTimeout(() => {
-        hideTimeout.current = null;
+      // Cancel any in-flight settle from a previous drill that hasn't landed.
+      pendingCleanupRef.current?.();
+
+      let cancelled = false;
+      pendingCleanupRef.current = () => { cancelled = true; };
+
+      const onSettle = () => {
+        if (cancelled) return;
         grid.style.display = "none";
 
         // Release the overlay styles so the selected section drops into normal
@@ -218,20 +226,30 @@ export function CategorySelector({
           pills.forEach((pill, i) => {
             pill.style.opacity = "0";
             pill.style.transform = "translateY(8px)";
-            animate(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (animate as any)(
               pill,
               { opacity: [0, 1], y: [8, 0] },
-              { ...springs.gentle, delay: i * 0.05 }
+              { ...springs.gentle, delay: i * stagger.pill, ...getReducedMotionOverride() },
             );
           });
         }
-      }, 350);
+      };
+
+      // Hand off to pills once the FLIP spring lands — no magic-number timeout.
+      if (iconAnim && iconAnim.finished && typeof iconAnim.finished.then === "function") {
+        iconAnim.finished.then(onSettle).catch(() => {
+          // motion rejects `.finished` on stop(); treat as cancel.
+        });
+      } else {
+        // Reduced-motion or no animation target — snap immediately.
+        onSettle();
+      }
     } else {
       // Reverse: show grid
-      if (hideTimeout.current) {
-        clearTimeout(hideTimeout.current);
-        hideTimeout.current = null;
-      }
+      pendingCleanupRef.current?.();
+      pendingCleanupRef.current = null;
+
       const grid = gridRef.current;
       grid.style.display = "";
       grid.style.transition = "";
@@ -265,7 +283,8 @@ export function CategorySelector({
 
   function handleCardRelease(el: HTMLButtonElement) {
     el.style.transition = "";
-    animate(el, { scale: 1 }, springs.snappy);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (animate as any)(el, { scale: 1 }, { ...springs.snappy, ...getReducedMotionOverride() });
   }
 
   // Sorted categories (stable reference for index lookups)
@@ -330,10 +349,9 @@ export function CategorySelector({
                   data-card
                   ref={(el) => { if (el) cardRefs.current.set(cat.id, el); }}
                   onClick={() => handleCategoryTap(cat)}
-                  onMouseDown={(e) => handleCardPress(e.currentTarget as HTMLButtonElement)}
-                  onMouseUp={(e) => handleCardRelease(e.currentTarget as HTMLButtonElement)}
-                  onTouchStart={(e) => handleCardPress(e.currentTarget as HTMLButtonElement)}
-                  onTouchEnd={(e) => handleCardRelease(e.currentTarget as HTMLButtonElement)}
+                  onPointerDown={(e) => handleCardPress(e.currentTarget as HTMLButtonElement)}
+                  onPointerUp={(e) => handleCardRelease(e.currentTarget as HTMLButtonElement)}
+                  onPointerCancel={(e) => handleCardRelease(e.currentTarget as HTMLButtonElement)}
                   class="flex flex-col items-center justify-center gap-2 py-4 rounded-xl cursor-pointer border"
                   style={{
                     backgroundColor: `${cat.color}0d`,
@@ -397,10 +415,9 @@ export function CategorySelector({
                 data-card
                 ref={(el) => { if (el) cardRefs.current.set(cat.id, el); }}
                 onClick={() => handleCategoryTap(cat)}
-                onMouseDown={(e) => handleCardPress(e.currentTarget as HTMLButtonElement)}
-                onMouseUp={(e) => handleCardRelease(e.currentTarget as HTMLButtonElement)}
-                onTouchStart={(e) => handleCardPress(e.currentTarget as HTMLButtonElement)}
-                onTouchEnd={(e) => handleCardRelease(e.currentTarget as HTMLButtonElement)}
+                onPointerDown={(e) => handleCardPress(e.currentTarget as HTMLButtonElement)}
+                onPointerUp={(e) => handleCardRelease(e.currentTarget as HTMLButtonElement)}
+                onPointerCancel={(e) => handleCardRelease(e.currentTarget as HTMLButtonElement)}
                 class="flex flex-col items-center justify-center gap-2 py-4 rounded-xl cursor-pointer border"
                 style={{
                   backgroundColor: isConfirmed ? `${cat.color}25` : `${cat.color}0d`,

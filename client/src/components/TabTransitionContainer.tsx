@@ -128,15 +128,22 @@ export function TabTransitionContainer() {
         return;
       }
 
+      // Promote both layers to their own GPU layer for the duration of the
+      // transition. Removed in cleanup so idle tabs don't hold layer memory.
+      outLayer.classList.add("transitioning");
+      inLayer.classList.add("transitioning");
+
       // Step 1: Outgoing layer — set exit transform, remove active class.
       // CSS transition handles opacity (1 → 0, from .active → base) and
       // transform (0 → exit). Starts immediately, no frame gap.
-      outLayer.style.transform = `translateX(${dir === 1 ? "-15%" : "15%"})`;
+      // Smaller distances (8% out, 15% in) read as a peek rather than a
+      // full sideways slide — premium apps use subtler spatial shifts.
+      outLayer.style.transform = `translateX(${dir === 1 ? "-8%" : "8%"})`;
       outLayer.classList.remove("active");
 
       // Step 2: Incoming layer — place at starting position WITHOUT transition.
       inLayer.style.transition = "none";
-      inLayer.style.transform = `translateX(${dir === 1 ? "30%" : "-30%"})`;
+      inLayer.style.transform = `translateX(${dir === 1 ? "15%" : "-15%"})`;
       // Force layout to commit the starting state in this frame.
       void inLayer.offsetHeight;
 
@@ -168,6 +175,14 @@ export function TabTransitionContainer() {
         if (outLayer) outLayer.style.transform = "";
         if (inLayer) inLayer.style.transform = "";
 
+        // Demote layers from GPU compositing shortly after the transition
+        // ends so idle tabs don't permanently hold a layer reserved. The
+        // 100ms cushion avoids thrashing on rapid back-to-back tab taps.
+        window.setTimeout(() => {
+          if (outLayer) outLayer.classList.remove("transitioning");
+          if (inLayer) inLayer.classList.remove("transitioning");
+        }, 100);
+
         // Update state: new layer is active, old content unmounted
         setActiveIdx(newIdx);
         setSlots((s) => {
@@ -198,6 +213,7 @@ export function TabTransitionContainer() {
       outLayer.style.transition = "none";
       outLayer.style.transform = "";
       outLayer.classList.remove("active");
+      outLayer.classList.remove("transitioning");
       void outLayer.offsetHeight;
       outLayer.style.transition = "";
     }
@@ -205,6 +221,7 @@ export function TabTransitionContainer() {
       inLayer.style.transition = "none";
       inLayer.style.transform = "";
       inLayer.classList.add("active");
+      inLayer.classList.remove("transitioning");
       void inLayer.offsetHeight;
       inLayer.style.transition = "";
     }

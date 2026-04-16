@@ -5,6 +5,8 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { historyFilter } from "@/lib/filters";
 import { analyticsDrilldown } from "@/lib/analyticsDrilldown";
 import { useEntrance } from "@/lib/entrance";
+import { useCountUp } from "@/lib/useCountUp";
+import { usePressScale } from "@/lib/usePressScale";
 import {
   type CategoryBreakdownItem,
   type MonthlyTrendItem,
@@ -37,40 +39,29 @@ function nextYearMonth(year: number, month: number): { year: number; month: numb
   return { year, month: month + 1 };
 }
 
-// ── Number rolling animation via rAF ─────────────────────────────────────────
+// ── Animated total (count-up) ───────────────────────────────────────────────
+//
+// Wraps `useCountUp` so a `key` change on the <AnimatedTotal> element
+// remounts the hook and resets the internal prev-value ref to 0 — that's how
+// we get the "re-roll from 0 on drill change" behavior (the parent keys
+// on drillKey). `enabled` is used to hold at 0 during the tab transition
+// and only begin the count-up once the entrance is ready.
 
-function rollNumber(
-  el: HTMLElement,
-  from: number,
-  to: number,
-  duration: number,
-  delay: number,
-): () => void {
-  let cancelled = false;
-  let rafId: number;
+interface AnimatedTotalProps {
+  target: number;
+  enabled: boolean;
+  delay?: number;
+  style?: Record<string, string | number>;
+  class?: string;
+}
 
-  const timer = setTimeout(() => {
-    if (cancelled) return;
-    const start = performance.now();
-    function tick(now: number) {
-      if (cancelled) return;
-      const elapsed = now - start;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const current = Math.round(from + (to - from) * eased);
-      el.textContent = formatMoney(current);
-      if (progress < 1) {
-        rafId = requestAnimationFrame(tick);
-      }
-    }
-    rafId = requestAnimationFrame(tick);
-  }, delay);
-
-  return () => {
-    cancelled = true;
-    clearTimeout(timer);
-    cancelAnimationFrame(rafId);
-  };
+function AnimatedTotal({ target, enabled, delay = 0, style, class: className }: AnimatedTotalProps) {
+  const ref = useCountUp<HTMLSpanElement>(target, formatMoney, { enabled, delay });
+  return (
+    <span ref={ref} class={className} style={style}>
+      {formatMoney(0)}
+    </span>
+  );
 }
 
 // ── Top notes (Level 3) ──────────────────────────────────────────────────────
@@ -143,11 +134,6 @@ export default function AnalyticsScreen() {
     };
   }, []);
 
-  const totalRef = useRef<HTMLSpanElement>(null);
-  const ytdRef = useRef<HTMLSpanElement>(null);
-  const prevTotalRef = useRef<number>(-1);
-  const prevYtdRef = useRef<number>(-1);
-  const cancelAnims = useRef<(() => void)[]>([]);
   const [entranceReady, setEntranceReady] = useState(false);
 
   useEntrance(() => { setEntranceReady(true); });
@@ -289,48 +275,14 @@ export default function AnalyticsScreen() {
     drillLevel,
   ]);
 
-  // Rolling number animation — waits for entrance delay on initial load.
-  // Also re-rolls from 0 on drill changes so the scoped totals animate.
-  useEffect(() => {
-    if (!analytics || !entranceReady) return;
-
-    for (const cancel of cancelAnims.current) cancel();
-    cancelAnims.current = [];
-
-    const newTotal = analytics.currentTotal;
-    const newYtd = analytics.ytd;
-    const oldTotal = prevTotalRef.current < 0 ? 0 : prevTotalRef.current;
-    const oldYtd = prevYtdRef.current < 0 ? 0 : prevYtdRef.current;
-
-    if (totalRef.current) {
-      cancelAnims.current.push(
-        rollNumber(totalRef.current, oldTotal, newTotal, 400, 0)
-      );
-    }
-    if (ytdRef.current) {
-      cancelAnims.current.push(
-        rollNumber(ytdRef.current, oldYtd, newYtd, 400, 100)
-      );
-    }
-
-    prevTotalRef.current = newTotal;
-    prevYtdRef.current = newYtd;
-
-    return () => {
-      for (const cancel of cancelAnims.current) cancel();
-      cancelAnims.current = [];
-    };
-  }, [analytics?.currentTotal, analytics?.ytd, entranceReady]);
-
-  // Reset roll baseline when drill changes so the next roll starts from 0
-  useEffect(() => {
-    prevTotalRef.current = -1;
-    prevYtdRef.current = -1;
-  }, [drill?.categoryId, drill?.subcategoryId]);
-
-  // ── Crossfade content on drill-level change ───────────────────────────────
+  // ── Drill-level change: directional slide, matching tab transition ────────
+  //
+  // Deeper (L1→L2 or L2→L3): content slides in from 15% right.
+  // Back (L2→L1 or L3→L2): content slides in from 15% left.
+  // Same level but different subtree (e.g. swap category at L2): fade only.
   const contentRef = useRef<HTMLDivElement>(null);
   const prevDrillKeyRef = useRef<string>("L1");
+  const prevLevelRef = useRef<number>(drillLevel);
   const drillKey = drill
     ? drill.subcategoryId
       ? `L3:${drill.categoryId}:${drill.subcategoryId}`
@@ -339,15 +291,33 @@ export default function AnalyticsScreen() {
 
   useEffect(() => {
     if (prevDrillKeyRef.current === drillKey) return;
+    const oldLevel = prevLevelRef.current;
+    const newLevel = drillLevel;
     prevDrillKeyRef.current = drillKey;
+    prevLevelRef.current = newLevel;
+
     const el = contentRef.current;
     if (!el) return;
+
     el.style.transition = "none";
     el.style.opacity = "0";
+    if (oldLevel !== newLevel) {
+      const deeper = newLevel > oldLevel;
+      el.style.transform = deeper ? "translateX(15%)" : "translateX(-15%)";
+    } else {
+      el.style.transform = "translateX(0)";
+    }
+    // Force reflow so the "from" state commits before the transition runs.
     void el.offsetHeight;
-    el.style.transition = "opacity 150ms ease";
+    el.style.transition = "opacity 200ms ease, transform 200ms ease";
     el.style.opacity = "1";
+    el.style.transform = "translateX(0)";
   }, [drillKey]);
+
+  // Press feedback for month arrows + view-in-history
+  const prevArrowPress = usePressScale<HTMLButtonElement>(0.95);
+  const nextArrowPress = usePressScale<HTMLButtonElement>(0.95);
+  const viewInHistoryPress = usePressScale<HTMLButtonElement>(0.97);
 
   // ── Event handlers ────────────────────────────────────────────────────────
 
@@ -453,6 +423,10 @@ export default function AnalyticsScreen() {
       {/* Month selector — always visible, works at any drill level */}
       <div class="flex items-center justify-between">
         <button
+          ref={prevArrowPress.ref}
+          onPointerDown={prevArrowPress.onPointerDown}
+          onPointerUp={prevArrowPress.onPointerUp}
+          onPointerCancel={prevArrowPress.onPointerCancel}
           onClick={handlePrev}
           class="flex items-center justify-center rounded-full border text-sm"
           style={{
@@ -461,6 +435,7 @@ export default function AnalyticsScreen() {
             backgroundColor: "var(--color-bg-surface)",
             borderColor: "rgba(42,42,50,0.8)",
             color: "var(--color-text-primary)",
+            WebkitTapHighlightColor: "transparent",
           }}
         >
           ←
@@ -474,6 +449,10 @@ export default function AnalyticsScreen() {
         </span>
 
         <button
+          ref={nextArrowPress.ref}
+          onPointerDown={nextArrowPress.onPointerDown}
+          onPointerUp={nextArrowPress.onPointerUp}
+          onPointerCancel={nextArrowPress.onPointerCancel}
           onClick={handleNext}
           class="flex items-center justify-center rounded-full border text-sm"
           style={{
@@ -482,6 +461,7 @@ export default function AnalyticsScreen() {
             backgroundColor: "var(--color-bg-surface)",
             borderColor: "rgba(42,42,50,0.8)",
             color: "var(--color-text-primary)",
+            WebkitTapHighlightColor: "transparent",
           }}
         >
           →
@@ -508,13 +488,13 @@ export default function AnalyticsScreen() {
               <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
                 {totalCardLabel}
               </span>
-              <span
-                ref={totalRef}
+              <AnimatedTotal
+                key={`total-${drillKey}`}
+                target={currentTotal}
+                enabled={entranceReady}
                 class="tabular-nums"
                 style={{ fontSize: 28, fontWeight: 300, color: "var(--color-text-primary)" }}
-              >
-                {formatMoney(0)}
-              </span>
+              />
               {prevTotal > 0 && (
                 <span
                   style={{ fontSize: 13, color: isLess ? "var(--color-success)" : "var(--color-danger)" }}
@@ -537,13 +517,14 @@ export default function AnalyticsScreen() {
               <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
                 {ytdCardLabel}
               </span>
-              <span
-                ref={ytdRef}
+              <AnimatedTotal
+                key={`ytd-${drillKey}`}
+                target={ytd}
+                enabled={entranceReady}
+                delay={0.1}
                 class="tabular-nums"
                 style={{ fontSize: 28, fontWeight: 300, color: "var(--color-text-primary)" }}
-              >
-                {formatMoney(0)}
-              </span>
+              />
               {prevYtd > 0 && (
                 <span
                   style={{ fontSize: 13, color: ytdIsLess ? "var(--color-success)" : "var(--color-danger)" }}
@@ -608,6 +589,10 @@ export default function AnalyticsScreen() {
           {/* View-in-history link — levels 2 and 3 */}
           {drillLevel > 1 && (
             <button
+              ref={viewInHistoryPress.ref}
+              onPointerDown={viewInHistoryPress.onPointerDown}
+              onPointerUp={viewInHistoryPress.onPointerUp}
+              onPointerCancel={viewInHistoryPress.onPointerCancel}
               onClick={handleViewInHistory}
               class="self-end bg-transparent border-0 cursor-pointer"
               style={{

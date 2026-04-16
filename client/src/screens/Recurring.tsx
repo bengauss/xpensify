@@ -1,13 +1,15 @@
 import { useRef, useEffect, useState, useLayoutEffect } from "preact/hooks";
 import { useLocation } from "preact-iso";
 import { animate } from "motion";
-import { springs } from "@/lib/animations";
+import { springs, durations, stagger, getReducedMotionOverride } from "@/lib/animations";
 import { db } from "@/db/local";
 import type { RecurringTemplate, Expense } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { categoryIcons } from "@/icons";
 import { api } from "@/lib/api";
 import { useEntrance, animateRowEntrance } from "@/lib/entrance";
+import { useCountUp } from "@/lib/useCountUp";
+import { usePressScale } from "@/lib/usePressScale";
 import { formatMoney, formatEur, MONTHS_SHORT } from "@/lib/format";
 import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
 
@@ -63,12 +65,17 @@ function Toggle({ active, onToggle }: ToggleProps) {
   useEffect(() => {
     if (!knobRef.current) return;
     const targetX = active ? 16 : 0;
-    animate(knobRef.current, { x: targetX }, springs.toggle);
+    // Knob slides on spring (physical motion).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (animate as any)(knobRef.current, { x: targetX }, { ...springs.toggle, ...getReducedMotionOverride() });
     if (trackRef.current) {
-      animate(
+      // Track color uses duration + ease — color has no mass, springs are
+      // physically meaningless for it and can read as a lagging overshoot.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (animate as any)(
         trackRef.current,
         { backgroundColor: active ? "var(--color-accent)" : "var(--color-text-ghost)" },
-        springs.toggle
+        { ...durations.exit, ...getReducedMotionOverride() },
       );
     }
   }, [active]);
@@ -221,7 +228,21 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
   const prevHeightRef = useRef<number | null>(null);
   const toggleBtnRef = useRef<HTMLButtonElement>(null);
   const [paidExpanded, setPaidExpanded] = useState(false);
-  const [displayedAmount, setDisplayedAmount] = useState(0);
+  /** Flipped true when the card's entrance has played, which also unlocks
+   *  useCountUp to begin counting from 0 → target. */
+  const [entranceReady, setEntranceReady] = useState(false);
+
+  // The amount text content is owned by useCountUp. When `entranceReady`
+  // flips true, the hook animates 0 → forecast.total_remaining with the
+  // shared count duration + easing. Later forecast updates animate from
+  // the previous displayed value to the new target automatically.
+  const amountRef = useCountUp<HTMLSpanElement>(
+    forecast.total_remaining,
+    (v) => formatMoney(v),
+    { enabled: entranceReady, duration: 0.9, delay: 0.15, ease: [0.16, 1, 0.3, 1] },
+  );
+
+  const toggleExpandPress = usePressScale<HTMLButtonElement>(0.98);
 
   // Pin inner-element hidden state BEFORE first paint so nothing flashes at
   // its final value between render and the JS-driven animation kickoff.
@@ -239,11 +260,6 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
     }
   }, []);
 
-  // Keep the latest forecast accessible from inside the one-shot entrance
-  // callback below without re-running the entrance on every data update.
-  const forecastRef = useRef(forecast);
-  forecastRef.current = forecast;
-
   // Chained entrance: card fade+rise → number count-up → row stagger → toggle
   // fade. Piggybacks on `useEntrance` so it waits for any pending tab
   // transition + the shared MOUNT_DELAY — same cadence as other screens.
@@ -254,30 +270,20 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ANIM = animate as any;
 
-    // 1. Card fade + rise.
+    // 1. Card fade + rise — durations.soft is the shared easeOutQuart used
+    //    for chunky content reveals.
     ANIM(
       cardRef.current,
       { opacity: [0, 1], y: [10, 0] },
-      { duration: 0.4, ease: [0.22, 1, 0.36, 1] }
+      { ...durations.soft, ...getReducedMotionOverride() },
     );
 
-    // 2. Number count-up — starts as the card is rising.
-    const target = forecastRef.current.total_remaining;
-    if (target > 0) {
-      ANIM(0, target, {
-        duration: 0.9,
-        delay: 0.15,
-        ease: [0.16, 1, 0.3, 1],
-        onUpdate: (v: number) => setDisplayedAmount(v),
-        onComplete: () => setDisplayedAmount(target),
-      });
-    } else {
-      setDisplayedAmount(0);
-    }
+    // 2. Unlock count-up (useCountUp runs on the next render with the shared
+    //    0.15s delay baked in).
+    setEntranceReady(true);
 
     // 3. Row stagger — begins after the count-up has visually landed.
     const ROW_START = 0.6;
-    const ROW_STAGGER = 0.05;
     let rowCount = 0;
     if (listRef.current) {
       const rows = Array.from(
@@ -288,27 +294,26 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
         ANIM(
           row,
           { opacity: [0, 1], y: [6, 0] },
-          { duration: 0.35, delay: ROW_START + i * ROW_STAGGER, ease: [0.22, 1, 0.36, 1] }
+          {
+            duration: 0.35,
+            delay: ROW_START + i * stagger.pill,
+            ease: [0.22, 1, 0.36, 1],
+            ...getReducedMotionOverride(),
+          },
         );
       });
     }
 
     // 4. Toggle button tails the rows.
     if (toggleBtnRef.current) {
-      const delay = ROW_START + rowCount * ROW_STAGGER + 0.05;
+      const delay = ROW_START + rowCount * stagger.pill + 0.05;
       ANIM(
         toggleBtnRef.current,
         { opacity: [0, 1] },
-        { duration: 0.3, delay, ease: [0.22, 1, 0.36, 1] }
+        { duration: 0.3, delay, ease: [0.22, 1, 0.36, 1], ...getReducedMotionOverride() },
       );
     }
   });
-
-  // After the entrance has played, keep the displayed amount in sync with
-  // forecast updates (sync, live-query data refreshes, etc.).
-  useEffect(() => {
-    if (hasAnimatedRef.current) setDisplayedAmount(forecast.total_remaining);
-  }, [forecast.total_remaining]);
 
   // Height animation on expand/collapse. Measure-before-commit pattern so the
   // row list smoothly transitions between compact and full views.
@@ -375,7 +380,7 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
           marginBottom: 4,
         }}
       >
-        EUR {formatMoney(Math.round(displayedAmount))}
+        EUR <span ref={amountRef}>{formatMoney(0)}</span>
       </p>
       <p
         style={{
@@ -409,7 +414,13 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
           </div>
           {hasPaid && (
             <button
-              ref={toggleBtnRef}
+              ref={(el) => {
+                toggleBtnRef.current = el;
+                (toggleExpandPress.ref as { current: HTMLButtonElement | null }).current = el;
+              }}
+              onPointerDown={toggleExpandPress.onPointerDown}
+              onPointerUp={toggleExpandPress.onPointerUp}
+              onPointerCancel={toggleExpandPress.onPointerCancel}
               onClick={togglePaid}
               class="w-full text-left bg-transparent border-0 cursor-pointer"
               style={{
@@ -464,12 +475,18 @@ function TemplateRow({
   const IconComponent = categoryIcons[template.category_icon ?? ""] ?? null;
   const color = template.category_color ?? "var(--color-accent)";
   const label = template.note || template.subcategory_name || template.category_name || "—";
+  const press = usePressScale<HTMLButtonElement>(0.97);
 
   return (
     <button
+      ref={press.ref}
+      onPointerDown={press.onPointerDown}
+      onPointerUp={press.onPointerUp}
+      onPointerCancel={press.onPointerCancel}
       data-row
       onClick={onTap}
       class="flex items-center gap-3 w-full text-left px-1 py-2.5 cursor-pointer bg-transparent border-0"
+      style={{ WebkitTapHighlightColor: "transparent" }}
     >
       {/* Icon + text — animated together */}
       <div data-row-text class="flex items-center gap-3 flex-1 min-w-0">
@@ -506,6 +523,7 @@ export default function RecurringScreen() {
   const { route } = useLocation();
   const forecast = useForecast();
   const screenRef = useRef<HTMLDivElement>(null);
+  const fabPress = usePressScale<HTMLButtonElement>(0.95);
 
   const allTemplates = useLiveQuery(() => db.recurring_templates.toArray(), []);
 
@@ -616,6 +634,10 @@ export default function RecurringScreen() {
           the button hovers over the existing bottom padding without pushing
           layout down further. */}
       <button
+        ref={fabPress.ref}
+        onPointerDown={fabPress.onPointerDown}
+        onPointerUp={fabPress.onPointerUp}
+        onPointerCancel={fabPress.onPointerCancel}
         onClick={() => route("/recurring/new")}
         class="sticky self-end z-30 flex items-center justify-center rounded-full cursor-pointer border-0"
         style={{
@@ -627,6 +649,7 @@ export default function RecurringScreen() {
           backgroundColor: "var(--color-accent)",
           color: "var(--color-bg-primary)",
           boxShadow: "0 6px 20px rgba(0,0,0,0.5), 0 0 0 1px rgba(108,156,255,0.35)",
+          WebkitTapHighlightColor: "transparent",
         }}
         aria-label="Add recurring expense"
       >

@@ -1,11 +1,8 @@
 import { useEffect, useRef } from "preact/hooks";
 import { animate } from "motion";
-import { springs } from "@/lib/animations";
+import { springs, stagger, MOUNT_DELAY_MS, getReducedMotionOverride, shouldReduceMotion } from "@/lib/animations";
 import { transitionDone } from "@/lib/transitions";
 
-const MOUNT_DELAY = 80; // ms after mount/transition before entrance starts
-const TEXT_STAGGER = 30; // ms between row text animations
-const AMOUNT_STAGGER = 20; // ms between row amount animations
 const MAX_ANIMATED_ROWS = 15; // only animate above-the-fold
 
 /**
@@ -27,15 +24,16 @@ export function useEntrance(
       if (cleanup) cancelRef.current = cleanup;
     }
 
+    const mountDelay = shouldReduceMotion() ? 0 : MOUNT_DELAY_MS;
     const pending = transitionDone.value;
     if (pending) {
       pending.then(() => {
         if (cancelled) return;
-        const timer = setTimeout(run, MOUNT_DELAY);
+        const timer = setTimeout(run, mountDelay);
         cancelRef.current = () => { clearTimeout(timer); cancelled = true; };
       });
     } else {
-      const timer = setTimeout(run, MOUNT_DELAY);
+      const timer = setTimeout(run, mountDelay);
       cancelRef.current = () => { clearTimeout(timer); cancelled = true; };
     }
 
@@ -76,11 +74,22 @@ export function animateRowEntrance(container: HTMLElement): () => void {
     return () => {};
   }
 
+  // Reduced-motion: reveal without staggered animation.
+  if (shouldReduceMotion()) {
+    for (const row of unrevealed) {
+      row.querySelector<HTMLElement>("[data-row-text]")?.setAttribute("data-revealed", "1");
+      row.querySelector<HTMLElement>("[data-row-amount]")?.setAttribute("data-revealed", "1");
+    }
+    return () => {};
+  }
+
   const anims: { stop: () => void }[] = [];
   const timers: number[] = [];
   const animatedTextEls: HTMLElement[] = [];
   const animatedAmountEls: HTMLElement[] = [];
   const count = Math.min(unrevealed.length, MAX_ANIMATED_ROWS);
+  const textStaggerMs = stagger.text * 1000;
+  const amountStaggerMs = stagger.amount * 1000;
 
   // Phase 1: text slides in from left for the first `count` rows.
   for (let i = 0; i < count; i++) {
@@ -95,7 +104,7 @@ export function animateRowEntrance(container: HTMLElement): () => void {
     const a = (animate as any)(
       textEl,
       { opacity: [0, 1], x: [-20, 0] },
-      { ...springs.snappy, delay: (i * TEXT_STAGGER) / 1000 }
+      { ...springs.snappy, delay: i * stagger.text, ...getReducedMotionOverride() },
     );
     anims.push(a);
   }
@@ -106,14 +115,14 @@ export function animateRowEntrance(container: HTMLElement): () => void {
   }
 
   // Phase 2: amounts fade in after text settles.
-  const textSettleTime = count * TEXT_STAGGER + 200; // ms
+  const textSettleTime = count * textStaggerMs + 200; // ms
   for (let i = 0; i < count; i++) {
     const amountEl = unrevealed[i].querySelector<HTMLElement>("[data-row-amount]");
     if (!amountEl) continue;
     amountEl.style.opacity = "0";
     amountEl.setAttribute("data-revealed", "1");
     animatedAmountEls.push(amountEl);
-    const delay = textSettleTime + i * AMOUNT_STAGGER;
+    const delay = textSettleTime + i * amountStaggerMs;
     const t = window.setTimeout(() => {
       amountEl.style.transition = "opacity 100ms ease";
       amountEl.style.opacity = "1";

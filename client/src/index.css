@@ -128,8 +128,13 @@ body {
   -webkit-overflow-scrolling: touch;
   opacity: 0;
   transition: opacity 250ms ease-out, transform 250ms ease-out;
-  will-change: transform, opacity;
   pointer-events: none;
+}
+
+/* GPU-promote only during in-flight transitions so idle layers don't keep
+   their layer memory reserved. Toggled on by TabTransitionContainer. */
+.transition-layer.transitioning {
+  will-change: transform, opacity;
 }
 
 .transition-layer.active {
@@ -159,4 +164,80 @@ body {
 }
 [data-row-amount]:not([data-revealed]) {
   opacity: 0;
+}
+
+/* ── Add-screen column entrance ──────────────────────────────────────────
+   Wrappers flagged with data-add-reveal stay hidden until the screen's
+   useEntrance marks them [data-revealed]. Same CSS-attribute pattern as
+   rows so Preact re-renders can't clobber back to opacity:0. */
+[data-add-reveal]:not([data-revealed]) {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+/* ── Analytics category bars ─────────────────────────────────────────────
+   Bar fill and amount label are hidden until the CategoryBars effect flips
+   [data-revealed] after first animation. Prevents a 0% flash on re-render. */
+[data-bar-fill]:not([data-revealed]) {
+  width: 0%;
+}
+[data-bar-amount]:not([data-revealed]) {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+/* ── Analytics / TrendChart bars ─────────────────────────────────────────
+   Height is JS-driven; CSS hides the initial state before motion takes over. */
+[data-trend-bar]:not([data-revealed]) {
+  height: 0 !important;
+}
+
+/* ── Login card entrance ───────────────────────────────────────────────── */
+[data-login-card]:not([data-revealed]) {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+/* ── Sync indicator state fade ─────────────────────────────────────────── */
+@keyframes syncIndicatorEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.sync-indicator-enter {
+  animation: syncIndicatorEnter 200ms ease-out;
+}
+
+/* ── Just-saved glow in History ────────────────────────────────────────── */
+@keyframes justSavedGlow {
+  0% {
+    background-color: rgba(108, 156, 255, 0.08);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.just-saved-glow {
+  animation: justSavedGlow 1500ms ease-out forwards;
+  border-radius: 12px;
+}
+
+/* ── Reduced-motion: collapse everything to near-instant ──────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .transition-layer {
+    transition-duration: 0.01s !important;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01s !important;
+    animation-duration: 0.01s !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
 }

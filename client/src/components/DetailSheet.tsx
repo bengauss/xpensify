@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
 import { createPortal } from "preact/compat";
 import { animate } from "motion";
-import { springs } from "@/lib/animations";
+import { springs, durations, getReducedMotionOverride } from "@/lib/animations";
 
 type SheetState = "closed" | "opening" | "open" | "closing";
 
@@ -34,7 +34,7 @@ export function DetailSheet({ open, onClose, children }: DetailSheetProps) {
       const anim = (animate as any)(
         el,
         { y: ["100%", "0%"] },
-        springs.gentle
+        { ...springs.gentle, ...getReducedMotionOverride() },
       );
       anim.then(() => setState("open"));
     } else if (state === "closing" && sheetRef.current) {
@@ -43,7 +43,7 @@ export function DetailSheet({ open, onClose, children }: DetailSheetProps) {
       const anim = (animate as any)(
         el,
         { y: ["0%", "100%"] },
-        { duration: 0.2, ease: "easeOut" }
+        { ...durations.exit, ...getReducedMotionOverride() },
       );
       anim.then(() => {
         setState("closed");

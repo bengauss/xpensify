@@ -9,6 +9,7 @@ import { sync } from "@/sync/engine";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { api } from "@/lib/api";
 import { MONTHS_SHORT } from "@/lib/format";
+import { usePressScale } from "@/lib/usePressScale";
 
 // ── Shared primitives ────────────────────────────────────────────────────────
 
@@ -54,12 +55,14 @@ function Row({
   danger?: boolean;
 }) {
   const tappable = !!onClick;
+  const press = usePressScale<HTMLDivElement>(0.98);
   return (
     <div
+      ref={tappable ? press.ref : undefined}
       onClick={onClick}
-      onPointerDown={tappable ? (e) => { (e.currentTarget as HTMLDivElement).style.opacity = "0.7"; } : undefined}
-      onPointerUp={tappable ? (e) => { (e.currentTarget as HTMLDivElement).style.opacity = ""; } : undefined}
-      onPointerLeave={tappable ? (e) => { (e.currentTarget as HTMLDivElement).style.opacity = ""; } : undefined}
+      onPointerDown={tappable ? press.onPointerDown : undefined}
+      onPointerUp={tappable ? press.onPointerUp : undefined}
+      onPointerCancel={tappable ? press.onPointerCancel : undefined}
       class="flex items-center gap-3"
       style={{
         padding: "12px 16px",
@@ -67,7 +70,6 @@ function Row({
         cursor: tappable ? "pointer" : "default",
         color: danger ? "var(--color-danger)" : "var(--color-text-body)",
         WebkitTapHighlightColor: "transparent",
-        transition: "opacity 120ms ease",
       }}
     >
       {children}
@@ -155,6 +157,8 @@ function PasswordChangeForm({ onDone }: { onDone: () => void }) {
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const savePress = usePressScale<HTMLButtonElement>(0.97);
+  const cancelPress = usePressScale<HTMLButtonElement>(0.97);
 
   async function handleSave() {
     setMsg(""); setError(""); setSaving(true);
@@ -193,17 +197,29 @@ function PasswordChangeForm({ onDone }: { onDone: () => void }) {
       {msg && <p class="text-xs" style={{ color: "#30d158" }}>{msg}</p>}
       <div class="flex gap-2 pt-1">
         <button
+          ref={savePress.ref}
+          onPointerDown={savePress.onPointerDown}
+          onPointerUp={savePress.onPointerUp}
+          onPointerCancel={savePress.onPointerCancel}
           onClick={handleSave}
           disabled={saving || !currentPw || !newPw}
           class="rounded-lg px-4 py-2 text-xs font-medium text-white cursor-pointer border-0"
-          style={{ backgroundColor: "var(--color-accent)", opacity: saving || !currentPw || !newPw ? 0.6 : 1 }}
+          style={{
+            backgroundColor: "var(--color-accent)",
+            opacity: saving || !currentPw || !newPw ? 0.6 : 1,
+            WebkitTapHighlightColor: "transparent",
+          }}
         >
           {saving ? "saving..." : "save"}
         </button>
         <button
+          ref={cancelPress.ref}
+          onPointerDown={cancelPress.onPointerDown}
+          onPointerUp={cancelPress.onPointerUp}
+          onPointerCancel={cancelPress.onPointerCancel}
           onClick={onDone}
           class="rounded-lg px-4 py-2 text-xs cursor-pointer bg-transparent border-0"
-          style={{ color: "var(--color-text-secondary)" }}
+          style={{ color: "var(--color-text-secondary)", WebkitTapHighlightColor: "transparent" }}
         >
           cancel
         </button>

@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from "preact/hooks";
 import { useLocation } from "preact-iso";
+import { animate } from "motion";
 import { login } from "@/lib/auth";
+import { durations, getReducedMotionOverride } from "@/lib/animations";
+import { usePressScale } from "@/lib/usePressScale";
 
 export default function LoginScreen() {
   const { route } = useLocation();
@@ -9,9 +12,25 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const userRef = useRef<HTMLInputElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const submitPress = usePressScale<HTMLButtonElement>(0.97);
 
   useEffect(() => {
     userRef.current?.focus();
+  }, []);
+
+  // First-impression fade-up. Default hidden state lives in CSS
+  // ([data-login-card]) so Preact re-renders can't clobber opacity back to 0.
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (animate as any)(
+      el,
+      { opacity: [0, 1], y: [10, 0] },
+      { ...durations.soft, ...getReducedMotionOverride() },
+    );
+    el.setAttribute("data-revealed", "1");
   }, []);
 
   async function handleSubmit(e: Event) {
@@ -47,7 +66,11 @@ export default function LoginScreen() {
         backgroundColor: "#0c0d12",
       }}
     >
-      <div style={{ width: "100%", maxWidth: 320, display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <div
+        ref={cardRef}
+        data-login-card
+        style={{ width: "100%", maxWidth: 320, display: "flex", flexDirection: "column", alignItems: "center" }}
+      >
         {/* Logo + wordmark */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
@@ -94,11 +117,12 @@ export default function LoginScreen() {
           />
 
           <button
+            ref={submitPress.ref}
             type="submit"
             disabled={loading}
-            onPointerDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.98)"; }}
-            onPointerUp={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = ""; }}
-            onPointerLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = ""; }}
+            onPointerDown={submitPress.onPointerDown}
+            onPointerUp={submitPress.onPointerUp}
+            onPointerCancel={submitPress.onPointerCancel}
             style={{
               marginTop: 24,
               height: 48,
@@ -110,7 +134,7 @@ export default function LoginScreen() {
               border: 0,
               cursor: loading ? "default" : "pointer",
               opacity: loading ? 0.7 : 1,
-              transition: "transform 120ms ease, opacity 150ms ease",
+              transition: "opacity 150ms ease",
               WebkitTapHighlightColor: "transparent",
             }}
           >

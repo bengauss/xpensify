@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "preact/hooks";
 import { animate } from "motion";
-import { springs } from "@/lib/animations";
+import { springs, durations, getReducedMotionOverride } from "@/lib/animations";
 
 interface ToastProps {
   message: string;
@@ -22,7 +22,12 @@ export function Toast({ message, visible, onDone }: ToastProps) {
     el.style.transition = "none";
 
     // Spring slide UP from below
-    animate(el, { y: [20, 0], opacity: [0, 1] }, springs.gentle);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (animate as any)(
+      el,
+      { y: [20, 0], opacity: [0, 1] },
+      { ...springs.gentle, ...getReducedMotionOverride() },
+    );
 
     if (dismissTimer.current !== null) {
       clearTimeout(dismissTimer.current);
@@ -31,10 +36,12 @@ export function Toast({ message, visible, onDone }: ToastProps) {
     // Auto-dismiss after 1.5 s — bottom position is less intrusive so keep it short
     dismissTimer.current = setTimeout(() => {
       if (!toastRef.current) return;
-      toastRef.current.style.transition = "opacity 150ms ease";
+      // Use shared exit duration (see durations.exit); hyphenated CSS keyword.
+      const exitMs = Math.round(durations.exit.duration * 1000);
+      toastRef.current.style.transition = `opacity ${exitMs}ms ease-out`;
       toastRef.current.style.opacity = "0";
 
-      setTimeout(onDone, 150);
+      setTimeout(onDone, exitMs);
     }, 1500);
 
     return () => {
