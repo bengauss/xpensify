@@ -28,7 +28,13 @@ export function CategoryBars({
   const activeAnims = useRef<{ stop: () => void }[]>([]);
   const fadeTimers = useRef<number[]>([]);
 
-  const animatedIdsRef = useRef(new Set<string>());
+  // Two sets because bar reveal and amount reveal are separately cancellable:
+  // bar width animates synchronously, but amount fade is a deferred setTimeout.
+  // If a fast month switch cancels the pending fade before it fires, the
+  // category must stay "unrevealed" on the amount side so the next effect run
+  // re-schedules it — otherwise the amount stays stuck at CSS opacity:0.
+  const barAnimatedIdsRef = useRef(new Set<string>());
+  const amountRevealedIdsRef = useRef(new Set<string>());
   const dataSigRef = useRef<string>("");
 
   const canCollapse = breakdown.length > maxCollapsed;
@@ -78,9 +84,11 @@ export function CategoryBars({
       activeAnims.current = [];
     }
 
-    let newCategoryIdx = 0;
-    const newCategoryCount = items.filter((it) => !animatedIdsRef.current.has(it.category_id)).length;
-    const barsSettleBase = newCategoryCount * 30 + 350;
+    let newBarIdx = 0;
+    let newAmountIdx = 0;
+    const newBarCount = items.filter((it) => !barAnimatedIdsRef.current.has(it.category_id)).length;
+    const newAmountCount = items.filter((it) => !amountRevealedIdsRef.current.has(it.category_id)).length;
+    const barsSettleBase = newBarCount * 30 + 350;
     const amountStaggerMs = 40;
 
     for (let index = 0; index < items.length; index++) {
@@ -88,16 +96,17 @@ export function CategoryBars({
       const bar = barRefs.current[index];
       const amt = amountRefs.current[index];
       const targetPct = maxTotal > 0 ? (item.total / maxTotal) * 100 : 0;
-      const firstTime = !animatedIdsRef.current.has(item.category_id);
+      const barFirstTime = !barAnimatedIdsRef.current.has(item.category_id);
+      const amountFirstTime = !amountRevealedIdsRef.current.has(item.category_id);
 
       if (bar) {
-        if (firstTime) {
+        if (barFirstTime) {
           bar.setAttribute("data-revealed", "1");
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const anim = (animate as any)(
             bar,
             { width: ["0%", `${targetPct}%`] },
-            { ...springs.data, delay: newCategoryIdx * stagger.bar, ...getReducedMotionOverride() },
+            { ...springs.data, delay: newBarIdx * stagger.bar, ...getReducedMotionOverride() },
           );
           activeAnims.current.push(anim);
         } else {
@@ -113,23 +122,30 @@ export function CategoryBars({
         }
       }
 
-      if (amt && firstTime) {
+      if (amt && amountFirstTime) {
         // Amount stagger is intentionally reversed (top row fades last) as a
-        // design choice — see animation review #9.
-        const reverseIndex = newCategoryCount - 1 - newCategoryIdx;
-        const delay = barsSettleBase + reverseIndex * amountStaggerMs;
+        // design choice — see animation review #9. Only wait for bars to settle
+        // when they're actually animating in fresh; otherwise fade in promptly.
+        const reverseIndex = newAmountCount - 1 - newAmountIdx;
+        const baseDelay = barFirstTime ? barsSettleBase : 0;
+        const delay = baseDelay + reverseIndex * amountStaggerMs;
+        const categoryId = item.category_id;
         const timer = window.setTimeout(() => {
           amt.style.transition = "opacity 200ms ease-out, transform 200ms ease-out";
           amt.style.opacity = "1";
           amt.style.transform = "translateY(0)";
           amt.setAttribute("data-revealed", "1");
+          amountRevealedIdsRef.current.add(categoryId);
         }, delay);
         fadeTimers.current.push(timer);
       }
 
-      if (firstTime) {
-        animatedIdsRef.current.add(item.category_id);
-        newCategoryIdx++;
+      if (barFirstTime) {
+        barAnimatedIdsRef.current.add(item.category_id);
+        newBarIdx++;
+      }
+      if (amountFirstTime) {
+        newAmountIdx++;
       }
     }
 
