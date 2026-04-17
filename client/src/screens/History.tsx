@@ -250,8 +250,18 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
         <div class="flex items-center gap-1.5 flex-wrap">
           <span class="text-base">
             <span style={{ color: "var(--color-text-secondary)" }}>{category?.name ?? "other"}</span>
-            <span style={{ color: "var(--color-text-muted)" }}> · </span>
-            <span class="font-medium" style={{ color: "var(--color-text-body)" }}>{subcategory?.name ?? "expense"}</span>
+            {subcategory && subcategory.name.toLowerCase() !== (category?.name ?? "").toLowerCase() && (
+              <>
+                <span style={{ color: "var(--color-text-muted)" }}> · </span>
+                <span class="font-medium" style={{ color: "var(--color-text-body)" }}>{subcategory.name}</span>
+              </>
+            )}
+            {!subcategory && (
+              <>
+                <span style={{ color: "var(--color-text-muted)" }}> · </span>
+                <span class="font-medium" style={{ color: "var(--color-text-body)" }}>expense</span>
+              </>
+            )}
           </span>
           {isRecurring && (
             <span
