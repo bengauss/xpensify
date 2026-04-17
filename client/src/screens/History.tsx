@@ -78,12 +78,12 @@ function groupByDay(expenses: Expense[]): DayGroup[] {
   const keys = Array.from(map.keys()).sort((a, b) => b.localeCompare(a));
   return keys.map((dateKey) => {
     const items = map.get(dateKey)!;
-    // Recurring expenses always pin to the top of their day, then manual
-    // entries sort by timestamp descending (most recent first).
+    // Manual entries come first in timestamp-descending order; recurring
+    // entries always fall to the bottom of their day.
     items.sort((a, b) => {
       const aRec = a.source === "recurring" ? 1 : 0;
       const bRec = b.source === "recurring" ? 1 : 0;
-      if (aRec !== bRec) return bRec - aRec;
+      if (aRec !== bRec) return aRec - bRec;
       return b.timestamp.localeCompare(a.timestamp);
     });
     const total = items.reduce((s, e) => s + e.amount, 0);
