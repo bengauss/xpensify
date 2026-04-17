@@ -289,26 +289,25 @@ export function AddScreen() {
         data-add-reveal
         class="flex items-center justify-between px-1"
       >
-        {/* Date — tappable to open picker; "editing · …" prefix in edit mode.
-            No press-scale here on purpose — see comment next to the refs. */}
-        <div class="relative">
-          <button
-            onClick={() => dateInputRef.current?.showPicker()}
-            class="text-xs bg-transparent border-0 cursor-pointer p-0"
-            style={{ color: isEditing ? "var(--color-text-secondary)" : "var(--color-text-tertiary)" }}
-          >
-            {isEditing ? `editing · ${dateLabel}` : dateLabel}
-          </button>
+        {/* Date — tappable to open native picker. Uses <label> wrapping the
+            input so the tap lands on the input itself: iOS Safari opens the
+            date picker natively on input click, avoiding the fragile JS
+            `showPicker()` + user-activation chain that has regressed twice. */}
+        <label
+          class="relative inline-block text-xs cursor-pointer"
+          style={{ color: isEditing ? "var(--color-text-secondary)" : "var(--color-text-tertiary)" }}
+        >
+          {isEditing ? `editing · ${dateLabel}` : dateLabel}
           <input
             ref={dateInputRef}
             type="date"
             value={dateStr}
             onInput={(e) => setDateStr((e.target as HTMLInputElement).value)}
-            class="absolute inset-0 opacity-0 pointer-events-none"
-            tabIndex={-1}
+            class="absolute inset-0 opacity-0 cursor-pointer"
+            aria-label="change date"
             style={{ colorScheme: "dark" }}
           />
-        </div>
+        </label>
 
         {/* Discretionary spend counter — hidden in edit mode */}
         {!isEditing && disc && (
