@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "preact/hooks";
+import { useState, useMemo, useRef, useEffect, useLayoutEffect } from "preact/hooks";
 import { useLocation } from "preact-iso";
 import { db } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -289,7 +289,10 @@ export default function AnalyticsScreen() {
       : `L2:${drill.categoryId}`
     : "L1";
 
-  useEffect(() => {
+  // useLayoutEffect: the "from" state must commit before paint — with useEffect
+  // the browser paints one frame of new content at opacity:1, transform:0
+  // before the hide fires, which shows as a flash + snap on every drill change.
+  useLayoutEffect(() => {
     if (prevDrillKeyRef.current === drillKey) return;
     const oldLevel = prevLevelRef.current;
     const newLevel = drillLevel;
@@ -307,7 +310,6 @@ export default function AnalyticsScreen() {
     } else {
       el.style.transform = "translateX(0)";
     }
-    // Force reflow so the "from" state commits before the transition runs.
     void el.offsetHeight;
     el.style.transition = "opacity 200ms ease, transform 200ms ease";
     el.style.opacity = "1";
@@ -468,17 +470,29 @@ export default function AnalyticsScreen() {
         </button>
       </div>
 
-      {/* Back / breadcrumb row — only in drill levels. Slide-in from left. */}
-      <BackRow
-        visible={drillLevel > 1}
-        crumb={crumb}
-        color={drillColor}
-        onBack={handleBack}
-      />
-
       {/* Content — crossfades on drill change */}
       {analytics && (
         <div ref={contentRef} class="flex flex-col gap-4">
+          {/* Back / breadcrumb row — lives inside contentRef so its mount/
+              unmount layout shift happens while the wrapper is at opacity:0,
+              not during the fade-in. */}
+          {drillLevel > 1 && (
+            <button
+              onClick={handleBack}
+              class="flex items-center gap-2 self-start bg-transparent border-0 cursor-pointer"
+              style={{
+                fontSize: 14,
+                fontWeight: 500,
+                color: drillColor,
+                padding: "2px 4px 2px 0",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              <span aria-hidden="true">←</span>
+              <span>{crumb}</span>
+            </button>
+          )}
+
           {/* Summary cards */}
           <div class="flex gap-3">
             <div
@@ -611,71 +625,3 @@ export default function AnalyticsScreen() {
   );
 }
 
-// ── Back / breadcrumb row ─────────────────────────────────────────────────────
-
-interface BackRowProps {
-  visible: boolean;
-  crumb: string;
-  color: string;
-  onBack: () => void;
-}
-
-function BackRow({ visible, crumb, color, onBack }: BackRowProps) {
-  const rowRef = useRef<HTMLDivElement>(null);
-  // mounted lags `visible` so the exit animation can play before unmount.
-  const [mounted, setMounted] = useState(visible);
-  const [shown, setShown] = useState(visible);
-  const lastCrumb = useRef(crumb);
-  const lastColor = useRef(color);
-
-  // Keep last-rendered crumb/color so the exit animation shows them while
-  // parent state has already transitioned to the next level.
-  if (visible) {
-    lastCrumb.current = crumb;
-    lastColor.current = color;
-  }
-
-  useEffect(() => {
-    if (visible) {
-      setMounted(true);
-      // Next frame, trigger the slide-in
-      requestAnimationFrame(() => setShown(true));
-    } else if (mounted) {
-      setShown(false);
-      const t = setTimeout(() => setMounted(false), 180);
-      return () => clearTimeout(t);
-    }
-  }, [visible]);
-
-  if (!mounted) return null;
-
-  const displayCrumb = visible ? crumb : lastCrumb.current;
-  const displayColor = visible ? color : lastColor.current;
-
-  return (
-    <div
-      ref={rowRef}
-      class="flex items-center justify-between"
-      style={{
-        opacity: shown ? 1 : 0,
-        transform: shown ? "translateX(0)" : "translateX(-12px)",
-        transition: "opacity 180ms ease, transform 180ms ease",
-      }}
-    >
-      <button
-        onClick={onBack}
-        class="flex items-center gap-2 bg-transparent border-0 cursor-pointer"
-        style={{
-          fontSize: 14,
-          fontWeight: 500,
-          color: displayColor,
-          padding: "2px 4px 2px 0",
-          WebkitTapHighlightColor: "transparent",
-        }}
-      >
-        <span aria-hidden="true">←</span>
-        <span>{displayCrumb}</span>
-      </button>
-    </div>
-  );
-}
