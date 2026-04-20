@@ -351,8 +351,6 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
   const [note, setNote] = useState(expense.note ?? "");
   const [expenseDateKey, setExpenseDateKey] = useState(toDateKey(expense.timestamp));
 
-  const dateInputRef = useRef<HTMLInputElement>(null);
-
   async function persist(partial: Partial<Expense>) {
     await db.expenses.update(expense.id, {
       ...partial,
@@ -386,18 +384,6 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
   }
 
   // Date edit — preserve the time-of-day portion so within-day ordering survives.
-  function openDatePicker() {
-    const el = dateInputRef.current;
-    if (!el) return;
-    type PickerInput = HTMLInputElement & { showPicker?: () => void };
-    const picker = el as PickerInput;
-    if (typeof picker.showPicker === "function") {
-      picker.showPicker();
-    } else {
-      el.focus();
-      el.click();
-    }
-  }
   function commitDate(newKey: string) {
     if (!newKey || newKey === expenseDateKey) return;
     const timePart = expense.timestamp.split("T")[1] ?? "12:00:00.000Z";
@@ -476,26 +462,25 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
         class="flex flex-col gap-0 rounded-xl overflow-hidden"
         style={{ backgroundColor: "rgba(255,255,255,0.04)" }}
       >
-        {/* Date — tap to open native date picker */}
-        <div
+        {/* Date — <label>-wraps-input so the tap lands on the real input and
+            iOS Safari opens the native picker without a JS showPicker() chain. */}
+        <label
           class="relative flex items-center justify-between px-4 py-3 cursor-pointer"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", WebkitTapHighlightColor: "transparent" }}
-          onClick={openDatePicker}
         >
           <span class="text-sm" style={{ color: "var(--color-text-secondary)" }}>date</span>
           <span class="text-sm" style={{ color: "var(--color-text-primary)" }}>
             {formatFullDate(expenseDateKey)}
           </span>
           <input
-            ref={dateInputRef}
             type="date"
             value={expenseDateKey}
-            onChange={(e) => commitDate((e.target as HTMLInputElement).value)}
-            class="absolute inset-0 opacity-0 pointer-events-none"
-            tabIndex={-1}
-            aria-hidden="true"
+            onInput={(e) => commitDate((e.target as HTMLInputElement).value)}
+            class="absolute inset-0 opacity-0 cursor-pointer"
+            aria-label="change date"
+            style={{ colorScheme: "dark" }}
           />
-        </div>
+        </label>
 
         {/* Note — always rendered as an input so first tap focuses it */}
         <div
