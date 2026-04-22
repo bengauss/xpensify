@@ -23,7 +23,11 @@ End users run this as an installed PWA in **iOS Safari** on **iPhone 15 Pro Max*
 - **Tailwind CSS v4** — no `tailwind.config.ts` or `postcss.config.js`. All tokens defined in `@theme` block in `client/src/index.css`. Uses `@tailwindcss/vite` plugin. Color utilities: `--color-bg-surface` → class `bg-bg-surface` (NOT `bg-surface`).
 - **Hono RPC** for type-safe API calls. Server exports `AppType`, client imports it via `@server/*` path alias (type-only, stripped at compile time). Calls with path params + JSON body (PATCH/DELETE on `/:id`) trip TS overload resolution — cast with `as any` (see `SettingsCategories.tsx`, `RecurringForm.tsx`, `Recurring.tsx`). Annoying but tolerated.
 - **Dexie liveQuery** for reactive IndexedDB reads in UI components.
-- **Preact Signals** for state management, **preact-iso** for routing. Cross-component signals (`editingExpense`, `historyFilter`, `analyticsDrilldown`, `syncStatus`, `currentUser`, `pendingDirection`, `transitionDone`, `isTransitioning`) live next to the feature that owns them — no central store.
+- **Preact Signals** for state management, **preact-iso** for routing. Cross-component signals live in `src/lib/` or `src/sync/`, not a central store — each next to the helper module that owns its semantics:
+  - `currentUser` → `lib/auth.ts`; `syncStatus` → `sync/status.ts`
+  - `editingExpense` → `lib/editing.ts`; `historyFilter` → `lib/filters.ts`; `analyticsDrilldown` → `lib/analyticsDrilldown.ts`
+  - `pendingDirection`, `transitionDone`, `isTransitioning` → `lib/transitions.ts`
+  - `authChecked` is a private signal local to `app.tsx`.
 - **motion** library (motion.dev) v12 — vanilla JS `animate()` only, NOT the React wrapper. Shared spring presets in `client/src/lib/animations.ts`. TypeScript overloads are finicky:
   - Use `(animate as any)(...)` for function-callback animations and any call that trips the overload resolver.
   - Use explicit keyframe arrays like `{ opacity: [0, 1], x: [-20, 0] }` to pin the starting value — otherwise motion reads `getComputedStyle` at t=0 and inherits whatever the element currently shows.
@@ -60,6 +64,11 @@ docker compose up -d --build  # Build and start
 npx tsx scripts/import-csv.ts --dry-run /path/to/expenses.csv  # Preview
 npx tsx scripts/import-csv.ts /path/to/expenses.csv             # Import
 # Aliases: baby→charlie, health→medical. Defaults user to "alice".
+```
+
+### PWA Icons
+```bash
+npx tsx scripts/generate-icons.ts  # Regenerates 192/512 PWA icons + 180 apple-touch-icon via sharp into client/public/icons/
 ```
 
 ## Path Aliases
@@ -117,12 +126,12 @@ All mounted under `/api/*`, guarded by `csrfMiddleware` (Origin check) + `noStor
 
 ## Cron Jobs
 
-All defined in `server/src/index.ts` via `node-cron`. Server local time.
+Schedules wired up in `server/src/index.ts` via `node-cron` (server local time). Job bodies live in `server/src/jobs/`:
 
-- `5 0 * * *` — `processRecurringTemplates()` generates any due expenses for active recurring templates (catch-up loop handles missed days). Also runs once on server startup.
-- `0 3 * * *` — `sweepExpiredSessions()` deletes expired session rows. Runs on startup too.
-- `0 21 * * *` — `sendDailyReminders()` pushes a reminder to users who opted in and have 0 expenses logged today. **Note:** fires at a fixed 21:00; the per-user `daily_reminder_time` pref in the DB is currently not applied.
-- `0 9 * * *` — `sendWeeklySummaries()` pushes weekly totals to users whose `weekly_summary_day` matches today. `weekly_summary_time` pref is similarly unused.
+- `5 0 * * *` — `processRecurringTemplates()` (`jobs/recurring.ts`) generates any due expenses for active recurring templates (catch-up loop handles missed days). Also runs once on server startup.
+- `0 3 * * *` — `sweepExpiredSessions(db)` (`jobs/sessions.ts`) deletes expired session rows. Runs on startup too.
+- `0 21 * * *` — `sendDailyReminders()` (`jobs/notifications.ts`) pushes a reminder to users who opted in and have 0 expenses logged today. **Note:** fires at a fixed 21:00; the per-user `daily_reminder_time` pref in the DB is currently not applied.
+- `0 9 * * *` — `sendWeeklySummaries()` (`jobs/notifications.ts`) pushes weekly totals to users whose `weekly_summary_day` matches today. `weekly_summary_time` pref is similarly unused. The summary sums all users' non-recurring expenses since the start of the current week — it's a household total, not per-user.
 
 Expired/dead push subscriptions (404 or 410 from the push service) are auto-pruned inside `sendToUser`.
 
@@ -185,6 +194,8 @@ Recurring templates are fetched in a separate `GET /api/recurring` call at the e
 
 `push` event: parses payload JSON and calls `showNotification(title, { body, icon })`. `notificationclick` focuses an existing tab or opens a new one.
 
+Build is wired up through `vite-plugin-pwa` in `strategies: "injectManifest"` mode (`vite.config.ts`) — the plugin compiles `src/sw.ts` and injects the precache manifest at `self.__WB_MANIFEST`. `injectRegister: false` and `manifest: false` because the app registers the SW manually and ships its own `public/manifest.json`. `devOptions.enabled: false` keeps the SW out of the dev server so Vite HMR isn't fighting it.
+
 ## Docker Build
 
 Three stages in `Dockerfile`:
@@ -198,6 +209,7 @@ Three stages in `Dockerfile`:
 
 - Dockerfile header is `# syntax=docker/dockerfile:1.7` so BuildKit cache-mount syntax works. Every `npm ci` uses `--mount=type=cache,target=/root/.npm,sharing=locked` plus `--prefer-offline --no-audit --no-fund`. A `package-lock.json` bump still busts the layer, but npm's on-disk cache survives, so the re-install copies from disk instead of re-downloading from the registry.
 - Cold build on the VPS is ~40s; fully cached rebuild is ~1s. The single largest step is client `tsc && vite build` (~16s).
+- `rollup-plugin-visualizer` emits `client/dist/bundle-stats.html` (treemap, gzip sizes) on every production build. Manual chunks split `motion` and `dexie` out of the main bundle (see `vite.config.ts`).
 - The VPS runs a **weekly Docker prune** via root's crontab: `0 4 * * 0 docker buildx prune -f --keep-storage 5GB && docker image prune -af --filter "until=168h"`, logged to `./data/docker-prune.log`. The original trigger was disk pressure (85% full) from 84 GB of accumulated buildx cache silently slowing overlay2 writes. Don't remove this cron without replacing it — the cache grows unbounded otherwise.
 
 ## Gotchas
