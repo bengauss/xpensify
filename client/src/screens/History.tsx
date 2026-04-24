@@ -349,6 +349,7 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
   const [amountCents, setAmountCents] = useState(expense.amount);
   const [amountText, setAmountText] = useState(formatCents(expense.amount));
   const [note, setNote] = useState(expense.note ?? "");
+  const [committedNote, setCommittedNote] = useState<string | null>(expense.note ?? null);
   const [expenseDateKey, setExpenseDateKey] = useState(toDateKey(expense.timestamp));
 
   async function persist(partial: Partial<Expense>) {
@@ -377,9 +378,9 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
   function commitNote(next: string) {
     const trimmed = next.trim();
     const newVal: string | null = trimmed === "" ? null : trimmed;
-    const curVal: string | null = note === "" ? null : note;
     setNote(trimmed);
-    if (newVal === curVal) return;
+    if (newVal === committedNote) return;
+    setCommittedNote(newVal);
     persist({ note: newVal });
   }
 
