@@ -86,13 +86,17 @@ cron.schedule("0 21 * * *", () => {
   }
 });
 
-// Weekly summary push at 9 AM every day (the job filters by each user's configured day)
-cron.schedule("0 9 * * *", () => {
-  try {
-    sendWeeklySummaries();
-  } catch (err) {
-    console.error("[notifications] Weekly summary cron failed:", err);
-  }
-});
+// Weekly summary push at 9 PM Vienna time, every day (the job filters by each user's configured day)
+cron.schedule(
+  "0 21 * * *",
+  () => {
+    try {
+      sendWeeklySummaries();
+    } catch (err) {
+      console.error("[notifications] Weekly summary cron failed:", err);
+    }
+  },
+  { timezone: "Europe/Vienna" }
+);
 
 export type AppType = typeof app;

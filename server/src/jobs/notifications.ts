@@ -115,9 +115,11 @@ export function sendWeeklySummaries(): void {
     )
     .all(todayDay) as Array<{ user_id: string; weekly_summary_day: number }>;
 
-  // Sum the previous 7 days (the just-completed week).
-  const start = new Date();
-  start.setDate(start.getDate() - 7);
+  // Sum from this week's Monday 00:00 (UTC) through now.
+  const now = new Date();
+  const daysSinceMonday = (now.getUTCDay() + 6) % 7;
+  const start = new Date(now);
+  start.setUTCDate(now.getUTCDate() - daysSinceMonday);
   const weekStart = start.toISOString().split("T")[0];
 
   const row = db

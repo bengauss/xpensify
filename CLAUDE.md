@@ -131,7 +131,7 @@ Schedules wired up in `server/src/index.ts` via `node-cron` (server local time).
 - `5 0 * * *` — `processRecurringTemplates()` (`jobs/recurring.ts`) generates any due expenses for active recurring templates (catch-up loop handles missed days). Also runs once on server startup.
 - `0 3 * * *` — `sweepExpiredSessions(db)` (`jobs/sessions.ts`) deletes expired session rows. Runs on startup too.
 - `0 21 * * *` — `sendDailyReminders()` (`jobs/notifications.ts`) pushes a reminder to users who opted in and have 0 expenses logged today. **Note:** fires at a fixed 21:00; the per-user `daily_reminder_time` pref in the DB is currently not applied.
-- `0 9 * * *` — `sendWeeklySummaries()` (`jobs/notifications.ts`) pushes weekly totals to users whose `weekly_summary_day` matches today. `weekly_summary_time` pref is similarly unused. The summary sums all users' non-recurring expenses since the start of the current week — it's a household total, not per-user.
+- `0 21 * * *` (Europe/Vienna) — `sendWeeklySummaries()` (`jobs/notifications.ts`) pushes weekly totals to users whose `weekly_summary_day` matches today. `weekly_summary_time` pref is similarly unused. Sums all users' non-recurring expenses from this week's Monday 00:00 UTC through now — household total. With the default Sunday day, that's the full Mon–Sun window through 21:00 Vienna.
 
 Expired/dead push subscriptions (404 or 410 from the push service) are auto-pruned inside `sendToUser`.
 
