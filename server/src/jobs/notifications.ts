@@ -115,11 +115,10 @@ export function sendWeeklySummaries(): void {
     )
     .all(todayDay) as Array<{ user_id: string; weekly_summary_day: number }>;
 
-  // Get the start of the current week (Sunday)
-  const now = new Date();
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - now.getDay());
-  const weekStart = startOfWeek.toISOString().split("T")[0];
+  // Sum the previous 7 days (the just-completed week).
+  const start = new Date();
+  start.setDate(start.getDate() - 7);
+  const weekStart = start.toISOString().split("T")[0];
 
   const row = db
     .prepare(
@@ -134,7 +133,7 @@ export function sendWeeklySummaries(): void {
 
   for (const { user_id } of users) {
     sendToUser(user_id, {
-      title: "xpensify weekly summary",
+      title: "Weekly summary",
       body: `€${totalFormatted} spent on discretionary expenses this week.`,
     }).catch((err) =>
       console.error(`[notifications] sendWeeklySummaries error for ${user_id}:`, err)
