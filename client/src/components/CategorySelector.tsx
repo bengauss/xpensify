@@ -203,7 +203,33 @@ export function CategorySelector({
       pendingCleanupRef.current?.();
 
       let cancelled = false;
-      pendingCleanupRef.current = () => { cancelled = true; };
+
+      // Start the pill cascade as soon as the grid cards have mostly faded —
+      // don't wait for the full icon FLIP spring to settle (~400ms), so the
+      // first pill is tappable ~250ms sooner. Layout cleanup (display:none on
+      // grid + releasing the selected overlay) still waits for the icon to
+      // land, since releasing the overlay mid-FLIP would shift the icon's
+      // reference frame. The selected section is z-index:10 over the grid, so
+      // pills are on top and tappable even while the grid is still in the DOM.
+      const pillCascadeTimer = window.setTimeout(() => {
+        if (cancelled || !pillsContainer) return;
+        const pills = pillsContainer.querySelectorAll<HTMLElement>("[data-pill]");
+        pills.forEach((pill, i) => {
+          pill.style.opacity = "0";
+          pill.style.transform = "translateY(8px)";
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (animate as any)(
+            pill,
+            { opacity: [0, 1], y: [8, 0] },
+            { ...springs.gentle, delay: i * stagger.pill, ...getReducedMotionOverride() },
+          );
+        });
+      }, 150);
+
+      pendingCleanupRef.current = () => {
+        cancelled = true;
+        clearTimeout(pillCascadeTimer);
+      };
 
       const onSettle = () => {
         if (cancelled) return;
@@ -219,24 +245,10 @@ export function CategorySelector({
           selected.style.zIndex = "";
         }
         tappedRectRef.current = null;
-
-        // Animate pills cascading in
-        if (pillsContainer) {
-          const pills = pillsContainer.querySelectorAll<HTMLElement>("[data-pill]");
-          pills.forEach((pill, i) => {
-            pill.style.opacity = "0";
-            pill.style.transform = "translateY(8px)";
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (animate as any)(
-              pill,
-              { opacity: [0, 1], y: [8, 0] },
-              { ...springs.gentle, delay: i * stagger.pill, ...getReducedMotionOverride() },
-            );
-          });
-        }
       };
 
-      // Hand off to pills once the FLIP spring lands — no magic-number timeout.
+      // Hand off layout cleanup once the FLIP spring lands — no magic-number
+      // timeout. Pills already started at the 150ms mark above.
       if (iconAnim && iconAnim.finished && typeof iconAnim.finished.then === "function") {
         iconAnim.finished.then(onSettle).catch(() => {
           // motion rejects `.finished` on stop(); treat as cancel.
