@@ -7,6 +7,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { currentUser, logout } from "@/lib/auth";
 import { sync } from "@/sync/engine";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { DetailSheet } from "@/components/DetailSheet";
 import { api } from "@/lib/api";
 import { MONTHS_SHORT } from "@/lib/format";
 import { usePressScale } from "@/lib/usePressScale";
@@ -378,6 +379,469 @@ function DataSection() {
   );
 }
 
+// ── Apple Pay automation section ─────────────────────────────────────────────
+
+interface ApiToken {
+  id: string;
+  name: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+interface NewToken {
+  id: string;
+  name: string;
+  created_at: string;
+  token: string;
+}
+
+function relativeAgo(iso: string | null): string {
+  if (!iso) return "never used";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "never used";
+  const seconds = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
+  return formatFullTimestamp(iso);
+}
+
+function formatFullTimestamp(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}, ${hh}:${mm}`;
+}
+
+function TokenDetail({
+  token,
+  onClose,
+  onRevoked,
+}: {
+  token: ApiToken;
+  onClose: () => void;
+  onRevoked: () => void;
+}) {
+  const [confirm, setConfirm] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+
+  async function handleRevoke() {
+    setRevoking(true);
+    try {
+      await (api.api.tokens[":id"].$delete as any)({ param: { id: token.id } });
+      onRevoked();
+      onClose();
+    } finally {
+      setRevoking(false);
+    }
+  }
+
+  return (
+    <div class="flex flex-col gap-4">
+      <div>
+        <h2 class="text-base font-semibold" style={{ color: "var(--color-text-primary)" }}>
+          {token.name}
+        </h2>
+      </div>
+      <div
+        class="rounded-xl"
+        style={{ backgroundColor: "rgba(255,255,255,0.04)" }}
+      >
+        <div
+          class="flex items-center justify-between px-4 py-3"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+        >
+          <span class="text-sm" style={{ color: "var(--color-text-secondary)" }}>created</span>
+          <span class="text-sm" style={{ color: "var(--color-text-primary)" }}>
+            {formatFullTimestamp(token.created_at)}
+          </span>
+        </div>
+        <div class="flex items-center justify-between px-4 py-3">
+          <span class="text-sm" style={{ color: "var(--color-text-secondary)" }}>last used</span>
+          <span class="text-sm" style={{ color: "var(--color-text-primary)" }}>
+            {token.last_used_at ? formatFullTimestamp(token.last_used_at) : "never"}
+          </span>
+        </div>
+      </div>
+      {confirm ? (
+        <ConfirmDialog
+          message="revoke this token? the iOS shortcut will stop working."
+          onConfirm={handleRevoke}
+          onCancel={() => setConfirm(false)}
+        />
+      ) : (
+        <button
+          onClick={() => setConfirm(true)}
+          disabled={revoking}
+          class="flex items-center justify-center text-sm font-medium cursor-pointer border-0"
+          style={{
+            height: 48,
+            borderRadius: 14,
+            backgroundColor: "rgba(255,55,95,0.12)",
+            color: "var(--color-danger)",
+            WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          revoke
+        </button>
+      )}
+    </div>
+  );
+}
+
+function GenerateTokenSheet({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (token: NewToken) => void;
+}) {
+  const [name, setName] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [created, setCreated] = useState<NewToken | null>(null);
+  const [copied, setCopied] = useState(false);
+  const generatePress = usePressScale<HTMLButtonElement>(0.97);
+  const copyPress = usePressScale<HTMLButtonElement>(0.97);
+  const donePress = usePressScale<HTMLButtonElement>(0.97);
+
+  async function handleGenerate() {
+    const trimmed = name.trim();
+    if (!trimmed || generating) return;
+    setGenerating(true);
+    try {
+      const res = await api.api.tokens.$post({ json: { name: trimmed } });
+      if (!res.ok) return;
+      const data = (await res.json()) as NewToken;
+      setCreated(data);
+      onCreated(data);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function handleCopy() {
+    if (!created) return;
+    try {
+      await navigator.clipboard.writeText(created.token);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard API might not be available — surface a hint by toggling state.
+    }
+  }
+
+  if (!created) {
+    return (
+      <div class="flex flex-col gap-4">
+        <h2 class="text-base font-semibold" style={{ color: "var(--color-text-primary)" }}>
+          new token
+        </h2>
+        <input
+          type="text"
+          placeholder="alice's iphone"
+          value={name}
+          onInput={(e) => setName((e.target as HTMLInputElement).value)}
+          class="rounded-lg bg-bg-primary px-3 py-2.5 text-sm text-text-primary outline-none border border-text-ghost/20"
+          autoFocus
+        />
+        <button
+          ref={generatePress.ref}
+          onPointerDown={generatePress.onPointerDown}
+          onPointerUp={generatePress.onPointerUp}
+          onPointerCancel={generatePress.onPointerCancel}
+          onClick={handleGenerate}
+          disabled={!name.trim() || generating}
+          class="flex items-center justify-center text-sm font-medium text-white cursor-pointer border-0"
+          style={{
+            height: 48,
+            borderRadius: 14,
+            backgroundColor: "var(--color-accent)",
+            opacity: !name.trim() || generating ? 0.5 : 1,
+            WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          {generating ? "generating..." : "generate"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div class="flex flex-col gap-4">
+      <h2 class="text-base font-semibold" style={{ color: "var(--color-text-primary)" }}>
+        token created
+      </h2>
+      <p class="text-xs" style={{ color: "var(--color-warning, #ff9f0a)" }}>
+        save this token now — it won't be shown again
+      </p>
+      <div
+        class="rounded-xl px-3 py-3 break-all"
+        style={{
+          backgroundColor: "rgba(255,255,255,0.04)",
+          fontFamily:
+            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace",
+          fontSize: 12,
+          color: "var(--color-text-primary)",
+          userSelect: "all",
+        }}
+      >
+        {created.token}
+      </div>
+      <button
+        ref={copyPress.ref}
+        onPointerDown={copyPress.onPointerDown}
+        onPointerUp={copyPress.onPointerUp}
+        onPointerCancel={copyPress.onPointerCancel}
+        onClick={handleCopy}
+        class="flex items-center justify-center text-sm font-medium cursor-pointer border-0"
+        style={{
+          height: 44,
+          borderRadius: 14,
+          backgroundColor: "rgba(108,156,255,0.12)",
+          color: "var(--color-accent)",
+          WebkitTapHighlightColor: "transparent",
+        }}
+      >
+        {copied ? "copied" : "copy to clipboard"}
+      </button>
+      <button
+        ref={donePress.ref}
+        onPointerDown={donePress.onPointerDown}
+        onPointerUp={donePress.onPointerUp}
+        onPointerCancel={donePress.onPointerCancel}
+        onClick={onClose}
+        class="flex items-center justify-center text-sm font-medium cursor-pointer border-0"
+        style={{
+          height: 44,
+          borderRadius: 14,
+          backgroundColor: "rgba(255,255,255,0.06)",
+          color: "var(--color-text-secondary)",
+          WebkitTapHighlightColor: "transparent",
+        }}
+      >
+        done
+      </button>
+    </div>
+  );
+}
+
+function CopyableValue({ value, label }: { value: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* no clipboard */
+    }
+  }
+  return (
+    <button
+      onClick={handleCopy}
+      class="text-left bg-transparent border-0 cursor-pointer w-full"
+      style={{ WebkitTapHighlightColor: "transparent", padding: 0 }}
+      aria-label={label}
+    >
+      <code
+        class="block break-all"
+        style={{
+          fontFamily:
+            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace",
+          fontSize: 11.5,
+          color: copied ? "var(--color-accent)" : "var(--color-text-primary)",
+          backgroundColor: "rgba(255,255,255,0.04)",
+          borderRadius: 6,
+          padding: "4px 6px",
+        }}
+      >
+        {copied ? "copied" : value}
+      </code>
+    </button>
+  );
+}
+
+function SetupInstructions() {
+  return (
+    <div class="flex flex-col gap-4 text-sm" style={{ color: "var(--color-text-body)" }}>
+      <div>
+        <h2 class="text-base font-semibold" style={{ color: "var(--color-text-primary)" }}>
+          set up apple pay automation
+        </h2>
+        <p class="text-xs mt-1" style={{ color: "var(--color-text-secondary)" }}>
+          your iphone can log expenses automatically when you tap to pay with apple pay. here's
+          how to set it up:
+        </p>
+      </div>
+
+      <ol class="flex flex-col gap-3 pl-5" style={{ listStyle: "decimal" }}>
+        <li>
+          <div class="font-medium" style={{ color: "var(--color-text-primary)" }}>generate a token</div>
+          <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+            if you haven't yet, tap "generate new token" and copy it.
+          </p>
+        </li>
+        <li>
+          <div class="font-medium" style={{ color: "var(--color-text-primary)" }}>open the shortcuts app on your iphone</div>
+          <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>it's pre-installed.</p>
+        </li>
+        <li>
+          <div class="font-medium" style={{ color: "var(--color-text-primary)" }}>
+            go to the automation tab → create personal automation
+          </div>
+        </li>
+        <li>
+          <div class="font-medium" style={{ color: "var(--color-text-primary)" }}>choose "wallet" (or "transaction" on older ios)</div>
+          <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+            under "when i tap", select all the cards you want to track. we recommend selecting
+            all of them.
+          </p>
+        </li>
+        <li>
+          <div class="font-medium" style={{ color: "var(--color-text-primary)" }}>tap next, then "add action"</div>
+        </li>
+        <li>
+          <div class="font-medium" style={{ color: "var(--color-text-primary)" }}>
+            search for "get contents of url" and add it
+          </div>
+        </li>
+        <li>
+          <div class="font-medium mb-1" style={{ color: "var(--color-text-primary)" }}>configure the action:</div>
+          <div class="flex flex-col gap-2">
+            <div>
+              <p class="text-xs mb-1" style={{ color: "var(--color-text-secondary)" }}>URL:</p>
+              <CopyableValue
+                value="https://your-domain.com/api/shortcuts/expense"
+                label="copy URL"
+              />
+            </div>
+            <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+              method: POST
+            </p>
+            <div>
+              <p class="text-xs mb-1" style={{ color: "var(--color-text-secondary)" }}>
+                headers (tap "show more" → "add new header"):
+              </p>
+              <CopyableValue value="Authorization: Bearer YOUR_TOKEN_HERE" label="copy auth header" />
+              <div style={{ height: 4 }} />
+              <CopyableValue value="Content-Type: application/json" label="copy content-type header" />
+            </div>
+            <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+              request body: JSON
+            </p>
+            <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+              add fields:
+            </p>
+            <ul class="text-xs flex flex-col gap-0.5 pl-4" style={{ color: "var(--color-text-secondary)", listStyle: "disc" }}>
+              <li>amount → shortcut input → amount</li>
+              <li>merchant → shortcut input → merchant</li>
+              <li>currency → "EUR"</li>
+              <li>timestamp → current date (formatted ISO 8601)</li>
+            </ul>
+          </div>
+        </li>
+        <li>
+          <div class="font-medium" style={{ color: "var(--color-text-primary)" }}>tap save</div>
+          <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+            turn off "ask before running" so it runs silently.
+          </p>
+        </li>
+        <li>
+          <div class="font-medium" style={{ color: "var(--color-text-primary)" }}>
+            test by paying with apple pay at any store
+          </div>
+          <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+            open xpensify afterward — you should see "1 expense to confirm" at the top of the add screen.
+          </p>
+        </li>
+      </ol>
+
+      <div class="flex flex-col gap-1 pt-2">
+        <p class="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>notes</p>
+        <ul class="text-xs flex flex-col gap-0.5 pl-4" style={{ color: "var(--color-text-secondary)", listStyle: "disc" }}>
+          <li>only works for in-store apple pay taps, not online purchases</li>
+          <li>only EUR transactions are supported</li>
+          <li>if you return something, edit the expense manually after</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function ApplePaySection() {
+  const [tokens, setTokens] = useState<ApiToken[] | null>(null);
+  const [selectedToken, setSelectedToken] = useState<ApiToken | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
+
+  async function loadTokens() {
+    try {
+      const res = await api.api.tokens.$get();
+      if (!res.ok) return;
+      const data = (await res.json()) as ApiToken[];
+      setTokens(data);
+    } catch {
+      /* offline */
+    }
+  }
+
+  useEffect(() => {
+    loadTokens();
+  }, []);
+
+  return (
+    <>
+      <Section title="apple pay automation">
+        {(tokens ?? []).map((t) => (
+          <Row key={t.id} onClick={() => setSelectedToken(t)}>
+            <span class="flex-1 text-sm">{t.name}</span>
+            <span class="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+              {t.last_used_at ? `used ${relativeAgo(t.last_used_at)}` : "never used"}
+            </span>
+            <Chevron />
+          </Row>
+        ))}
+        <Row onClick={() => setGenerating(true)}>
+          <span class="flex-1 text-sm">generate new token</span>
+          <Chevron />
+        </Row>
+        <Row onClick={() => setShowInstructions(true)}>
+          <span class="flex-1 text-sm">how to set up</span>
+          <Chevron />
+        </Row>
+      </Section>
+
+      <DetailSheet open={selectedToken !== null} onClose={() => setSelectedToken(null)}>
+        {selectedToken && (
+          <TokenDetail
+            token={selectedToken}
+            onClose={() => setSelectedToken(null)}
+            onRevoked={loadTokens}
+          />
+        )}
+      </DetailSheet>
+
+      <DetailSheet open={generating} onClose={() => setGenerating(false)}>
+        {generating && (
+          <GenerateTokenSheet
+            onClose={() => setGenerating(false)}
+            onCreated={() => loadTokens()}
+          />
+        )}
+      </DetailSheet>
+
+      <DetailSheet open={showInstructions} onClose={() => setShowInstructions(false)}>
+        {showInstructions && <SetupInstructions />}
+      </DetailSheet>
+    </>
+  );
+}
+
 // ── Sync section ─────────────────────────────────────────────────────────────
 
 function formatSyncTime(ts: string | null): string {
@@ -509,6 +973,7 @@ export default function SettingsScreen() {
       <AccountSection />
       {hasPush && <NotificationsSection />}
       <DataSection />
+      <ApplePaySection />
       <SyncSection />
       <AboutSection />
     </div>

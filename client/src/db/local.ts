@@ -14,14 +14,29 @@ export interface Expense {
   image_url: string | null;
   /** ISO-8601 date string (YYYY-MM-DD) */
   timestamp: string;
-  source: 'manual' | 'import' | 'recurring';
+  source: 'manual' | 'import' | 'recurring' | 'apple-pay';
   recurring_template_id: string | null;
   /** 0 = not deleted, 1 = deleted (INTEGER to match server) */
   deleted: number;
+  /**
+   * 'pending' = awaiting user confirmation (Apple Pay shortcut). Server keeps
+   * pending expenses out of sync responses, so locally Expense rows are
+   * always 'confirmed'. Stored on the type for completeness only.
+   */
+  status: 'pending' | 'confirmed';
   /** Client-only field — never synced to server */
   sync_status: 'pending' | 'synced' | 'error';
   created_at: string;
   updated_at: string;
+}
+
+export interface PendingExpense {
+  id: string;
+  amount: number;
+  note: string | null;
+  timestamp: string;
+  source: string;
+  created_at: string;
 }
 
 export interface Category {

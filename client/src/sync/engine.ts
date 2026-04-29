@@ -3,6 +3,7 @@ import type { RecurringTemplate } from "@/db/local";
 import { syncStatus } from "@/sync/status";
 import { api } from "@/lib/api";
 import { logout } from "@/lib/auth";
+import { refreshPendingExpenses } from "@/lib/pending";
 
 export async function sync(): Promise<void> {
   // Don't stack syncs
@@ -99,4 +100,8 @@ export async function sync(): Promise<void> {
   } catch {
     // Non-fatal: recurring templates will just be stale / empty
   }
+
+  // Pending expenses live only on the server (not in Dexie). Refresh the
+  // signal so the banner / confirm screen reflect any new Apple Pay drops.
+  refreshPendingExpenses().catch(() => {});
 }

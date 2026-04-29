@@ -38,8 +38,8 @@ CREATE TABLE IF NOT EXISTS subcategories (
 CREATE TABLE IF NOT EXISTS expenses (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id),
-  category_id TEXT NOT NULL REFERENCES categories(id),
-  subcategory_id TEXT NOT NULL REFERENCES subcategories(id),
+  category_id TEXT REFERENCES categories(id),
+  subcategory_id TEXT REFERENCES subcategories(id),
   amount INTEGER NOT NULL,
   note TEXT,
   tags TEXT,
@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   source TEXT NOT NULL DEFAULT 'manual',
   recurring_template_id TEXT REFERENCES recurring_templates(id),
   deleted INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'confirmed',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -91,3 +92,16 @@ CREATE TABLE IF NOT EXISTS notification_preferences (
   weekly_summary_time TEXT NOT NULL DEFAULT '09:00',
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  token_hash TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  last_used_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash);
+-- idx_expenses_status is created in migrate.ts after the status column is
+-- ensured to exist on legacy DBs.

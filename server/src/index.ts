@@ -10,16 +10,36 @@ import recurringRouter from "./routes/recurring.js";
 import pushRouter from "./routes/push.js";
 import categoriesRouter from "./routes/categories.js";
 import exportRouter from "./routes/export.js";
+import tokensRouter from "./routes/tokens.js";
+import shortcutsRouter from "./routes/shortcuts.js";
+import pendingRouter from "./routes/pending.js";
 import { processRecurringTemplates } from "./jobs/recurring.js";
 import { sendDailyReminders, sendWeeklySummaries } from "./jobs/notifications.js";
 import { sweepExpiredSessions } from "./jobs/sessions.js";
 import { csrfMiddleware, noStoreMiddleware } from "./middleware/csrf.js";
+import { runMigrations } from "./db/migrate.js";
 import db from "./db/connection.js";
 import type { Variables } from "./middleware/auth.js";
 
+// Run idempotent migrations on every boot so deploys never need a manual step.
+try {
+  runMigrations();
+} catch (err) {
+  console.error("[migrate] Startup migrations failed:", err);
+  process.exit(1);
+}
+
+// /api/shortcuts/expense is called by iOS Shortcuts which won't send a matching
+// Origin header. Bearer-token auth is the security boundary instead, so the
+// CSRF Origin check must skip that prefix specifically.
+const csrfExceptShortcuts = (c: import("hono").Context, next: import("hono").Next) => {
+  if (c.req.path.startsWith("/api/shortcuts/")) return next();
+  return csrfMiddleware(c, next);
+};
+
 // Chain .route() calls so Hono RPC can infer the full route tree from AppType
 const app = new Hono<{ Variables: Variables }>()
-  .use("/api/*", csrfMiddleware)
+  .use("/api/*", csrfExceptShortcuts)
   .use("/api/*", noStoreMiddleware)
   .get("/api/health", (c) => c.json({ ok: true }))
   .route("/api/auth", auth)
@@ -28,6 +48,9 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/api/push", pushRouter)
   .route("/api/categories", categoriesRouter)
   .route("/api/export", exportRouter)
+  .route("/api/tokens", tokensRouter)
+  .route("/api/shortcuts", shortcutsRouter)
+  .route("/api/pending", pendingRouter)
   // Unknown API routes return JSON 404 (not the SPA shell)
   .all("/api/*", (c) => c.json({ error: "Not found" }, 404));
 

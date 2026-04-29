@@ -21,7 +21,7 @@ const exportRouter = new Hono<{ Variables: Variables }>()
          JOIN categories cat ON cat.id = e.category_id
          JOIN subcategories sub ON sub.id = e.subcategory_id
          JOIN users u ON u.id = e.user_id
-         WHERE e.deleted = 0
+         WHERE e.deleted = 0 AND e.status = 'confirmed'
          ORDER BY e.timestamp ASC`
       )
       .all() as {

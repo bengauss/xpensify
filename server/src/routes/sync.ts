@@ -147,8 +147,10 @@ const sync = new Hono<{ Variables: Variables }>()
       if (lastSync === null) {
         // Initial sync / cache clear: return ALL records including soft-deleted
         // tombstones so the client's view stays consistent after future deletes.
+        // Exclude pending expenses entirely — they live server-side until the
+        // user confirms them in-app, and only then enter the sync stream.
         serverChanges = db
-          .prepare(`SELECT * FROM expenses`)
+          .prepare(`SELECT * FROM expenses WHERE status = 'confirmed'`)
           .all() as ExpenseRow[];
       } else if (acceptedIds.length > 0) {
         const placeholders = acceptedIds.map(() => "?").join(", ");
@@ -156,13 +158,14 @@ const sync = new Hono<{ Variables: Variables }>()
           .prepare(
             `SELECT * FROM expenses
              WHERE updated_at > ?
+               AND status = 'confirmed'
                AND id NOT IN (${placeholders})`
           )
           .all(lastSync, ...acceptedIds) as ExpenseRow[];
       } else {
         serverChanges = db
           .prepare(
-            `SELECT * FROM expenses WHERE updated_at > ?`
+            `SELECT * FROM expenses WHERE updated_at > ? AND status = 'confirmed'`
           )
           .all(lastSync) as ExpenseRow[];
       }

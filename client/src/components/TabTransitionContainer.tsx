@@ -17,6 +17,7 @@ const RecurringForm = lazy(() => import("@/screens/RecurringForm"));
 const SettingsScreen = lazy(() => import("@/screens/Settings"));
 const SettingsCategoriesScreen = lazy(() => import("@/screens/SettingsCategories"));
 const AnalyticsScreen = lazy(() => import("@/screens/Analytics"));
+const ConfirmScreen = lazy(() => import("@/screens/Confirm"));
 
 // ── RouteContent: manual path → component mapping ──────────────────────────
 
@@ -32,6 +33,7 @@ function RouteContent({ path }: { path: string }) {
   if (path === "/analytics") return <AnalyticsScreen />;
   if (path === "/settings") return <SettingsScreen />;
   if (path === "/settings/categories") return <SettingsCategoriesScreen />;
+  if (path === "/confirm") return <ConfirmScreen />;
   return <AddScreen />;
 }
 
