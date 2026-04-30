@@ -364,9 +364,19 @@ export function AddScreen() {
     confirmingPending.value = null;
     await refreshPendingExpenses();
     if (pendingExpenses.value.length > 0) {
+      // More to review — back to the list. AddScreen unmounts on the route
+      // change, which clears form state on its own.
       route("/confirm");
     } else {
-      route("/");
+      // No more pending — we stay on `/`, so AddScreen does NOT remount and
+      // the local form state would retain the just-skipped expense's values.
+      // Reset everything explicitly to land on a clean Add screen.
+      setAmount("");
+      setNote("");
+      setDateStr(new Date().toISOString().split("T")[0]);
+      setPendingCategoryId("");
+      setPendingSubcategoryId("");
+      setFormKey((k) => k + 1);
     }
   }
 
