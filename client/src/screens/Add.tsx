@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useMemo } from "preact/hooks";
 import { animate } from "motion";
 import { durations, getReducedMotionOverride } from "@/lib/animations";
 import { db } from "@/db/local";
-import type { Expense } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { AmountInput, parseCents, formatCents, type AmountInputCelebrateApi } from "@/components/AmountInput";
 import { CategorySelector } from "@/components/CategorySelector";
@@ -11,7 +10,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { currentUser } from "@/lib/auth";
 import { sync } from "@/sync/engine";
 import { useLocation } from "preact-iso";
-import { formatMoney, formatMoneyWhole, monthKey, MONTHS_SHORT } from "@/lib/format";
+import { formatMoney, formatMoneyWhole, MONTHS_SHORT } from "@/lib/format";
 import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
 import { editingExpense } from "@/lib/editing";
 import { useEntrance } from "@/lib/entrance";
@@ -22,55 +21,7 @@ import {
   refreshPendingExpenses,
   confirmingPending,
 } from "@/lib/pending";
-
-// ── Discretionary spend helpers ──────────────────────────────────────────────
-
-function prevMonth(year: number, month: number): { year: number; month: number } {
-  return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
-}
-
-function roundToHundred(cents: number): number {
-  return Math.round(cents / 10000) * 10000;
-}
-
-function computeDiscretionary(expenses: Expense[] | undefined) {
-  if (!expenses) return null;
-
-  const now = new Date();
-  const curYear = now.getFullYear();
-  const curMonth = now.getMonth() + 1;
-  const curKey = monthKey(curYear, curMonth);
-
-  // Current month discretionary
-  const currentTotal = expenses
-    .filter((e) => e.timestamp.startsWith(curKey) && e.deleted === 0 && e.source !== "recurring")
-    .reduce((s, e) => s + e.amount, 0);
-
-  // Last 3 completed months
-  let y = curYear, m = curMonth;
-  const monthTotals: number[] = [];
-  for (let i = 0; i < 3; i++) {
-    ({ year: y, month: m } = prevMonth(y, m));
-    const key = monthKey(y, m);
-    const total = expenses
-      .filter((e) => e.timestamp.startsWith(key) && e.deleted === 0 && e.source !== "recurring")
-      .reduce((s, e) => s + e.amount, 0);
-    monthTotals.push(total);
-  }
-
-  // Outlier guard: if any month > 2x median, drop it
-  const hasData = monthTotals.some((t) => t > 0);
-  if (!hasData) return { current: currentTotal, avg: null };
-
-  const sorted = [...monthTotals].sort((a, b) => a - b);
-  const median = sorted[1]; // middle of 3
-  const filtered = monthTotals.filter((t) => t <= median * 2);
-  const avg = filtered.length > 0
-    ? filtered.reduce((s, t) => s + t, 0) / filtered.length
-    : monthTotals.reduce((s, t) => s + t, 0) / monthTotals.length;
-
-  return { current: currentTotal, avg: roundToHundred(avg) };
-}
+import { computeDiscretionary } from "@/lib/discretionary";
 
 export function AddScreen() {
   const editing = editingExpense.value;
