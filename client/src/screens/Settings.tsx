@@ -713,36 +713,36 @@ function SetupInstructions() {
         <li>
           <div class="font-medium mb-1" style={{ color: "var(--color-text-primary)" }}>configure the action:</div>
           <div class="flex flex-col gap-2">
-            <div>
-              <p class="text-xs mb-1" style={{ color: "var(--color-text-secondary)" }}>URL:</p>
-              <CopyableValue
-                value="https://your-domain.com/api/shortcuts/expense"
-                label="copy URL"
-              />
-            </div>
             <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-              method: POST
+              method: GET
             </p>
             <div>
               <p class="text-xs mb-1" style={{ color: "var(--color-text-secondary)" }}>
-                headers (tap "show more" → "add new header"):
+                URL — paste this exactly, then long-press each magic-var slot
+                and replace it with the matching shortcut input:
+              </p>
+              <CopyableValue
+                value="https://your-domain.com/api/shortcuts/expense?amount=AMOUNT&merchant=MERCHANT&currency=EUR&timestamp=DATE"
+                label="copy URL template"
+              />
+              <ul class="text-xs flex flex-col gap-0.5 pl-4 mt-1" style={{ color: "var(--color-text-secondary)", listStyle: "disc" }}>
+                <li>replace AMOUNT with shortcut input → Amount</li>
+                <li>replace MERCHANT with shortcut input → Merchant</li>
+                <li>replace DATE with shortcut input → Date</li>
+              </ul>
+            </div>
+            <div>
+              <p class="text-xs mb-1" style={{ color: "var(--color-text-secondary)" }}>
+                headers (expand the action → "show more" → "add new header"):
               </p>
               <CopyableValue value="Authorization: Bearer YOUR_TOKEN_HERE" label="copy auth header" />
-              <div style={{ height: 4 }} />
-              <CopyableValue value="Content-Type: application/json" label="copy content-type header" />
+              <p class="text-xs mt-1" style={{ color: "var(--color-text-tertiary)" }}>
+                replace YOUR_TOKEN_HERE with the token you generated above.
+              </p>
             </div>
             <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-              request body: JSON
+              leave the request body empty.
             </p>
-            <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-              add fields:
-            </p>
-            <ul class="text-xs flex flex-col gap-0.5 pl-4" style={{ color: "var(--color-text-secondary)", listStyle: "disc" }}>
-              <li>amount → shortcut input → amount</li>
-              <li>merchant → shortcut input → merchant</li>
-              <li>currency → "EUR"</li>
-              <li>timestamp → current date (formatted ISO 8601)</li>
-            </ul>
           </div>
         </li>
         <li>
@@ -760,6 +760,18 @@ function SetupInstructions() {
           </p>
         </li>
       </ol>
+
+      <div class="flex flex-col gap-1 pt-2">
+        <p class="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>sharing with another user</p>
+        <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+          to set this up for the other person in this account: in the shortcuts
+          app, open the automation, tap the share icon, and send them the
+          icloud link. they import it, then edit only the Authorization header
+          and replace your token with one they generate themselves under
+          settings → apple pay automation. their pending expenses land under
+          their own user.
+        </p>
+      </div>
 
       <div class="flex flex-col gap-1 pt-2">
         <p class="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>notes</p>
