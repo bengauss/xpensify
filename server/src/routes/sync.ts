@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import db from "../db/connection.js";
 import { authMiddleware, type Variables } from "../middleware/auth.js";
+import { resetMerchantMemory } from "../lib/merchantMemory.js";
 
 interface ClientChange {
   id: string;
@@ -51,8 +52,14 @@ const sync = new Hono<{ Variables: Variables }>()
     const lastSync: string | null =
       typeof body.last_sync === "string" ? body.last_sync : null;
 
-    const selectExistingStmt = db.prepare<[string], { updated_at: string }>(
-      `SELECT updated_at FROM expenses WHERE id = ?`
+    const selectExistingStmt = db.prepare<[string], {
+      updated_at: string;
+      source: string;
+      category_id: string | null;
+      subcategory_id: string | null;
+      note: string | null;
+    }>(
+      `SELECT updated_at, source, category_id, subcategory_id, note FROM expenses WHERE id = ?`
     );
 
     const insertStmt = db.prepare<[string, string, string, string, number, string | null, string | null, string | null, string, string, string | null, number]>(
@@ -137,6 +144,29 @@ const sync = new Hono<{ Variables: Variables }>()
             change.id
           );
           acceptedIds.push(change.id);
+
+          // Recategorization signal: if the user just edited an Apple Pay
+          // expense and changed its category, the auto-save mapping was
+          // wrong for this transaction. Reset merchant memory to count=1
+          // with the new mapping — next transaction at this merchant will
+          // go pending so the user can confirm the corrected category.
+          // Skip soft-deletes (deleted=1 isn't a recategorization signal).
+          if (
+            existing.source === "apple-pay" &&
+            (change.deleted ?? 0) === 0 &&
+            existing.category_id !== change.category_id
+          ) {
+            const merchantNormalized = (existing.note ?? "").trim();
+            if (merchantNormalized) {
+              resetMerchantMemory(
+                userId,
+                merchantNormalized,
+                change.category_id,
+                change.subcategory_id,
+                new Date().toISOString(),
+              );
+            }
+          }
         }
         // else: server has a newer version — don't push to acceptedIds so the
         // authoritative server row flows back in the delta below.

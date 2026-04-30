@@ -75,6 +75,10 @@ export function runMigrations(): void {
 
   addColumnIfMissing("recurring_templates", "start_date", "TEXT");
   addColumnIfMissing("expenses", "status", "TEXT NOT NULL DEFAULT 'confirmed'");
+  // last_history_visit_at: per-user marker for "have I seen the History tab
+  // since the last auto-saved Apple Pay expense?". The BottomNav dot reads
+  // this to decide whether to show the unreviewed indicator.
+  addColumnIfMissing("users", "last_history_visit_at", "TEXT");
 
   // Index requires the status column to exist; created here, post-add.
   db.exec(`CREATE INDEX IF NOT EXISTS idx_expenses_status ON expenses(status)`);

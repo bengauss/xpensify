@@ -1,6 +1,7 @@
 import { useLocation } from "preact-iso";
 import { navigateTab } from "@/lib/transitions";
 import { usePressScale } from "@/lib/usePressScale";
+import { hasUnreviewedAutoSaves } from "@/lib/pending";
 
 const tabs = [
   { path: "/", icon: "M12 5v14M5 12h14" },
@@ -13,10 +14,12 @@ function TabLink({
   tab,
   active,
   onClick,
+  showDot,
 }: {
   tab: { path: string; icon: string };
   active: boolean;
   onClick: (e: Event) => void;
+  showDot?: boolean;
 }) {
   const press = usePressScale<HTMLAnchorElement>(0.95);
   return (
@@ -31,7 +34,7 @@ function TabLink({
       style={{ WebkitTapHighlightColor: "transparent" }}
     >
       <div
-        class={`flex h-11 w-11 items-center justify-center rounded-full transition-colors ${active ? "bg-accent/15" : ""}`}
+        class={`flex h-11 w-11 items-center justify-center rounded-full transition-colors relative ${active ? "bg-accent/15" : ""}`}
       >
         <svg
           width="28"
@@ -45,6 +48,21 @@ function TabLink({
         >
           <path d={tab.icon} />
         </svg>
+        {showDot && (
+          <span
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              top: 6,
+              right: 6,
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              backgroundColor: "var(--color-accent)",
+              boxShadow: "0 0 0 1.5px var(--color-bg-primary)",
+            }}
+          />
+        )}
       </div>
     </a>
   );
@@ -63,6 +81,7 @@ export function BottomNav() {
           key={tab.path}
           tab={tab}
           active={path === tab.path}
+          showDot={tab.path === "/history" && hasUnreviewedAutoSaves.value && path !== "/history"}
           onClick={(e) => {
             e.preventDefault();
             if (tab.path === path) return;

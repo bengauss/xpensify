@@ -1,7 +1,7 @@
 import { sync } from "@/sync/engine";
 import { syncStatus } from "@/sync/status";
 import { db } from "@/db/local";
-import { refreshPendingExpenses } from "@/lib/pending";
+import { refreshPendingExpenses, refreshUnreviewedAutoSaves } from "@/lib/pending";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
 
@@ -9,6 +9,7 @@ function handleVisibilityChange() {
   if (document.visibilityState === "visible" && navigator.onLine) {
     sync().catch(console.error);
     refreshPendingExpenses().catch(() => {});
+    refreshUnreviewedAutoSaves().catch(() => {});
   }
 }
 

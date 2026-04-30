@@ -10,6 +10,7 @@ import { editingExpense } from "@/lib/editing";
 import { parseCents, formatCents } from "@/components/AmountInput";
 import { sync } from "@/sync/engine";
 import { historyFilter } from "@/lib/filters";
+import { markHistoryVisited } from "@/lib/pending";
 import { useEntrance, animateRowEntrance } from "@/lib/entrance";
 import { fadeRemoveRow } from "@/lib/dissolve";
 import { usePressScale } from "@/lib/usePressScale";
@@ -604,6 +605,9 @@ export default function HistoryScreen() {
     if (f) {
       setSearchQuery(f.subcategory || f.category);
     }
+    // Stamp the History-visited marker so the BottomNav unreviewed dot clears
+    // and any subsequent auto-saves register as new again.
+    markHistoryVisited().catch(() => {});
   }, []);
 
   // Load all non-deleted expenses sorted by timestamp DESC

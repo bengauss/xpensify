@@ -37,6 +37,10 @@ export interface PendingExpense {
   timestamp: string;
   source: string;
   created_at: string;
+  /** Pre-filled merchant memory suggestion (1-confirmation case). Null when
+   *  the merchant is unknown — the confirm screen renders no pre-selection. */
+  category_id: string | null;
+  subcategory_id: string | null;
 }
 
 export interface Category {

@@ -100,8 +100,18 @@ export function AddScreen() {
   );
   // Pending category/subcategory selection — only used in edit/confirm modes, so the user
   // can change multiple fields before committing via the save button.
-  const [pendingCategoryId, setPendingCategoryId] = useState<string>(editing?.category_id ?? "");
-  const [pendingSubcategoryId, setPendingSubcategoryId] = useState<string>(editing?.subcategory_id ?? "");
+  // In confirm mode with a 1-confirmation merchant memory the server pre-fills
+  // the suggested (category, subcategory) on the pending row; we mount the
+  // selector with that pair already chosen so confirm is one tap.
+  const [pendingCategoryId, setPendingCategoryId] = useState<string>(
+    editing?.category_id ?? confirming?.category_id ?? "",
+  );
+  const [pendingSubcategoryId, setPendingSubcategoryId] = useState<string>(
+    editing?.subcategory_id ?? confirming?.subcategory_id ?? "",
+  );
+  // True when the pending row arrived with a suggestion attached — drives the
+  // "✓ confirmed once before" hint under the date row.
+  const hasSuggestion = !!(confirming && confirming.category_id && confirming.subcategory_id);
 
   // confirm-mode local state
   const [confirmSaving, setConfirmSaving] = useState(false);
@@ -504,13 +514,28 @@ export function AddScreen() {
         )}
       </div>
 
+      {/* "Confirmed once before" hint — only shown in confirm mode when the
+          pending expense arrived with a 1-confirmation merchant suggestion. */}
+      {isConfirming && hasSuggestion && (
+        <div
+          style={{
+            marginTop: -8,
+            paddingLeft: 4,
+            fontSize: 11,
+            color: "var(--color-text-tertiary)",
+          }}
+        >
+          ✓ confirmed once before
+        </div>
+      )}
+
       {/* Category selector */}
       <CategorySelector
         key={formKey}
         categories={categories}
         subcategories={subcategories}
         onSelect={handleSelect}
-        initialCategoryId={editing?.category_id}
+        initialCategoryId={editing?.category_id ?? confirming?.category_id ?? undefined}
         confirmedSubcategoryId={pendingSubcategoryId || undefined}
       />
 

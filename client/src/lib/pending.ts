@@ -11,6 +11,36 @@ export const pendingExpenses = signal<PendingExpense[]>([]);
  */
 export const confirmingPending = signal<PendingExpense | null>(null);
 
+/**
+ * True when the current user has auto-saved Apple Pay expenses created since
+ * their last History visit. Drives the small accent dot on the History tab
+ * icon. Refreshed on sync; cleared by `markHistoryVisited()` (called from the
+ * History screen on mount).
+ */
+export const hasUnreviewedAutoSaves = signal<boolean>(false);
+
+export async function refreshUnreviewedAutoSaves(): Promise<void> {
+  try {
+    const res = await api.api["history-marker"].$get();
+    if (!res.ok) return;
+    const data = (await res.json()) as { has_unreviewed: boolean };
+    hasUnreviewedAutoSaves.value = !!data.has_unreviewed;
+  } catch {
+    // Non-fatal — stale dot state will be refreshed on the next sync.
+  }
+}
+
+export async function markHistoryVisited(): Promise<void> {
+  hasUnreviewedAutoSaves.value = false;
+  try {
+    await api.api["history-marker"].visit.$post();
+  } catch {
+    // Best-effort; if the visit POST fails the server-side marker stays stale
+    // but the in-memory signal is already cleared, so the dot disappears now
+    // and the next sync's refresh confirms it.
+  }
+}
+
 let inFlight: Promise<void> | null = null;
 
 /**

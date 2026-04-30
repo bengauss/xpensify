@@ -762,6 +762,19 @@ function SetupInstructions() {
       </ol>
 
       <div class="flex flex-col gap-1 pt-2">
+        <p class="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>silent notifications (optional)</p>
+        <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+          the response includes <code style={{ fontFamily: "ui-monospace, monospace" }}>auto_saved</code>,
+          <code style={{ fontFamily: "ui-monospace, monospace" }}> category</code>, and
+          <code style={{ fontFamily: "ui-monospace, monospace" }}> subcategory</code> fields. add a
+          "Show Notification" action after the URL fetch and pull these from
+          the JSON dictionary to display "logged X.XX at &lt;merchant&gt; as
+          &lt;category&gt; → &lt;subcategory&gt;" on auto-save, or "needs
+          confirmation" when pending.
+        </p>
+      </div>
+
+      <div class="flex flex-col gap-1 pt-2">
         <p class="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>sharing with another user</p>
         <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
           to set this up for the other person in this account: in the shortcuts
@@ -786,10 +799,14 @@ function SetupInstructions() {
 }
 
 function ApplePaySection() {
+  const { route } = useLocation();
   const [tokens, setTokens] = useState<ApiToken[] | null>(null);
   const [selectedToken, setSelectedToken] = useState<ApiToken | null>(null);
   const [generating, setGenerating] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [merchantCount, setMerchantCount] = useState<number | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
 
   async function loadTokens() {
     try {
@@ -802,8 +819,41 @@ function ApplePaySection() {
     }
   }
 
+  async function loadMerchantCount() {
+    try {
+      const res = await api.api.merchants.$get();
+      if (!res.ok) return;
+      const data = (await res.json()) as unknown[];
+      setMerchantCount(Array.isArray(data) ? data.length : 0);
+    } catch {
+      /* offline */
+    }
+  }
+
+  async function handleImport() {
+    if (importing) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const res = await api.api.merchants.import.$post();
+      if (res.ok) {
+        const data = (await res.json()) as { inserted: number; skipped: number; total: number };
+        setImportResult(
+          data.inserted === 0
+            ? `nothing new to import (${data.skipped} already known)`
+            : `imported ${data.inserted} merchant${data.inserted === 1 ? "" : "s"}`,
+        );
+        loadMerchantCount();
+        setTimeout(() => setImportResult(null), 3000);
+      }
+    } finally {
+      setImporting(false);
+    }
+  }
+
   useEffect(() => {
     loadTokens();
+    loadMerchantCount();
   }, []);
 
   return (
@@ -821,6 +871,21 @@ function ApplePaySection() {
         <Row onClick={() => setGenerating(true)}>
           <span class="flex-1 text-sm">generate new token</span>
           <Chevron />
+        </Row>
+        <Row onClick={() => route("/settings/merchants")}>
+          <span class="flex-1 text-sm">merchant memory</span>
+          <span class="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+            {merchantCount === null ? "" : `${merchantCount} known`}
+          </span>
+          <Chevron />
+        </Row>
+        <Row onClick={handleImport}>
+          <div class="flex-1 flex flex-col gap-0.5">
+            <span class="text-sm">{importing ? "importing..." : "import existing apple pay expenses"}</span>
+            <span class="text-xs" style={{ color: "var(--color-text-hint)" }}>
+              {importResult ?? "seed memory from already-confirmed apple pay history"}
+            </span>
+          </div>
         </Row>
         <Row onClick={() => setShowInstructions(true)}>
           <span class="flex-1 text-sm">how to set up</span>

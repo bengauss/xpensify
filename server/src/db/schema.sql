@@ -105,3 +105,18 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash);
 -- idx_expenses_status is created in migrate.ts after the status column is
 -- ensured to exist on legacy DBs.
+
+-- merchant_categories: per-user memory of the (merchant → category) mapping
+-- learned from confirmed Apple Pay expenses. Composite PK because two users
+-- in the same household can categorize the same merchant differently.
+CREATE TABLE IF NOT EXISTS merchant_categories (
+  user_id TEXT NOT NULL REFERENCES users(id),
+  merchant_normalized TEXT NOT NULL,
+  category_id TEXT NOT NULL REFERENCES categories(id),
+  subcategory_id TEXT NOT NULL REFERENCES subcategories(id),
+  confirmation_count INTEGER NOT NULL DEFAULT 1,
+  last_confirmed_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, merchant_normalized)
+);
+
+CREATE INDEX IF NOT EXISTS idx_merchant_categories_user ON merchant_categories(user_id);

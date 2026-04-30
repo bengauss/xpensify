@@ -13,6 +13,8 @@ import exportRouter from "./routes/export.js";
 import tokensRouter from "./routes/tokens.js";
 import shortcutsRouter from "./routes/shortcuts.js";
 import pendingRouter from "./routes/pending.js";
+import merchantsRouter from "./routes/merchants.js";
+import historyMarkerRouter from "./routes/historyMarker.js";
 import { processRecurringTemplates } from "./jobs/recurring.js";
 import { sendDailyReminders, sendWeeklySummaries } from "./jobs/notifications.js";
 import { sweepExpiredSessions } from "./jobs/sessions.js";
@@ -51,6 +53,8 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/api/tokens", tokensRouter)
   .route("/api/shortcuts", shortcutsRouter)
   .route("/api/pending", pendingRouter)
+  .route("/api/merchants", merchantsRouter)
+  .route("/api/history-marker", historyMarkerRouter)
   // Unknown API routes return JSON 404 (not the SPA shell)
   .all("/api/*", (c) => c.json({ error: "Not found" }, 404));
 

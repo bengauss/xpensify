@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { createHash } from "crypto";
 import db from "../db/connection.js";
 import { normalizeMerchant } from "../lib/merchantNormalize.js";
+import { lookupMerchantMemory } from "../lib/merchantMemory.js";
 
 const MAX_MERCHANT_LENGTH = 200;
 const MAX_AMOUNT_EUR = 10000;
@@ -161,21 +162,94 @@ function ingestExpense(
   const amountCents = Math.round(amount * 100);
   const nowIso = new Date().toISOString();
 
+  // Merchant memory: 2+ prior confirmations → auto-save; 1 → pending with
+  // pre-filled suggestion; 0 → pending with no suggestion.
+  const memory = lookupMerchantMemory(tokenRow.user_id, note);
+  let status: "pending" | "confirmed";
+  let categoryId: string | null;
+  let subcategoryId: string | null;
+  let categoryName: string | null = null;
+  let subcategoryName: string | null = null;
+
+  if (memory && memory.confirmation_count >= 2) {
+    status = "confirmed";
+    categoryId = memory.category_id;
+    subcategoryId = memory.subcategory_id;
+  } else if (memory && memory.confirmation_count === 1) {
+    status = "pending";
+    categoryId = memory.category_id;
+    subcategoryId = memory.subcategory_id;
+  } else {
+    status = "pending";
+    categoryId = null;
+    subcategoryId = null;
+  }
+
+  if (categoryId && subcategoryId) {
+    const lookup = db
+      .prepare(
+        `SELECT c.name AS category_name, s.name AS subcategory_name
+         FROM categories c JOIN subcategories s ON s.category_id = c.id
+         WHERE c.id = ? AND s.id = ?`,
+      )
+      .get(categoryId, subcategoryId) as
+      | { category_name: string; subcategory_name: string }
+      | undefined;
+    categoryName = lookup?.category_name ?? null;
+    subcategoryName = lookup?.subcategory_name ?? null;
+  }
+
   db.transaction(() => {
     db.prepare(
       `INSERT INTO expenses
          (id, user_id, category_id, subcategory_id, amount, note, tags, image_url,
           timestamp, source, recurring_template_id, deleted, status, created_at, updated_at)
-       VALUES (?, ?, NULL, NULL, ?, ?, NULL, NULL, ?, 'apple-pay', NULL, 0, 'pending', ?, ?)`,
-    ).run(id, tokenRow.user_id, amountCents, note, timestamp, nowIso, nowIso);
+       VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, 'apple-pay', NULL, 0, ?, ?, ?)`,
+    ).run(
+      id,
+      tokenRow.user_id,
+      categoryId,
+      subcategoryId,
+      amountCents,
+      note,
+      timestamp,
+      status,
+      nowIso,
+      nowIso,
+    );
 
     db.prepare(`UPDATE api_tokens SET last_used_at = ? WHERE id = ?`).run(nowIso, tokenRow.id);
   })();
 
-  console.log(`[shortcuts] logged pending ${id} amount=${amountCents} merchant="${note}"`);
+  console.log(
+    `[shortcuts] ${status === "confirmed" ? "auto-saved" : "logged pending"} ${id} amount=${amountCents} merchant="${note}"${
+      memory ? ` memory.count=${memory.confirmation_count}` : ""
+    }`,
+  );
 
   c.header("Cache-Control", "no-store");
-  return c.json({ id, status: "pending" }, 200);
+  if (status === "confirmed") {
+    return c.json(
+      {
+        id,
+        status,
+        auto_saved: true,
+        category: categoryName,
+        subcategory: subcategoryName,
+      },
+      200,
+    );
+  }
+  return c.json(
+    {
+      id,
+      status,
+      auto_saved: false,
+      suggested_category: categoryName,
+      suggested_subcategory: subcategoryName,
+    },
+    200,
+  );
 }
 
 const shortcuts = new Hono()

@@ -1,10 +1,13 @@
 import { Hono } from "hono";
 import db from "../db/connection.js";
 import { authMiddleware, type Variables } from "../middleware/auth.js";
+import { upsertMerchantMemory } from "../lib/merchantMemory.js";
 
 interface PendingRow {
   id: string;
   user_id: string;
+  category_id: string | null;
+  subcategory_id: string | null;
   amount: number;
   note: string | null;
   timestamp: string;
@@ -17,12 +20,15 @@ const MAX_NOTE_LENGTH = 1000;
 
 const pending = new Hono<{ Variables: Variables }>()
   .use("/*", authMiddleware)
-  // GET / — pending expenses for the current user
+  // GET / — pending expenses for the current user. category_id/subcategory_id
+  // are non-null when the shortcut webhook attached a 1-confirmation merchant
+  // suggestion; the client uses that to pre-select in confirm mode.
   .get("/", (c) => {
     const userId = c.get("userId");
     const rows = db
       .prepare(
-        `SELECT id, amount, note, timestamp, source, created_at
+        `SELECT id, amount, note, timestamp, source, created_at,
+                category_id, subcategory_id
          FROM expenses
          WHERE user_id = ? AND status = 'pending' AND deleted = 0
          ORDER BY timestamp DESC`
@@ -91,16 +97,31 @@ const pending = new Hono<{ Variables: Variables }>()
       }
     }
 
-    db.prepare(
-      `UPDATE expenses SET
-         category_id = ?,
-         subcategory_id = ?,
-         amount = ?,
-         note = ?,
-         status = 'confirmed',
-         updated_at = datetime('now')
-       WHERE id = ?`
-    ).run(body.category_id, body.subcategory_id, amountCents, note, id);
+    const categoryId = body.category_id;
+    const subcategoryId = body.subcategory_id;
+    // The pending row's `note` field holds the already-normalized merchant —
+    // don't re-normalize. If the user rewrote the note we still key memory on
+    // the original normalized merchant from the pending row.
+    const merchantNormalized = (existing.note ?? "").trim();
+    const nowIso = new Date().toISOString();
+
+    const commit = db.transaction(() => {
+      db.prepare(
+        `UPDATE expenses SET
+           category_id = ?,
+           subcategory_id = ?,
+           amount = ?,
+           note = ?,
+           status = 'confirmed',
+           updated_at = datetime('now')
+         WHERE id = ?`
+      ).run(categoryId, subcategoryId, amountCents, note, id);
+
+      if (existing.source === "apple-pay" && merchantNormalized) {
+        upsertMerchantMemory(userId, merchantNormalized, categoryId, subcategoryId, nowIso);
+      }
+    });
+    commit();
 
     const updated = db.prepare(`SELECT * FROM expenses WHERE id = ?`).get(id);
     return c.json(updated);
