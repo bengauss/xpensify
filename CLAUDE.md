@@ -27,6 +27,7 @@ End users run this as an installed PWA in **iOS Safari** on **iPhone 15 Pro Max*
   - `currentUser` → `lib/auth.ts`; `syncStatus` → `sync/status.ts`
   - `editingExpense` → `lib/editing.ts`; `historyFilter` → `lib/filters.ts`; `analyticsDrilldown` → `lib/analyticsDrilldown.ts`
   - `pendingDirection`, `transitionDone`, `isTransitioning` → `lib/transitions.ts`
+  - `pendingExpenses`, `confirmingPending`, `hasUnreviewedAutoSaves` → `lib/pending.ts` (Apple Pay)
   - `authChecked` is a private signal local to `app.tsx`.
 - **motion** library (motion.dev) v12 — vanilla JS `animate()` only, NOT the React wrapper. Shared spring presets in `client/src/lib/animations.ts`. TypeScript overloads are finicky:
   - Use `(animate as any)(...)` for function-callback animations and any call that trips the overload resolver.
@@ -34,7 +35,7 @@ End users run this as an installed PWA in **iOS Safari** on **iPhone 15 Pro Max*
 - **Sync-on-use** — triggers on visibility change, 30s interval, after save, pull-to-refresh (vertical swipe from top of tab), manual "force full sync" button in Settings. Server is clock authority for `updated_at` timestamps.
 - **Soft deletes** on expenses (`deleted: 1`) for sync correctness — server returns tombstones in initial sync so client views stay consistent after remote deletes.
 - **bcryptjs** (pure JS) — not native bcrypt, to avoid Docker multi-arch issues. Cost factor 12.
-- **Lazy-loaded screens** — only `AddScreen` is eager (the default landing). History/Recurring/RecurringForm/Settings/SettingsCategories/Analytics/Login are `lazy()` + `Suspense`. Motion + Dexie are split into their own Rollup chunks.
+- **Lazy-loaded screens** — only `AddScreen` is eager (the default landing). History, Recurring, RecurringForm, Settings, SettingsCategories, SettingsMerchants, Analytics, Confirm, Login are `lazy()` + `Suspense`. Motion + Dexie are split into their own Rollup chunks.
 
 ## Common Commands
 
@@ -52,6 +53,14 @@ cd server && npm run build    # TypeScript compilation
 cd server && npm run start    # Run compiled server
 cd server && npm run migrate  # Run schema.sql (idempotent) + ALTER TABLE backfills
 cd server && npm run seed     # Seed categories, subcategories, users (skips existing users)
+```
+
+### Tests (Vitest)
+```bash
+cd server && npm test          # 133 tests, ~3s
+cd client && npm test          # 61 tests, ~2s
+cd <pkg>  && npm run test:watch        # watch mode
+cd <pkg>  && npm run test:coverage     # v8 coverage HTML in coverage/
 ```
 
 ### Docker (production)
@@ -101,10 +110,13 @@ All colors, spacing, and typography tokens live in `client/src/index.css` under 
 - Amounts are INTEGER (cents) in both databases.
 - **Dexie `orderBy()` requires indexed fields.** Categories only index `id`. Sort by `sort_order` in JS after `.toArray()`, not via `orderBy("sort_order")`.
 - Expense `tags` and `image_url` columns are part of the schema on both ends but not yet surfaced in the UI. The sync route round-trips them; don't remove them.
+- **Tables**: `users`, `sessions`, `categories`, `subcategories`, `expenses`, `recurring_templates`, `push_subscriptions`, `notification_preferences`, `api_tokens` (iOS Shortcuts auth), `merchant_categories` (per-user merchant→category memory).
+- **Expense `status` column**: `'confirmed'` (default, in sync stream) or `'pending'` (Apple Pay awaiting user confirmation, server-only). `category_id` / `subcategory_id` are NULLABLE on purpose so pending rows can have no category yet — see `relaxExpensesNullability()` in `migrate.ts`.
+- **`users.last_history_visit_at`**: timestamp gating the History tab's unreviewed-autosaves dot.
 
 ## API Surface
 
-All mounted under `/api/*`, guarded by `csrfMiddleware` (Origin check) + `noStoreMiddleware` (Cache-Control: no-store). Auth is per-router, not global — `health` and `login` are intentionally unauthenticated.
+All mounted under `/api/*`, guarded by `csrfMiddleware` (Origin check) + `noStoreMiddleware` (Cache-Control: no-store). Auth is per-router, not global — `health`, `login`, and `shortcuts/*` are intentionally unauthenticated by session (the shortcut webhook uses Bearer tokens; the CSRF Origin check is also skipped for `/api/shortcuts/*` since iOS Shortcuts won't send a matching Origin).
 
 - `GET  /api/health` — unauthenticated liveness probe.
 - `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `POST /api/auth/change-password`.
@@ -113,6 +125,11 @@ All mounted under `/api/*`, guarded by `csrfMiddleware` (Origin check) + `noStor
 - `POST|DELETE /api/push/subscribe`, `GET|PUT /api/push/preferences`.
 - `GET|POST /api/categories`, `PATCH|DELETE /api/categories/:id`, subcategory CRUD on `/api/categories/:id/subcategories` + `/api/categories/subcategories/:id`.
 - `GET /api/export` — full CSV dump (all users — the ledger is shared).
+- `GET|POST|DELETE /api/tokens[/:id]` — API token CRUD for iOS Shortcuts. POST returns the plain token **once**; only the SHA-256 hash is stored.
+- `POST|GET /api/shortcuts/expense` — Apple Pay webhook. Bearer token (Authorization header **or** `?token=` query). Rate-limited to 60 req/min per token. Tolerant amount/timestamp/merchant parsers handle iOS locale variants (€1,23 vs 1.23, currency dicts, naturally-formatted dates). GET variant exists because Cloudflare drops Shortcuts' POST+JSON body with a generic 400.
+- `GET /api/pending`, `PATCH /api/pending/:id/confirm`, `DELETE /api/pending/:id` — Apple Pay pending expenses lifecycle.
+- `GET|PATCH|DELETE /api/merchants[/:merchant]`, `POST /api/merchants/import` — merchant memory CRUD; import backfills from existing confirmed Apple Pay expenses.
+- `GET /api/history-marker`, `POST /api/history-marker/visit` — read/clear the History-tab "unreviewed Apple Pay autosaves" dot.
 - Unknown `/api/*` paths return JSON 404, not the SPA shell. Non-`/api` paths in production fall through to `serveStatic` then to the cached `index.html`.
 
 ## Auth & Sessions
@@ -139,7 +156,7 @@ Expired/dead push subscriptions (404 or 410 from the push service) are auto-prun
 
 `AuthenticatedShell` in `app.tsx` is a **persistent singleton** wrapping `TabTransitionContainer`. It does NOT remount per route, so the transition-layer DOM and its scroll position survive route changes. Header + BottomNav sit outside the container — only the middle animates.
 
-Bottom-nav tabs (`/`, `/history`, `/recurring`, `/analytics`) use directional slide+crossfade. All other routes (`/settings`, `/settings/categories`, `/recurring/new`, `/recurring/edit/:id`) navigate without transition — `navigateTab` bails early if either endpoint isn't a tab. Use plain `route(...)` from `useLocation()` for non-tab navigation; reserve `navigateTab()` for tab switches only.
+Bottom-nav tabs (`/`, `/history`, `/recurring`, `/analytics`) use directional slide+crossfade. All other routes (`/settings`, `/settings/categories`, `/settings/merchants`, `/recurring/new`, `/recurring/edit/:id`, `/confirm`) navigate without transition — `navigateTab` bails early if either endpoint isn't a tab. Use plain `route(...)` from `useLocation()` for non-tab navigation; reserve `navigateTab()` for tab switches only.
 
 `TabTransitionContainer` bypasses preact-iso's `<Router>` — it does its own path → component mapping in `RouteContent`. `useRoute().params` is therefore undefined for some paths; `RecurringForm` guards the access.
 
@@ -178,15 +195,39 @@ When adding a new list screen: pass deps to `useEntrance` that change when rows 
 - **Analytics → History** via "view in history" button — writes `historyFilter` signal with category/subcategory/month, routes to `/history`. History pre-populates its search box from the filter on mount; clearing the chip clears both.
 - **History → Add (edit mode)** via `editingExpense` signal — the detail sheet's "edit" button stashes the expense and routes to `/`. `AddScreen` renders a save/cancel bar fixed above the nav when `editingExpense` is set.
 - **Add (category-first flow)** — tapping a subcategory with amount still 0 stores a pending selection, shakes the amount input, and focuses it. Filling the amount and tapping again commits.
-- **Add discretionary counter** — only counts `source !== "recurring"` expenses. Median-based outlier guard drops any month over 2× the median of the last 3.
+- **Add discretionary counter** — only counts `source !== "recurring"` expenses. Median-based outlier guard drops any month over 2× the median of the last 3. Helper extracted to `lib/discretionary.ts` and unit-tested.
+- **Pending banner → Confirm** — `pendingExpenses` signal feeds a banner on Add. Tapping a row sets `confirmingPending` and routes to `/confirm`; the Confirm screen renders pre-filled amount/note/category, lets the user edit, then `PATCH /pending/:id/confirm` flips the row and upserts merchant memory.
+- **Auto-saved indicator** — `hasUnreviewedAutoSaves` signal drives the accent dot on the History tab icon. Refreshed by `refreshUnreviewedAutoSaves()` on every sync; cleared when the History screen mounts (`markHistoryVisited()` → `POST /history-marker/visit`).
 
 ## Sync Protocol
 
 POST `/api/sync` with `{ changes, last_sync }`. Server upserts with server-stamped `updated_at`, returns delta changes since `last_sync`. Initial sync (null `last_sync`) returns all records including tombstones. Last-write-wins conflict resolution based on ISO string comparison of `updated_at`.
 
+**Pending Apple Pay expenses are excluded** from every sync response (`status = 'confirmed'` filter). They live server-side until the user confirms them through `/api/pending/:id/confirm`, at which point they enter the next sync stream.
+
+**Server-rejected client writes are echoed back**: if the server has a newer `updated_at`, the client's change is dropped and the authoritative server row is included in the delta — even if the client just uploaded that ID. Implemented by tracking `acceptedIds` and excluding them from the delta SELECT (see `sync.ts`).
+
+**Recategorization signal**: when a client edit changes the category of an `apple-pay` expense, `sync.ts` calls `resetMerchantMemory()` so the next transaction at that merchant goes pending again instead of auto-saving with the now-wrong category. Soft deletes don't trigger this.
+
 Server also returns the **full** categories + subcategories list on every sync. The client reconciles by computing `staleIds = local - server`, `bulkDelete(staleIds)`, then `bulkPut(serverList)`. This way server-side deletes propagate without wiping any in-flight client inserts.
 
-Recurring templates are fetched in a separate `GET /api/recurring` call at the end of `sync()` — failure there is non-fatal and logged.
+After the sync transaction, the engine fetches `/api/recurring`, `/api/pending`, and `/api/history-marker` to refresh their respective signals — all non-fatal on failure.
+
+## Apple Pay & Merchant Memory
+
+iOS Shortcut sends every Apple Pay transaction to `POST|GET /api/shortcuts/expense` with a per-user Bearer token. The webhook normalizes the merchant name (`lib/merchantNormalize.ts` strips trailing store IDs, `#` numbers, Austrian city suffixes) and consults `merchant_categories` (`lib/merchantMemory.ts`):
+
+- **0 confirmations** (no row): row inserted with `status='pending'`, `category_id=null`. UI prompts user to categorize.
+- **1 confirmation**: pending row created with the suggested `(category, subcategory)` pre-filled. The Confirm screen mounts CategorySelector with the suggestion already chosen — one tap to confirm.
+- **≥2 confirmations**: row inserted as `status='confirmed'` directly with the memorized category. The user is informed via the History-tab dot rather than a confirmation prompt.
+
+Confirmation flow (`PATCH /api/pending/:id/confirm`) wraps the status flip + merchant memory upsert in a single SQLite transaction. Same-(category,subcategory) confirmation increments `confirmation_count`; different category resets it to 1 (the user disagreed with prior memory, so we start over).
+
+When the user **edits** an already-confirmed Apple Pay expense and changes its category (sync flow), `sync.ts` calls `resetMerchantMemory()` to flip the count back to 1 — next webhook hit at that merchant goes pending again so the user can re-confirm. This is gated to `source === 'apple-pay'` and `deleted === 0` (soft deletes don't reset memory).
+
+Memory is per-user (composite PK `user_id + merchant_normalized`) — household members can categorize the same merchant differently.
+
+`Settings → Merchants` (`/settings/merchants`) renders the user's full memory; PATCH overrides a mapping (resets count to 1), DELETE removes it. `POST /api/merchants/import` backfills from existing confirmed Apple Pay history — picks the most-frequent (cat, sub) pair per merchant and never overwrites an existing memory row.
 
 ## Service Worker
 
@@ -212,6 +253,16 @@ Three stages in `Dockerfile`:
 - `rollup-plugin-visualizer` emits `client/dist/bundle-stats.html` (treemap, gzip sizes) on every production build. Manual chunks split `motion` and `dexie` out of the main bundle (see `vite.config.ts`).
 - The VPS runs a **weekly Docker prune** via root's crontab: `0 4 * * 0 docker buildx prune -f --keep-storage 5GB && docker image prune -af --filter "until=168h"`, logged to `./data/docker-prune.log`. The original trigger was disk pressure (85% full) from 84 GB of accumulated buildx cache silently slowing overlay2 writes. Don't remove this cron without replacing it — the cache grows unbounded otherwise.
 
+## Test Infrastructure
+
+Vitest in both packages, `*.test.ts` files live next to the file they test.
+
+- **Server** (`server/vitest.config.ts`, Node env): per-file in-memory SQLite via `DB_PATH=:memory:` set in `src/test/setup.ts` before any module loads. Helpers in `src/test/db.ts` — `ensureMigrated()` runs schema once, `resetDb()` truncates between tests, `seedTestUsers()` / `seedTestSession()` / `seedTestApiToken()` / `insertExpense()` / `insertRecurringTemplate()` populate. `src/test/app.ts` mounts a Hono sub-router under `/api/<prefix>` and wraps `app.request(...)`.
+- **Client** (`client/vitest.config.ts`, jsdom env): `src/test/setup.ts` imports `fake-indexeddb/auto` so Dexie writes go to an in-memory IDB; jest-dom matchers attached via `@testing-library/jest-dom/vitest`. `window.matchMedia` stubbed.
+- **API mocks**: client tests use `vi.mock("@/lib/api", ...)` to stub the Hono RPC client (see `sync/engine.test.ts`).
+- **Coverage targets** (current): sync route 100%, auth 95%, merchants 96%, recurring cron 92%, shortcuts 85%; format/discretionary helpers ~100%. Notifications, push, export, tokens, categories CRUD intentionally untested for now (low data-integrity risk).
+- **Bcrypt cost in tests**: `seedTestUsers()` hashes at cost 4, not 12, to keep the auth suite under a few seconds.
+
 ## Gotchas
 
 - **Preact re-renders clobber inline JSX styles** — If JSX sets `style={{ opacity: 0 }}` and then motion imperatively sets `el.style.opacity = "1"`, the NEXT re-render (new data, state change, list growth) re-applies the JSX inline style and hides the element again. For animated reveals, keep the default hidden state in a CSS rule gated on a data-attribute that JS adds (e.g. `[data-revealed]`). Never rely on JSX inline `opacity: 0` as a "until animated" marker — it regresses on every re-render. See [lib/entrance.ts](client/src/lib/entrance.ts) for the reference implementation.
@@ -225,3 +276,5 @@ Three stages in `Dockerfile`:
 - **No shell transform** — `AuthenticatedShell` deliberately does not wrap content in a `transform`-ed ancestor. iOS Safari PWAs mis-measure fixed descendants inside transform'ed ancestors on cold start, leaving the bottom nav floating until the first touch reflow. Apply `max-w-[480px] mx-auto` on fixed children instead.
 - **Safe-area bottom padding** — `.safe-pb` is a plain `16px` and `.safe-pb-lg` is `24px`. They are **not** safe-area aware; `BottomNav` handles the home-indicator inset itself via `calc(env(safe-area-inset-bottom, 0px) + 24px)`. Analytics uses a custom `calc(env(safe-area-inset-bottom, 0px) + 72px)` because its bottom card wants tighter breathing room above the nav.
 - **Hono RPC param+body calls need `as any`** — e.g. `api.api.categories[":id"].$patch({ param: { id }, json: body } as any)`. The overload resolution fails on routes that take both. Already applied across the codebase; keep doing it.
+- **`CREATE TABLE IF NOT EXISTS` won't relax constraints either.** When `expenses.category_id`/`subcategory_id` had to become NULLABLE for Apple Pay pending rows, `migrate.ts` rebuilt the table via `expenses_new` + `INSERT … SELECT … DROP … RENAME`. See `relaxExpensesNullability()`. Toggle `foreign_keys` OFF outside the transaction (sqlite refuses to flip mid-tx) before doing this kind of rebuild.
+- **Hono sub-routers + trailing slashes** — when a sub-app declares `.get("/", …)` and is mounted via `.route("/api/pending", subapp)`, requests to `/api/pending/` 404 but `/api/pending` matches. Tests / fetch calls should use the no-trailing-slash form.
