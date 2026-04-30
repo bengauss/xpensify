@@ -334,7 +334,12 @@ export function AddScreen() {
 
       confirmingPending.value = null;
       await refreshPendingExpenses();
-      sync().catch(console.error);
+      // Await sync so the just-confirmed expense lands in Dexie BEFORE we
+      // navigate to /history. If we routed first and synced after, the History
+      // entrance cascade would be running when Dexie's length flips +1, which
+      // re-fires useEntrance mid-animation and strands rows in a half-revealed
+      // state.
+      await sync().catch(console.error);
 
       // If more pending remain, return to the confirm list; otherwise go to history.
       if (pendingExpenses.value.length > 0) {
@@ -380,7 +385,7 @@ export function AddScreen() {
     : null;
 
   return (
-    <div class={`flex flex-col gap-4 px-4 pt-2 ${isEditing || isConfirming ? "pb-40" : "safe-pb"}`}>
+    <div class={`flex flex-col gap-4 px-4 pt-2 ${isEditing ? "pb-40" : "safe-pb"}`}>
       <div ref={amountWrapRef} data-add-reveal>
         <AmountInput
           value={amount}
@@ -503,6 +508,61 @@ export function AddScreen() {
         <NoteInput value={note} onChange={setNote} />
       </div>
 
+      {/* Confirm-mode save bar — inline, right below the note. Fixed-bottom
+          would push it off-screen behind the tab bar on a tall category grid. */}
+      {isConfirming && (
+        <div>
+          {showSkipConfirm ? (
+            <ConfirmDialog
+              message="skip this expense? it won't be logged"
+              onConfirm={async () => {
+                setShowSkipConfirm(false);
+                await handleSkipPending();
+              }}
+              onCancel={() => setShowSkipConfirm(false)}
+            />
+          ) : (
+            <div class="grid grid-cols-2" style={{ gap: 10 }}>
+              <button
+                ref={confirmPress.ref}
+                onPointerDown={confirmPress.onPointerDown}
+                onPointerUp={confirmPress.onPointerUp}
+                onPointerCancel={confirmPress.onPointerCancel}
+                onClick={handleConfirmPending}
+                disabled={!pendingSubcategoryId || confirmSaving || parseCents(amount) <= 0}
+                class="flex items-center justify-center text-sm font-medium text-white cursor-pointer border-0"
+                style={{
+                  height: 48,
+                  borderRadius: 14,
+                  backgroundColor: "var(--color-accent)",
+                  opacity: !pendingSubcategoryId || confirmSaving || parseCents(amount) <= 0 ? 0.5 : 1,
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                {confirmSaving ? "saving..." : "confirm"}
+              </button>
+              <button
+                ref={skipPress.ref}
+                onPointerDown={skipPress.onPointerDown}
+                onPointerUp={skipPress.onPointerUp}
+                onPointerCancel={skipPress.onPointerCancel}
+                onClick={() => setShowSkipConfirm(true)}
+                class="flex items-center justify-center text-sm font-medium cursor-pointer border-0"
+                style={{
+                  height: 48,
+                  borderRadius: 14,
+                  backgroundColor: "rgba(255,255,255,0.06)",
+                  color: "var(--color-text-secondary)",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                skip
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Edit-mode save bar — fixed above the tab bar */}
       {isEditing && (
         <div
@@ -550,67 +610,6 @@ export function AddScreen() {
         </div>
       )}
 
-      {/* Confirm-mode save bar — fixed above the tab bar */}
-      {isConfirming && (
-        <div
-          class="fixed left-0 right-0 mx-auto max-w-[480px] z-40 px-4"
-          style={{
-            bottom: "calc(68px + env(safe-area-inset-bottom))",
-            backgroundColor: "var(--color-bg-primary)",
-          }}
-        >
-          {showSkipConfirm ? (
-            <div class="pt-2 pb-3">
-              <ConfirmDialog
-                message="skip this expense? it won't be logged"
-                onConfirm={async () => {
-                  setShowSkipConfirm(false);
-                  await handleSkipPending();
-                }}
-                onCancel={() => setShowSkipConfirm(false)}
-              />
-            </div>
-          ) : (
-            <div class="grid grid-cols-2 pt-2 pb-3" style={{ gap: 10 }}>
-              <button
-                ref={confirmPress.ref}
-                onPointerDown={confirmPress.onPointerDown}
-                onPointerUp={confirmPress.onPointerUp}
-                onPointerCancel={confirmPress.onPointerCancel}
-                onClick={handleConfirmPending}
-                disabled={!pendingSubcategoryId || confirmSaving || parseCents(amount) <= 0}
-                class="flex items-center justify-center text-sm font-medium text-white cursor-pointer border-0"
-                style={{
-                  height: 48,
-                  borderRadius: 14,
-                  backgroundColor: "var(--color-accent)",
-                  opacity: !pendingSubcategoryId || confirmSaving || parseCents(amount) <= 0 ? 0.5 : 1,
-                  WebkitTapHighlightColor: "transparent",
-                }}
-              >
-                {confirmSaving ? "saving..." : "confirm"}
-              </button>
-              <button
-                ref={skipPress.ref}
-                onPointerDown={skipPress.onPointerDown}
-                onPointerUp={skipPress.onPointerUp}
-                onPointerCancel={skipPress.onPointerCancel}
-                onClick={() => setShowSkipConfirm(true)}
-                class="flex items-center justify-center text-sm font-medium cursor-pointer border-0"
-                style={{
-                  height: 48,
-                  borderRadius: 14,
-                  backgroundColor: "rgba(255,255,255,0.06)",
-                  color: "var(--color-text-secondary)",
-                  WebkitTapHighlightColor: "transparent",
-                }}
-              >
-                skip
-              </button>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
