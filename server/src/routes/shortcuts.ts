@@ -121,6 +121,34 @@ interface ExpenseInput {
   timestamp: unknown;
 }
 
+function pickFromDict(d: Record<string, unknown>, ...keys: string[]): unknown {
+  for (const k of keys) {
+    if (d[k] !== undefined && d[k] !== null && d[k] !== "") return d[k];
+  }
+  const lower: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(d)) lower[k.toLowerCase()] = v;
+  for (const k of keys) {
+    const v = lower[k.toLowerCase()];
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return undefined;
+}
+
+function extractFromDict(d: Record<string, unknown>): ExpenseInput {
+  const merchantRaw = pickFromDict(d, "merchant", "Merchant", "merchantName", "MerchantName", "name", "Name");
+  let merchant: unknown = merchantRaw;
+  if (merchantRaw && typeof merchantRaw === "object") {
+    const m = merchantRaw as Record<string, unknown>;
+    merchant = m.name ?? m.Name ?? m.merchantName ?? JSON.stringify(merchantRaw);
+  }
+  return {
+    amount: pickFromDict(d, "amount", "Amount", "value", "Value"),
+    merchant,
+    currency: pickFromDict(d, "currency", "Currency", "currencyCode", "CurrencyCode"),
+    timestamp: pickFromDict(d, "date", "Date", "timestamp", "Timestamp", "transactionDate", "TransactionDate"),
+  };
+}
+
 function ingestExpense(
   c: import("hono").Context,
   tokenRow: { id: string; user_id: string },
@@ -285,6 +313,28 @@ const shortcuts = new Hono()
     if (!auth.ok) return c.json(auth.body, auth.status);
 
     const q = c.req.query();
+
+    // If `transaction` (or `tx` / `dict`) is present, prefer it: it's the
+    // whole Wallet Transaction dictionary serialized to JSON by Shortcuts.
+    const dictRaw = q.transaction ?? q.tx ?? q.dict;
+    if (typeof dictRaw === "string" && dictRaw.trim() !== "") {
+      console.log(`[shortcuts] raw dict: ${dictRaw.slice(0, 1000)}`);
+      let parsed: unknown = null;
+      try {
+        parsed = JSON.parse(dictRaw);
+      } catch {
+        console.warn(`[shortcuts] dict not JSON; raw=${dictRaw.slice(0, 500)}`);
+      }
+      if (parsed && typeof parsed === "object") {
+        return ingestExpense(
+          c,
+          auth.tokenRow,
+          extractFromDict(parsed as Record<string, unknown>),
+          `?transaction=${dictRaw.slice(0, 500)}`,
+        );
+      }
+    }
+
     return ingestExpense(
       c,
       auth.tokenRow,
