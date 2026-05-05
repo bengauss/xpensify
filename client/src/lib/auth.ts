@@ -9,7 +9,30 @@ export interface User {
   avatar_color: string;
 }
 
-export const currentUser = signal<User | null>(null);
+const USER_CACHE_KEY = "xpensify_user";
+
+// Cache the display profile so offline cold-starts can render the app shell
+// and stamp user_id on new expenses without a network call. The HttpOnly
+// session cookie remains the actual credential — this is rendering metadata.
+function loadCachedUser(): User | null {
+  try {
+    const raw = localStorage.getItem(USER_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as User) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setUser(user: User | null): void {
+  currentUser.value = user;
+  if (user) {
+    localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+  } else {
+    localStorage.removeItem(USER_CACHE_KEY);
+  }
+}
+
+export const currentUser = signal<User | null>(loadCachedUser());
 
 export async function login(username: string, password: string): Promise<void> {
   const res = await api.api.auth.login.$post({ json: { username, password } });
@@ -20,7 +43,7 @@ export async function login(username: string, password: string): Promise<void> {
   }
 
   const user = await res.json() as User;
-  currentUser.value = user;
+  setUser(user);
 }
 
 export async function logout(): Promise<void> {
@@ -29,7 +52,7 @@ export async function logout(): Promise<void> {
   } catch {
     // Network failure — still wipe local state so another user can't reuse the device
   }
-  currentUser.value = null;
+  setUser(null);
   localStorage.removeItem("xpensify_last_sync");
   try {
     await db.delete();
@@ -40,18 +63,27 @@ export async function logout(): Promise<void> {
   window.location.href = "/login";
 }
 
+// Best-effort background revalidation. Called once on app boot. Never throws —
+// offline is a normal state and must not strand the UI behind a rejected promise.
 export async function checkAuth(): Promise<void> {
-  const res = await api.api.auth.me.$get();
+  let res: Response;
+  try {
+    res = await api.api.auth.me.$get();
+  } catch {
+    // Offline / network error — keep whatever we have cached. Sync 401s will
+    // trigger logout() if the session has actually expired.
+    return;
+  }
 
   if (res.status === 401) {
-    currentUser.value = null;
+    setUser(null);
     return;
   }
 
   if (res.ok) {
     const user = await res.json() as User;
-    currentUser.value = user;
-  } else {
-    currentUser.value = null;
+    setUser(user);
   }
+  // Other statuses (5xx, etc.) — leave cached user alone; transient server
+  // problems must not log the user out.
 }

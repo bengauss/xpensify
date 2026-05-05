@@ -1,7 +1,6 @@
 import { LocationProvider, useLocation } from "preact-iso";
 import { useEffect } from "preact/hooks";
 import { lazy, Suspense } from "preact/compat";
-import { signal } from "@preact/signals";
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
 import { checkAuth, currentUser } from "@/lib/auth";
@@ -11,16 +10,17 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const LoginScreen = lazy(() => import("@/screens/Login"));
 
-/** True once checkAuth() has resolved (regardless of result) */
-const authChecked = signal(false);
-
-/** Checks auth on mount, redirects as needed, starts sync scheduler. */
+/**
+ * Background-revalidates the cached user on mount, redirects as needed,
+ * starts sync scheduler. currentUser is initialized synchronously from
+ * localStorage in auth.ts, so first render already has the right state —
+ * we never block the UI on a network call.
+ */
 function AuthGate() {
   const { route } = useLocation();
 
   useEffect(() => {
     checkAuth().then(() => {
-      authChecked.value = true;
       const currentPath = window.location.pathname;
       if (!currentUser.value && currentPath !== "/login") {
         route("/login");
@@ -69,7 +69,6 @@ function AuthenticatedShell() {
 function AppRoutes() {
   const { path } = useLocation();
 
-  if (!authChecked.value) return null;
   if (path === "/login") {
     return (
       <Suspense fallback={null}>
@@ -77,6 +76,9 @@ function AppRoutes() {
       </Suspense>
     );
   }
+  // No cached user and not on /login: render nothing while AuthGate's effect
+  // redirects. Brief, only on cold start with empty cache.
+  if (!currentUser.value) return null;
   return <AuthenticatedShell />;
 }
 

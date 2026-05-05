@@ -139,6 +139,7 @@ All mounted under `/api/*`, guarded by `csrfMiddleware` (Origin check) + `noStor
 - CSRF defense is an Origin header check (`middleware/csrf.ts`). GET/HEAD/OPTIONS are exempt. Missing Origin is rejected. Only active when `DOMAIN` is set.
 - Password change in `/api/auth/change-password` **rotates all sessions for the user** — every other device has to sign in again — and returns a fresh cookie for the current tab.
 - Client-side: on 401 from `/api/sync`, the engine calls `logout()`, which wipes IndexedDB and hard-reloads to `/login`. This prevents pending expenses from being re-stamped under whoever signs in next on the device.
+- The display profile is cached in `localStorage["xpensify_user"]` so offline cold-starts can render the shell and stamp `user_id` on new expenses without a network call. The HttpOnly session cookie is still the actual credential — the cached profile is rendering metadata only. `currentUser` is initialized synchronously from this cache at module load; `checkAuth()` runs as best-effort background revalidation (200 refreshes the cache, 401 clears it, network/5xx errors are no-ops). Without this cache, an offline boot rejected the `/api/auth/me` fetch and left the app stuck on a blank `<div id="app">` against the inline black background — the original "black screen offline" bug.
 - Push subscription endpoints are allowlisted to known push-service hosts (FCM, Mozilla, Microsoft, Apple, Windows Notify) to block SSRF — see `isAllowedPushEndpoint` in `server/src/routes/push.ts`.
 
 ## Cron Jobs
