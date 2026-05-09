@@ -6,6 +6,8 @@ import { usePressScale } from "@/lib/usePressScale";
 
 interface TrendChartProps {
   trend: MonthlyTrendItem[];
+  /** 'month' shows monthly bars (month=1..12); 'year' shows yearly bars (month=0). */
+  period?: "month" | "year";
   selectedYear: number;
   selectedMonth: number;
   onSelect: (year: number, month: number) => void;
@@ -29,6 +31,7 @@ function monthLabel(year: number, month: number): string {
 
 export function TrendChart({
   trend,
+  period = "month",
   selectedYear,
   selectedMonth,
   onSelect,
@@ -100,10 +103,15 @@ export function TrendChart({
           barEl.style.height = `${targetPx}px`;
         }
       } else {
+        // Bars that mounted after the first render (e.g. period switch swaps
+        // the keyed children) need the attribute too, otherwise the CSS
+        // `height: 0 !important` rule keeps the new bars invisible.
+        const justMounted = !barEl.hasAttribute("data-revealed");
+        barEl.setAttribute("data-revealed", "1");
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (animate as any)(
           barEl,
-          { height: `${targetPx}px` },
+          justMounted ? { height: ["0px", `${targetPx}px`] } : { height: `${targetPx}px` },
           { ...springs.data, ...getReducedMotionOverride() },
         );
       }
@@ -125,11 +133,14 @@ export function TrendChart({
       style={{ scrollbarWidth: "none" }}
     >
       {trend.map((item, index) => {
-        const isSelected = item.year === selectedYear && item.month === selectedMonth;
+        const isSelected = period === "year"
+          ? item.year === selectedYear
+          : item.year === selectedYear && item.month === selectedMonth;
         return (
           <TrendBar
-            key={`${item.year}-${item.month}`}
+            key={period === "year" ? `y-${item.year}` : `${item.year}-${item.month}`}
             item={item}
+            period={period}
             isSelected={isSelected}
             selectedColor={selectedColor}
             barMaxHeight={BAR_MAX_HEIGHT}
@@ -145,6 +156,7 @@ export function TrendChart({
 
 interface TrendBarProps {
   item: MonthlyTrendItem;
+  period: "month" | "year";
   isSelected: boolean;
   selectedColor: string;
   barMaxHeight: number;
@@ -155,6 +167,7 @@ interface TrendBarProps {
 
 function TrendBar({
   item,
+  period,
   isSelected,
   selectedColor,
   barMaxHeight,
@@ -163,6 +176,15 @@ function TrendBar({
   barRefCallback,
 }: TrendBarProps) {
   const press = usePressScale<HTMLButtonElement>(0.97);
+
+  const isYearMode = period === "year";
+  const isInProgressYear = isYearMode && item.year === new Date().getFullYear();
+  const label = isYearMode
+    ? (isInProgressYear ? `${item.year} ytd` : String(item.year))
+    : monthLabel(item.year, item.month);
+  const barWidth = isYearMode ? 60 : 48;
+  // Honest signal that this year isn't done yet: dim the fill.
+  const barOpacity = isInProgressYear ? 0.55 : 1;
 
   return (
     <button
@@ -175,7 +197,7 @@ function TrendBar({
       onPointerUp={press.onPointerUp}
       onPointerCancel={press.onPointerCancel}
       class="flex flex-col items-center flex-shrink-0"
-      style={{ width: 48, WebkitTapHighlightColor: "transparent" }}
+      style={{ width: barWidth, WebkitTapHighlightColor: "transparent" }}
     >
       {/* Value label on top */}
       <span
@@ -199,18 +221,19 @@ function TrendBar({
           class="w-full rounded-t-sm"
           style={{
             backgroundColor: isSelected ? selectedColor : "#4a4a52",
+            opacity: barOpacity,
             willChange: "height",
             minHeight: item.total > 0 ? 2 : 0,
           }}
         />
       </div>
 
-      {/* Month label below */}
+      {/* Period label below */}
       <span
         class="text-[10px] mt-1"
         style={{ color: isSelected ? selectedColor : "var(--color-text-tertiary)" }}
       >
-        {monthLabel(item.year, item.month)}
+        {label}
       </span>
     </button>
   );

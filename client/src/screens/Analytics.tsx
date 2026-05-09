@@ -13,8 +13,25 @@ import {
 } from "@/lib/analytics";
 import { CategoryBars } from "@/components/CategoryBars";
 import { TrendChart } from "@/components/TrendChart";
+import { SegmentedPill } from "@/components/SegmentedPill";
 import { formatMoney } from "@/lib/format";
 import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
+
+type Period = "month" | "year";
+type Scope = "all" | "discretionary";
+
+const PERIOD_KEY = "xpensify_analytics_period";
+const SCOPE_KEY = "xpensify_analytics_scope";
+
+function readStoredPeriod(): Period {
+  if (typeof localStorage === "undefined") return "month";
+  return localStorage.getItem(PERIOD_KEY) === "year" ? "year" : "month";
+}
+
+function readStoredScope(): Scope {
+  if (typeof localStorage === "undefined") return "all";
+  return localStorage.getItem(SCOPE_KEY) === "discretionary" ? "discretionary" : "all";
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -123,6 +140,17 @@ export default function AnalyticsScreen() {
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+  const [period, setPeriodState] = useState<Period>(readStoredPeriod);
+  const [scope, setScopeState] = useState<Scope>(readStoredScope);
+
+  function setPeriod(p: Period) {
+    setPeriodState(p);
+    try { localStorage.setItem(PERIOD_KEY, p); } catch { /* ignore */ }
+  }
+  function setScope(s: Scope) {
+    setScopeState(s);
+    try { localStorage.setItem(SCOPE_KEY, s); } catch { /* ignore */ }
+  }
 
   const drill = analyticsDrilldown.value;
   const drillLevel: 1 | 2 | 3 = drill ? (drill.subcategoryId ? 3 : 2) : 1;
@@ -150,33 +178,65 @@ export default function AnalyticsScreen() {
 
     const catMap = new Map(allCategories.map((c) => [c.id, c]));
     const subMap = new Map(allSubcategories.map((s) => [s.id, s]));
-    const ym = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
-    const { year: prevYear, month: prevMonth } = prevYearMonth(selectedYear, selectedMonth);
-    const ymPrev = `${prevYear}-${String(prevMonth).padStart(2, "0")}`;
 
-    // Scope the full expense set once based on drill-down
-    const scoped = allExpenses.filter((e) => {
+    // 1. Discretionary filter — exclude recurring-generated expenses entirely.
+    let baseExpenses = allExpenses;
+    if (scope === "discretionary") {
+      baseExpenses = baseExpenses.filter((e) => e.source !== "recurring");
+    }
+
+    // 2. Drill-down scope.
+    const scoped = baseExpenses.filter((e) => {
       if (drill?.categoryId && e.category_id !== drill.categoryId) return false;
       if (drill?.subcategoryId && e.subcategory_id !== drill.subcategoryId) return false;
       return true;
     });
 
-    const currentTotal = scoped
-      .filter((e) => e.timestamp.startsWith(ym))
-      .reduce((s, e) => s + e.amount, 0);
+    // 3. Period-aware "in current period" predicate + comparison cutoff.
+    const ym = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
+    const yr = String(selectedYear);
+    const { year: prevYear, month: prevMonth } = prevYearMonth(selectedYear, selectedMonth);
+    const ymPrev = `${prevYear}-${String(prevMonth).padStart(2, "0")}`;
 
-    const prevTotal = scoped
-      .filter((e) => e.timestamp.startsWith(ymPrev))
-      .reduce((s, e) => s + e.amount, 0);
+    const inCurrentPeriod = period === "year"
+      ? (e: typeof scoped[number]) => e.timestamp.startsWith(yr)
+      : (e: typeof scoped[number]) => e.timestamp.startsWith(ym);
 
-    // Breakdown — depends on level
+    // Comparison totals. In month mode: this month vs the previous month.
+    // In year mode: this year vs the prior year, both clamped to the same
+    // calendar cutoff (so a partial 2026 compares to Jan 1–today 2025).
+    const localNow = new Date();
+    let currentTotal = 0;
+    let prevTotal = 0;
+
+    if (period === "month") {
+      for (const e of scoped) {
+        if (e.timestamp.startsWith(ym)) currentTotal += e.amount;
+        else if (e.timestamp.startsWith(ymPrev)) prevTotal += e.amount;
+      }
+    } else {
+      const isCurrentYear = selectedYear === localNow.getFullYear();
+      const cutoffMd = isCurrentYear
+        ? localNow.toISOString().slice(5, 10) // "MM-DD"
+        : "12-31";
+      const cutoffYmd = `${selectedYear}-${cutoffMd}`;
+      const prevCutoffYmd = `${selectedYear - 1}-${cutoffMd}`;
+      for (const e of scoped) {
+        const ymd = e.timestamp.slice(0, 10);
+        const y = ymd.slice(0, 4);
+        if (y === yr && ymd <= cutoffYmd) currentTotal += e.amount;
+        else if (y === String(selectedYear - 1) && ymd <= prevCutoffYmd) prevTotal += e.amount;
+      }
+    }
+
+    // 4. Breakdown — depends on drill level. Same logic, just a period filter.
     let breakdown: CategoryBreakdownItem[] = [];
     let topNotes: TopNote[] = [];
 
     if (drillLevel === 1) {
       const catTotals = new Map<string, number>();
       for (const e of scoped) {
-        if (!e.timestamp.startsWith(ym)) continue;
+        if (!inCurrentPeriod(e)) continue;
         catTotals.set(e.category_id, (catTotals.get(e.category_id) ?? 0) + e.amount);
       }
       for (const [category_id, total] of catTotals) {
@@ -194,7 +254,7 @@ export default function AnalyticsScreen() {
       const parentColor = parent?.color ?? "#868e96";
       const subTotals = new Map<string, number>();
       for (const e of scoped) {
-        if (!e.timestamp.startsWith(ym)) continue;
+        if (!inCurrentPeriod(e)) continue;
         subTotals.set(e.subcategory_id, (subTotals.get(e.subcategory_id) ?? 0) + e.amount);
       }
       for (const [subcategory_id, total] of subTotals) {
@@ -208,10 +268,9 @@ export default function AnalyticsScreen() {
       }
       breakdown.sort((a, b) => b.total - a.total);
     } else {
-      // Level 3: top notes for this subcategory
       const noteTotals = new Map<string, { count: number; total: number }>();
       for (const e of scoped) {
-        if (!e.timestamp.startsWith(ym)) continue;
+        if (!inCurrentPeriod(e)) continue;
         const key = e.note?.trim() || "(no note)";
         const ex = noteTotals.get(key) ?? { count: 0, total: 0 };
         noteTotals.set(key, { count: ex.count + 1, total: ex.total + e.amount });
@@ -221,55 +280,86 @@ export default function AnalyticsScreen() {
         .sort((a, b) => b.total - a.total);
     }
 
-    // Trend — scoped
-    const trendTotals = new Map<string, number>();
-    for (const e of scoped) {
-      const key = e.timestamp.slice(0, 7);
-      trendTotals.set(key, (trendTotals.get(key) ?? 0) + e.amount);
-    }
+    // 5. Trend — monthly buckets in month mode, yearly buckets in year mode.
     const trend: MonthlyTrendItem[] = [];
-    for (const [key, total] of trendTotals) {
-      const [yearStr, monthStr] = key.split("-");
-      trend.push({
-        year: parseInt(yearStr, 10),
-        month: parseInt(monthStr, 10),
-        total,
-      });
+    if (period === "month") {
+      const trendTotals = new Map<string, number>();
+      for (const e of scoped) {
+        const key = e.timestamp.slice(0, 7);
+        trendTotals.set(key, (trendTotals.get(key) ?? 0) + e.amount);
+      }
+      for (const [key, total] of trendTotals) {
+        const [yearStr, monthStr] = key.split("-");
+        trend.push({
+          year: parseInt(yearStr, 10),
+          month: parseInt(monthStr, 10),
+          total,
+        });
+      }
+      trend.sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
+    } else {
+      const yearTotals = new Map<number, number>();
+      for (const e of scoped) {
+        const y = parseInt(e.timestamp.slice(0, 4), 10);
+        yearTotals.set(y, (yearTotals.get(y) ?? 0) + e.amount);
+      }
+      for (const [y, total] of yearTotals) {
+        trend.push({ year: y, month: 0, total });
+      }
+      trend.sort((a, b) => a.year - b.year);
     }
-    trend.sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
 
-    // Year-to-date — scoped to the selected year Jan 1 → cutoff, compared
-    // to the previous year Jan 1 → same cutoff. Cutoff is today when the
-    // selected month is the in-progress calendar month; otherwise it's the
-    // last day of the selected month (i.e. the month is finished).
-    const localNow = new Date();
-    const isCurrentCalendarMonth =
-      selectedYear === localNow.getFullYear() &&
-      selectedMonth === localNow.getMonth() + 1;
-    const cutoffYmd = isCurrentCalendarMonth
-      ? localNow.toISOString().slice(0, 10)
-      : `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(
-          new Date(selectedYear, selectedMonth, 0).getDate()
-        ).padStart(2, "0")}`;
-    const prevCutoffYmd = `${selectedYear - 1}${cutoffYmd.slice(4)}`;
-
+    // 6. YTD card data (month mode only).
     let ytd = 0;
     let prevYtd = 0;
-    for (const e of scoped) {
-      const ymd = e.timestamp.slice(0, 10);
-      const yr = ymd.slice(0, 4);
-      if (yr === String(selectedYear) && ymd <= cutoffYmd) {
-        ytd += e.amount;
-      } else if (yr === String(selectedYear - 1) && ymd <= prevCutoffYmd) {
-        prevYtd += e.amount;
+    if (period === "month") {
+      const isCurrentCalendarMonth =
+        selectedYear === localNow.getFullYear() &&
+        selectedMonth === localNow.getMonth() + 1;
+      const cutoffYmd = isCurrentCalendarMonth
+        ? localNow.toISOString().slice(0, 10)
+        : `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(
+            new Date(selectedYear, selectedMonth, 0).getDate()
+          ).padStart(2, "0")}`;
+      const prevCutoffYmd = `${selectedYear - 1}${cutoffYmd.slice(4)}`;
+      for (const e of scoped) {
+        const ymd = e.timestamp.slice(0, 10);
+        const y = ymd.slice(0, 4);
+        if (y === yr && ymd <= cutoffYmd) ytd += e.amount;
+        else if (y === String(selectedYear - 1) && ymd <= prevCutoffYmd) prevYtd += e.amount;
       }
     }
 
-    return { currentTotal, prevTotal, breakdown, topNotes, trend, ytd, prevYtd };
+    // 7. Monthly-avg card (year mode replacement for YTD).
+    // Average across the months that have actually elapsed in the selected
+    // year — so 2026 with five months in is divided by 5. Comparison uses
+    // the same denominator on the prior year for an apples-to-apples ratio.
+    let monthlyAvg = 0;
+    let prevMonthlyAvg = 0;
+    if (period === "year") {
+      const isCurrentYear = selectedYear === localNow.getFullYear();
+      const monthsElapsed = isCurrentYear ? localNow.getMonth() + 1 : 12;
+      monthlyAvg = monthsElapsed > 0 ? Math.round(currentTotal / monthsElapsed) : 0;
+      prevMonthlyAvg = monthsElapsed > 0 ? Math.round(prevTotal / monthsElapsed) : 0;
+    }
+
+    return {
+      currentTotal,
+      prevTotal,
+      breakdown,
+      topNotes,
+      trend,
+      ytd,
+      prevYtd,
+      monthlyAvg,
+      prevMonthlyAvg,
+    };
   }, [
     allExpenses,
     selectedYear,
     selectedMonth,
+    period,
+    scope,
     drill?.categoryId,
     drill?.subcategoryId,
     drillLevel,
@@ -324,12 +414,20 @@ export default function AnalyticsScreen() {
   // ── Event handlers ────────────────────────────────────────────────────────
 
   function handlePrev() {
+    if (period === "year") {
+      setSelectedYear((y) => y - 1);
+      return;
+    }
     const { year, month } = prevYearMonth(selectedYear, selectedMonth);
     setSelectedYear(year);
     setSelectedMonth(month);
   }
 
   function handleNext() {
+    if (period === "year") {
+      setSelectedYear((y) => y + 1);
+      return;
+    }
     const { year, month } = nextYearMonth(selectedYear, selectedMonth);
     setSelectedYear(year);
     setSelectedMonth(month);
@@ -337,7 +435,9 @@ export default function AnalyticsScreen() {
 
   function handleTrendSelect(year: number, month: number) {
     setSelectedYear(year);
-    setSelectedMonth(month);
+    if (period === "month") {
+      setSelectedMonth(month);
+    }
   }
 
   function handleItemTap(id: string) {
@@ -361,7 +461,11 @@ export default function AnalyticsScreen() {
     if (!drill) return;
     const cat = allCategories.find((c) => c.id === drill.categoryId);
     if (!cat) return;
-    const monthStr = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
+    // History month filter is YYYY-MM only — leave it unset in year mode so
+    // the user sees the whole year for the drilled category.
+    const monthStr = period === "year"
+      ? undefined
+      : `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
     if (drill.subcategoryId) {
       const sub = allSubcategories.find((s) => s.id === drill.subcategoryId);
       historyFilter.value = {
@@ -377,7 +481,9 @@ export default function AnalyticsScreen() {
 
   // ── Derived UI values ─────────────────────────────────────────────────────
 
-  const monthLabel = `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
+  const periodLabel = period === "year"
+    ? String(selectedYear)
+    : `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
   const prevMonthName = MONTH_NAMES[prevYearMonth(selectedYear, selectedMonth).month - 1];
 
   const currentTotal = analytics?.currentTotal ?? 0;
@@ -390,6 +496,11 @@ export default function AnalyticsScreen() {
   const prevYtd = analytics?.prevYtd ?? 0;
   const ytdPct = formatPct(ytd, prevYtd);
   const ytdIsLess = ytd - prevYtd <= 0;
+
+  const monthlyAvg = analytics?.monthlyAvg ?? 0;
+  const prevMonthlyAvg = analytics?.prevMonthlyAvg ?? 0;
+  const monthlyAvgPct = formatPct(monthlyAvg, prevMonthlyAvg);
+  const monthlyAvgIsLess = monthlyAvg - prevMonthlyAvg <= 0;
 
   const drillCategory = drill?.categoryId
     ? allCategories.find((c) => c.id === drill.categoryId)
@@ -413,61 +524,95 @@ export default function AnalyticsScreen() {
         ? drillCategory?.name ?? ""
         : "";
 
-  const totalCardLabel = scopeLabel ? `${scopeLabel} this month` : "total spent";
-  const ytdCardLabel = scopeLabel ? `${scopeLabel} ytd` : "year to date";
+  const totalCardLabel = scopeLabel
+    ? `${scopeLabel} ${period === "year" ? "this year" : "this month"}`
+    : "total spent";
+  const ytdCardLabel = period === "year"
+    ? "monthly avg"
+    : (scopeLabel ? `${scopeLabel} ytd` : "year to date");
   const barsHeader = drillLevel === 2 ? "by subcategory" : drillLevel === 3 ? "top notes" : "by category";
+  const trendHeader = period === "year" ? "yearly trend" : "monthly trend";
 
   return (
     <div
       class="flex flex-col gap-4 px-4 pt-2"
       style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 72px)" }}
     >
-      {/* Month selector — always visible, works at any drill level */}
-      <div class="flex items-center justify-between">
-        <button
-          ref={prevArrowPress.ref}
-          onPointerDown={prevArrowPress.onPointerDown}
-          onPointerUp={prevArrowPress.onPointerUp}
-          onPointerCancel={prevArrowPress.onPointerCancel}
-          onClick={handlePrev}
-          class="flex items-center justify-center rounded-full border text-sm"
-          style={{
-            width: 32,
-            height: 32,
-            backgroundColor: "var(--color-bg-surface)",
-            borderColor: "rgba(42,42,50,0.8)",
-            color: "var(--color-text-primary)",
-            WebkitTapHighlightColor: "transparent",
-          }}
-        >
-          ←
-        </button>
+      {/* Period selector + lens pills — single row to keep vertical density */}
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <button
+            ref={prevArrowPress.ref}
+            onPointerDown={prevArrowPress.onPointerDown}
+            onPointerUp={prevArrowPress.onPointerUp}
+            onPointerCancel={prevArrowPress.onPointerCancel}
+            onClick={handlePrev}
+            class="flex items-center justify-center rounded-full border text-sm"
+            style={{
+              width: 32,
+              height: 32,
+              backgroundColor: "var(--color-bg-surface)",
+              borderColor: "rgba(42,42,50,0.8)",
+              color: "var(--color-text-primary)",
+              WebkitTapHighlightColor: "transparent",
+              flex: "none",
+            }}
+          >
+            ←
+          </button>
 
-        <span
-          class="text-sm font-medium"
-          style={{ color: "var(--color-text-primary)" }}
-        >
-          {monthLabel}
-        </span>
+          <span
+            class="text-sm font-medium tabular-nums"
+            style={{
+              color: "var(--color-text-primary)",
+              minWidth: 96,
+              textAlign: "center",
+            }}
+          >
+            {periodLabel}
+          </span>
 
-        <button
-          ref={nextArrowPress.ref}
-          onPointerDown={nextArrowPress.onPointerDown}
-          onPointerUp={nextArrowPress.onPointerUp}
-          onPointerCancel={nextArrowPress.onPointerCancel}
-          onClick={handleNext}
-          class="flex items-center justify-center rounded-full border text-sm"
-          style={{
-            width: 32,
-            height: 32,
-            backgroundColor: "var(--color-bg-surface)",
-            borderColor: "rgba(42,42,50,0.8)",
-            color: "var(--color-text-primary)",
-            WebkitTapHighlightColor: "transparent",
-          }}
-        >
-          →
-        </button>
+          <button
+            ref={nextArrowPress.ref}
+            onPointerDown={nextArrowPress.onPointerDown}
+            onPointerUp={nextArrowPress.onPointerUp}
+            onPointerCancel={nextArrowPress.onPointerCancel}
+            onClick={handleNext}
+            class="flex items-center justify-center rounded-full border text-sm"
+            style={{
+              width: 32,
+              height: 32,
+              backgroundColor: "var(--color-bg-surface)",
+              borderColor: "rgba(42,42,50,0.8)",
+              color: "var(--color-text-primary)",
+              WebkitTapHighlightColor: "transparent",
+              flex: "none",
+            }}
+          >
+            →
+          </button>
+        </div>
+
+        <div class="flex items-center gap-1.5">
+          <SegmentedPill<Scope>
+            ariaLabel="spending scope"
+            value={scope}
+            onChange={setScope}
+            options={[
+              { value: "all", shortLabel: "all", longLabel: "all" },
+              { value: "discretionary", shortLabel: "disc.", longLabel: "discretionary" },
+            ]}
+          />
+          <SegmentedPill<Period>
+            ariaLabel="time period"
+            value={period}
+            onChange={setPeriod}
+            options={[
+              { value: "month", shortLabel: "m", longLabel: "month" },
+              { value: "year", shortLabel: "y", longLabel: "year" },
+            ]}
+          />
+        </div>
       </div>
 
       {/* Content — crossfades on drill change */}
@@ -514,7 +659,11 @@ export default function AnalyticsScreen() {
                   style={{ fontSize: 13, color: isLess ? "var(--color-success)" : "var(--color-danger)" }}
                 >
                   {isLess ? "↓" : "↑"} {pct}
-                  {drillLevel === 1 ? ` ${isLess ? "less" : "more"}` : ` vs ${prevMonthName}`}
+                  {period === "year"
+                    ? " vs last year"
+                    : drillLevel === 1
+                      ? ` ${isLess ? "less" : "more"}`
+                      : ` vs ${prevMonthName}`}
                 </span>
               )}
               {prevTotal === 0 && (
@@ -531,25 +680,52 @@ export default function AnalyticsScreen() {
               <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
                 {ytdCardLabel}
               </span>
-              <AnimatedTotal
-                key={`ytd-${drillKey}`}
-                target={ytd}
-                enabled={entranceReady}
-                delay={0.1}
-                class="tabular-nums"
-                style={{ fontSize: 28, fontWeight: 300, color: "var(--color-text-primary)" }}
-              />
-              {prevYtd > 0 && (
-                <span
-                  style={{ fontSize: 13, color: ytdIsLess ? "var(--color-success)" : "var(--color-danger)" }}
-                >
-                  {ytdIsLess ? "↓" : "↑"} {ytdPct} vs last year
-                </span>
-              )}
-              {prevYtd === 0 && (
-                <span style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>
-                  no prev. data
-                </span>
+              {period === "year" ? (
+                <>
+                  <AnimatedTotal
+                    key={`avg-${drillKey}-${selectedYear}`}
+                    target={monthlyAvg}
+                    enabled={entranceReady}
+                    delay={0.1}
+                    class="tabular-nums"
+                    style={{ fontSize: 28, fontWeight: 300, color: "var(--color-text-primary)" }}
+                  />
+                  {prevMonthlyAvg > 0 && (
+                    <span
+                      style={{ fontSize: 13, color: monthlyAvgIsLess ? "var(--color-success)" : "var(--color-danger)" }}
+                    >
+                      {monthlyAvgIsLess ? "↓" : "↑"} {monthlyAvgPct} vs last year
+                    </span>
+                  )}
+                  {prevMonthlyAvg === 0 && (
+                    <span style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>
+                      no prev. data
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <AnimatedTotal
+                    key={`ytd-${drillKey}`}
+                    target={ytd}
+                    enabled={entranceReady}
+                    delay={0.1}
+                    class="tabular-nums"
+                    style={{ fontSize: 28, fontWeight: 300, color: "var(--color-text-primary)" }}
+                  />
+                  {prevYtd > 0 && (
+                    <span
+                      style={{ fontSize: 13, color: ytdIsLess ? "var(--color-success)" : "var(--color-danger)" }}
+                    >
+                      {ytdIsLess ? "↓" : "↑"} {ytdPct} vs last year
+                    </span>
+                  )}
+                  {prevYtd === 0 && (
+                    <span style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>
+                      no prev. data
+                    </span>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -589,10 +765,11 @@ export default function AnalyticsScreen() {
               class="tracking-wider block mb-3"
               style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)" }}
             >
-              monthly trend
+              {trendHeader}
             </span>
             <TrendChart
               trend={analytics.trend}
+              period={period}
               selectedYear={selectedYear}
               selectedMonth={selectedMonth}
               onSelect={handleTrendSelect}
