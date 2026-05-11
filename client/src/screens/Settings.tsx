@@ -6,6 +6,7 @@ import { db } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { currentUser, logout } from "@/lib/auth";
 import { sync } from "@/sync/engine";
+import { forceUpdate } from "@/sync/swUpdater";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DetailSheet } from "@/components/DetailSheet";
 import { api } from "@/lib/api";
@@ -996,6 +997,10 @@ function SyncSection() {
           <Chevron />
         </Row>
       )}
+      <Row onClick={() => { forceUpdate().catch(() => {}); }}>
+        <span class="flex-1 text-sm">force update</span>
+        <Chevron />
+      </Row>
     </Section>
   );
 }
