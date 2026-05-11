@@ -289,12 +289,15 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
           )}
           {isAutoSaved && (
             <span
-              class="text-base leading-none"
-              style={{ lineHeight: 1 }}
+              class="inline-flex items-center"
+              style={{ color: "var(--color-text-tertiary)" }}
               aria-label="auto-saved from Apple Pay"
               title="auto-saved from Apple Pay"
             >
-              🍎
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M17.72 6.4c-1.45 0-2.46.65-3.36.65-.9 0-1.86-.62-3.16-.62-1.7 0-3.34.97-4.27 2.55-1.83 3.18-.47 7.86 1.31 10.43.86 1.26 1.9 2.66 3.27 2.66 1.32 0 1.79-.83 3.34-.83 1.55 0 1.97.83 3.32.83 1.39 0 2.27-1.27 3.13-2.55a11.27 11.27 0 0 0 1.42-2.93c-.04-.02-2.73-1.06-2.73-4.16 0-2.69 2.16-3.97 2.26-4.04-1.24-1.83-3.13-2.04-3.78-2.04-1.7 0-3.07.95-3.83.95Z" />
+                <path d="M14.93 4.4c.69-.83 1.16-1.96 1.04-3.1-.99.05-2.16.65-2.85 1.48-.62.74-1.18 1.92-1.04 3.05 1.07.08 2.16-.55 2.85-1.43Z" />
+              </svg>
             </span>
           )}
         </div>
