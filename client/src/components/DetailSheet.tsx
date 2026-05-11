@@ -89,7 +89,7 @@ export function DetailSheet({ open, onClose, children }: DetailSheetProps) {
         }}
       />
 
-      {/* Sheet — fixed to the bottom of the viewport */}
+      {/* Sheet — fixed to the bottom of the viewport, capped to the app column */}
       <div
         ref={sheetRef}
         class="flex flex-col"
@@ -98,6 +98,9 @@ export function DetailSheet({ open, onClose, children }: DetailSheetProps) {
           left: 0,
           right: 0,
           bottom: 0,
+          marginLeft: "auto",
+          marginRight: "auto",
+          maxWidth: 560,
           zIndex: 101,
           backgroundColor: "#1a1a22",
           borderRadius: "24px 24px 0 0",
