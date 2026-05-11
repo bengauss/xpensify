@@ -1,56 +1,11 @@
 /**
- * iOS Safari aggressively caches PWAs and rarely checks for SW updates on
- * its own — `registration.update()` has to be called explicitly. We poll on
- * every foreground transition and on app start, then reload the page when
- * the new SW takes control. From the user's perspective: tap into the app
- * after a deploy, see one quick refresh, you're on the new bundle.
- */
-
-let registered = false;
-
-async function checkForUpdate(): Promise<void> {
-  try {
-    const reg = await navigator.serviceWorker.getRegistration();
-    await reg?.update();
-  } catch {
-    // Best-effort. update() rejects offline; we'll retry on next foreground.
-  }
-}
-
-function onVisibility(): void {
-  if (document.visibilityState === "visible") {
-    checkForUpdate();
-  }
-}
-
-/**
- * Wire up SW update polling. Idempotent — safe to call multiple times.
- * Should be invoked once after `serviceWorker.register()` succeeds.
- */
-export function startSwUpdater(): void {
-  if (registered) return;
-  registered = true;
-  if (!("serviceWorker" in navigator)) return;
-
-  // Reload exactly once when a new SW takes control. clientsClaim() in sw.ts
-  // makes this fire as soon as the new SW activates.
-  let reloaded = false;
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (reloaded) return;
-    reloaded = true;
-    window.location.reload();
-  });
-
-  document.addEventListener("visibilitychange", onVisibility);
-  // First-load probe (don't wait for a foreground transition that may never
-  // come if the user opens the app after it's been backgrounded for hours).
-  checkForUpdate();
-}
-
-/**
  * Manual escape hatch: unregister the current SW, blow away every cache the
  * Cache Storage API knows about, and hard-reload. For when the user is
- * stuck on a stale bundle and the auto-updater isn't reaching them.
+ * stuck on a stale bundle (Settings → "force update").
+ *
+ * We previously also auto-polled `registration.update()` on every visibility
+ * change and reloaded on `controllerchange`, but that caused screen flashes
+ * during normal use. Manual-only is the safer default for iOS PWAs.
  */
 export async function forceUpdate(): Promise<void> {
   if ("serviceWorker" in navigator) {
