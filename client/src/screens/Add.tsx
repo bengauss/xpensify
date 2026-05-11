@@ -64,6 +64,23 @@ export function AddScreen() {
   // "✓ confirmed once before" hint under the date row.
   const hasSuggestion = !!(confirming && confirming.category_id && confirming.subcategory_id);
 
+  // Deep-link race: when the user opens the app via /?confirm=<id>, AddScreen
+  // mounts BEFORE app.tsx's effect has fetched /pending and set the
+  // confirmingPending signal. The useState seeds above only run once, so the
+  // form would stay empty even after `confirming` becomes non-null. Re-seed
+  // whenever we transition to a (different) pending expense, and bump
+  // formKey so CategorySelector remounts and re-reads `initialCategoryId`
+  // (CategorySelector seeds that prop into local state on mount only).
+  useEffect(() => {
+    if (!confirming) return;
+    setAmount(formatCents(confirming.amount));
+    setNote(confirming.note ?? "");
+    setDateStr(confirming.timestamp.split("T")[0]);
+    setPendingCategoryId(confirming.category_id ?? "");
+    setPendingSubcategoryId(confirming.subcategory_id ?? "");
+    setFormKey((k) => k + 1);
+  }, [confirming?.id]);
+
   // confirm-mode local state
   const [confirmSaving, setConfirmSaving] = useState(false);
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);

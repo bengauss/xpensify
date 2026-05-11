@@ -309,8 +309,6 @@ function ingestExpense(
   // app. Errors are logged and never thrown.
   const userId = tokenRow.user_id;
   const captured: PostInsertCaptured = {
-    categoryId,
-    subcategoryId,
     categoryName,
     subcategoryName,
     notificationKind,
@@ -349,8 +347,6 @@ function ingestExpense(
 }
 
 interface PostInsertCaptured {
-  categoryId: string | null;
-  subcategoryId: string | null;
   categoryName: string | null;
   subcategoryName: string | null;
   notificationKind: "auto-saved" | "memory-suggest" | "no-suggest";
@@ -389,8 +385,6 @@ async function runPostInsertWork(
 ): Promise<void> {
   let kind: "auto-saved" | "memory-suggest" | "flash-suggest" | "no-suggest" =
     captured.notificationKind;
-  let categoryId = captured.categoryId;
-  let subcategoryId = captured.subcategoryId;
   let categoryName = captured.categoryName;
   let subcategoryName = captured.subcategoryName;
 
@@ -419,8 +413,6 @@ async function runPostInsertWork(
         const names = lookupNames(suggestion.category_id, suggestion.subcategory_id);
         if (names) {
           kind = "flash-suggest";
-          categoryId = suggestion.category_id;
-          subcategoryId = suggestion.subcategory_id;
           categoryName = names.category;
           subcategoryName = names.subcategory;
         }
@@ -432,13 +424,8 @@ async function runPostInsertWork(
 
   const url = captured.status === "confirmed" ? "/history" : `/?confirm=${expenseId}`;
   const suggestion =
-    categoryName && subcategoryName && categoryId && subcategoryId
-      ? {
-          category: categoryName,
-          subcategory: subcategoryName,
-          categoryId,
-          subcategoryId,
-        }
+    categoryName && subcategoryName
+      ? { category: categoryName, subcategory: subcategoryName }
       : undefined;
   await notifyApplePayExpense(
     userId,

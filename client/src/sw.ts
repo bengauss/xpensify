@@ -30,10 +30,6 @@ interface PushPayload {
   icon?: string;
   tag?: string;
   url?: string;
-  expenseId?: string;
-  suggestedCategoryId?: string;
-  suggestedSubcategoryId?: string;
-  showActions?: boolean;
 }
 
 // Handle push notifications
@@ -58,20 +54,11 @@ self.addEventListener("push", (event: PushEvent) => {
     }
   }
 
-  // Action buttons appear on Apple Pay pending notifications when there's a
-  // suggested (category, subcategory) the SW can submit on the user's behalf.
-  // iOS Safari supports up to 2 visible actions on PWA push notifications.
-  // (NotificationAction isn't in the default webworker lib types, so we use
-  // a structural shape and cast on the showNotification call.)
-  const actions: Array<{ action: string; title: string }> = payloadData.showActions
-    ? [
-        { action: "confirm", title: "looks right" },
-        { action: "edit", title: "edit" },
-      ]
-    : [];
-
   // Fan out to controlled clients so an open app refreshes its pending /
   // history-marker state in real time, even before the user taps the push.
+  // (We previously also rendered notification action buttons — "looks right"
+  // / "edit" — but iOS Safari PWAs don't render them on lock screen even on
+  // long-press, so the feature was net negative complexity.)
   event.waitUntil(
     Promise.all([
       self.registration.showNotification(title, {
@@ -80,8 +67,7 @@ self.addEventListener("push", (event: PushEvent) => {
         badge: "/icons/icon-192.png",
         tag,
         data: payloadData,
-        actions,
-      } as NotificationOptions),
+      }),
       self.clients
         .matchAll({ type: "window", includeUncontrolled: true })
         .then((clients) => {
@@ -91,70 +77,11 @@ self.addEventListener("push", (event: PushEvent) => {
   );
 });
 
-/**
- * One-tap confirmation from the lock screen. PATCHes the pending row with the
- * server-suggested category/subcategory, then nudges open clients to refresh.
- * On failure (network, expired session, race), falls back to deep-linking
- * into the Confirm flow so the user can resolve it manually.
- */
-async function confirmFromNotification(data: PushPayload): Promise<void> {
-  const { expenseId, suggestedCategoryId, suggestedSubcategoryId } = data;
-  if (!expenseId || !suggestedCategoryId || !suggestedSubcategoryId) return;
-
-  let ok = false;
-  try {
-    const res = await fetch(`/api/pending/${expenseId}/confirm`, {
-      method: "PATCH",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        category_id: suggestedCategoryId,
-        subcategory_id: suggestedSubcategoryId,
-      }),
-    });
-    ok = res.ok;
-  } catch {
-    ok = false;
-  }
-
-  const clientList = await self.clients.matchAll({
-    type: "window",
-    includeUncontrolled: true,
-  });
-  if (ok) {
-    for (const c of clientList) c.postMessage({ type: "push-received" });
-    return;
-  }
-
-  // Fallback: open the Confirm screen so the user can resolve it.
-  const target = `/?confirm=${expenseId}`;
-  for (const c of clientList) {
-    if ("focus" in c) {
-      try {
-        if ("navigate" in c) await (c as WindowClient).navigate(target);
-      } catch {
-        // ignore — focus is enough
-      }
-      await c.focus();
-      return;
-    }
-  }
-  if (self.clients.openWindow) await self.clients.openWindow(target);
-}
-
 // Handle notification clicks — open / focus the app, deep-linking to the URL
 // the server attached to the push payload (e.g. /?confirm=<id>, /history).
 self.addEventListener("notificationclick", (event: NotificationEvent) => {
   event.notification.close();
   const data = (event.notification.data ?? {}) as PushPayload;
-
-  // "looks right" — confirm the pending row in place. No app open.
-  if (event.action === "confirm") {
-    event.waitUntil(confirmFromNotification(data));
-    return;
-  }
-
-  // "edit" or default body tap — deep-link into the app.
   const target = data.url ?? "/";
   event.waitUntil(
     self.clients
