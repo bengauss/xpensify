@@ -29,6 +29,8 @@ self.addEventListener("push", (event: PushEvent) => {
   let title = "xpensify";
   let body = "You have a new notification";
   let icon = "/icons/icon-192.png";
+  let tag = "xpensify-notification";
+  let url: string | undefined;
 
   if (event.data) {
     try {
@@ -36,42 +38,66 @@ self.addEventListener("push", (event: PushEvent) => {
         title?: string;
         body?: string;
         icon?: string;
+        tag?: string;
+        url?: string;
       };
       title = data.title ?? title;
       body = data.body ?? body;
       icon = data.icon ?? icon;
+      // Per-expense tags let multiple Apple Pay notifications stack on the
+      // lock screen instead of collapsing into the latest one.
+      tag = data.tag ?? tag;
+      url = data.url;
     } catch {
       body = event.data.text();
     }
   }
 
+  // Fan out to controlled clients so an open app refreshes its pending /
+  // history-marker state in real time, even before the user taps the push.
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      icon,
-      badge: "/icons/icon-192.png",
-      tag: "xpensify-notification",
-    })
+    Promise.all([
+      self.registration.showNotification(title, {
+        body,
+        icon,
+        badge: "/icons/icon-192.png",
+        tag,
+        data: { url },
+      }),
+      self.clients
+        .matchAll({ type: "window", includeUncontrolled: true })
+        .then((clients) => {
+          for (const c of clients) c.postMessage({ type: "push-received" });
+        }),
+    ])
   );
 });
 
-// Handle notification clicks — open / focus the app
+// Handle notification clicks — open / focus the app, deep-linking to the URL
+// the server attached to the push payload (e.g. /?confirm=<id>, /history).
 self.addEventListener("notificationclick", (event: NotificationEvent) => {
   event.notification.close();
+  const data = (event.notification.data ?? {}) as { url?: string };
+  const target = data.url ?? "/";
 
   event.waitUntil(
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })
-      .then((clientList) => {
-        // Focus an existing window if one is open
+      .then(async (clientList) => {
         for (const client of clientList) {
           if ("focus" in client) {
+            try {
+              if ("navigate" in client) {
+                await (client as WindowClient).navigate(target);
+              }
+            } catch {
+              // navigate fails for cross-origin clients; focus is enough.
+            }
             return client.focus();
           }
         }
-        // Otherwise open a new window
         if (self.clients.openWindow) {
-          return self.clients.openWindow("/");
+          return self.clients.openWindow(target);
         }
       })
   );

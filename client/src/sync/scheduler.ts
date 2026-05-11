@@ -5,6 +5,16 @@ import { refreshPendingExpenses, refreshUnreviewedAutoSaves } from "@/lib/pendin
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
 
+function handleSwMessage(event: MessageEvent) {
+  const data = event.data as { type?: string } | null;
+  if (!data || data.type !== "push-received") return;
+  // Server-side push fired (Apple Pay event, mostly). Refresh pending +
+  // history-marker so the open app's UI updates without waiting for the
+  // next visibility / 30s tick.
+  refreshPendingExpenses().catch(() => {});
+  refreshUnreviewedAutoSaves().catch(() => {});
+}
+
 function handleVisibilityChange() {
   if (document.visibilityState === "visible" && navigator.onLine) {
     sync().catch(console.error);
@@ -50,6 +60,9 @@ export function startSyncScheduler(): void {
   document.addEventListener("visibilitychange", handleVisibilityChange);
   window.addEventListener("online", handleOnline);
   window.addEventListener("offline", handleOffline);
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", handleSwMessage);
+  }
 
   intervalId = setInterval(() => {
     if (navigator.onLine && document.visibilityState === "visible") {
@@ -62,6 +75,9 @@ export function stopSyncScheduler(): void {
   document.removeEventListener("visibilitychange", handleVisibilityChange);
   window.removeEventListener("online", handleOnline);
   window.removeEventListener("offline", handleOffline);
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.removeEventListener("message", handleSwMessage);
+  }
 
   if (intervalId !== null) {
     clearInterval(intervalId);

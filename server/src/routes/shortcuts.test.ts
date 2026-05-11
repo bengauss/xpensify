@@ -1,8 +1,39 @@
-import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
 import shortcuts from "./shortcuts.js";
 import sync from "./sync.js";
+import pending from "./pending.js";
 import { db, ensureMigrated, resetDb, seedTestUsers, seedTestSession, sessionCookie, seedTestApiToken } from "../test/db.js";
 import { mountRouter, jsonInit } from "../test/app.js";
+
+// Mock the Gemini Flash categorizer. Each test overrides the mock to simulate
+// success, low-confidence, or failure. isFlashEnabled returns true so the
+// post-insert worker actually invokes categorizeWithFlash.
+const flashMock = vi.hoisted(() => ({
+  enabled: true,
+  result: null as
+    | null
+    | { category_id: string; subcategory_id: string; confidence: "low" | "medium" | "high" }
+    | { __throw: string },
+}));
+vi.mock("../lib/flashCategorize.js", () => ({
+  isFlashEnabled: () => flashMock.enabled,
+  categorizeWithFlash: vi.fn(async () => {
+    if (flashMock.result && "__throw" in flashMock.result) {
+      throw new Error(flashMock.result.__throw);
+    }
+    return flashMock.result as
+      | null
+      | { category_id: string; subcategory_id: string; confidence: "low" | "medium" | "high" };
+  }),
+}));
+
+/** Drain queueMicrotask + the await chain inside runPostInsertWork. */
+async function flushPostInsertWork() {
+  for (let i = 0; i < 5; i++) {
+    await Promise.resolve();
+    await new Promise((r) => setImmediate(r));
+  }
+}
 
 beforeAll(() => ensureMigrated());
 
@@ -19,6 +50,9 @@ beforeEach(() => {
   yaraId = users.bob.id;
   benToken = seedTestApiToken(benId).plainToken;
   yaraToken = seedTestApiToken(yaraId).plainToken;
+  // Default: Flash returns null (no suggestion). Tests override per scenario.
+  flashMock.enabled = true;
+  flashMock.result = null;
 });
 
 async function postExpense(token: string | null, body: unknown) {
@@ -294,5 +328,225 @@ describe("GET /api/shortcuts/expense — query string variant", () => {
     const row = db.prepare(`SELECT amount, note FROM expenses WHERE id = ?`).get(body.id) as { amount: number; note: string };
     expect(row.amount).toBe(1050);
     expect(row.note).toBe("billa");
+  });
+});
+
+describe("POST /api/shortcuts/expense — auto_saved column", () => {
+  it("auto-saved row has auto_saved=1 (memory ≥ 2 path)", async () => {
+    db.prepare(
+      `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+       VALUES (?, 'billa', 'cat-food', 'sub-groceries', 3, ?)`,
+    ).run(benId, new Date().toISOString());
+    const r = await postExpense(benToken, { amount: 10, merchant: "billa", currency: "EUR" });
+    const body = await r.json() as any;
+    expect(body.status).toBe("confirmed");
+    const row = db.prepare(`SELECT auto_saved FROM expenses WHERE id = ?`).get(body.id) as { auto_saved: number };
+    expect(row.auto_saved).toBe(1);
+  });
+
+  it("memory pre-fill row has auto_saved=0", async () => {
+    db.prepare(
+      `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+       VALUES (?, 'billa', 'cat-food', 'sub-groceries', 1, ?)`,
+    ).run(benId, new Date().toISOString());
+    const r = await postExpense(benToken, { amount: 10, merchant: "billa", currency: "EUR" });
+    const body = await r.json() as any;
+    expect(body.status).toBe("pending");
+    const row = db.prepare(`SELECT auto_saved FROM expenses WHERE id = ?`).get(body.id) as { auto_saved: number };
+    expect(row.auto_saved).toBe(0);
+  });
+
+  it("no-memory pending row has auto_saved=0", async () => {
+    const r = await postExpense(benToken, { amount: 10, merchant: "newmerchant", currency: "EUR" });
+    const body = await r.json() as any;
+    expect(body.status).toBe("pending");
+    const row = db.prepare(`SELECT auto_saved FROM expenses WHERE id = ?`).get(body.id) as { auto_saved: number };
+    expect(row.auto_saved).toBe(0);
+  });
+});
+
+describe("POST /api/shortcuts/expense — Gemini Flash background fill", () => {
+  it("medium-confidence Flash result fills the pending row's category", async () => {
+    flashMock.result = {
+      category_id: "cat-food",
+      subcategory_id: "sub-groceries",
+      confidence: "medium",
+    };
+
+    const r = await postExpense(benToken, { amount: 10, merchant: "newmerchant", currency: "EUR" });
+    const body = await r.json() as any;
+    // Webhook responds before Flash runs — initial response shows no suggestion.
+    expect(body.status).toBe("pending");
+    expect(body.suggested_category).toBeNull();
+
+    await flushPostInsertWork();
+
+    const row = db.prepare(
+      `SELECT category_id, subcategory_id, status FROM expenses WHERE id = ?`,
+    ).get(body.id) as { category_id: string; subcategory_id: string; status: string };
+    expect(row.category_id).toBe("cat-food");
+    expect(row.subcategory_id).toBe("sub-groceries");
+    expect(row.status).toBe("pending");
+  });
+
+  it("null Flash result (low confidence / failure) leaves the row uncategorized", async () => {
+    flashMock.result = null;
+    const r = await postExpense(benToken, { amount: 10, merchant: "obscuremerchant", currency: "EUR" });
+    const body = await r.json() as any;
+    await flushPostInsertWork();
+    const row = db.prepare(
+      `SELECT category_id, subcategory_id FROM expenses WHERE id = ?`,
+    ).get(body.id) as { category_id: string | null; subcategory_id: string | null };
+    expect(row.category_id).toBeNull();
+    expect(row.subcategory_id).toBeNull();
+  });
+
+  it("Flash exception (treated as null) does not crash and leaves row pending", async () => {
+    flashMock.result = { __throw: "boom" };
+    const r = await postExpense(benToken, { amount: 10, merchant: "crashy", currency: "EUR" });
+    const body = await r.json() as any;
+    await flushPostInsertWork();
+    const row = db.prepare(
+      `SELECT category_id, status FROM expenses WHERE id = ?`,
+    ).get(body.id) as { category_id: string | null; status: string };
+    expect(row.category_id).toBeNull();
+    expect(row.status).toBe("pending");
+  });
+
+  it("Flash does NOT run when memory exists (count=1 path)", async () => {
+    db.prepare(
+      `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+       VALUES (?, 'billa', 'cat-food', 'sub-groceries', 1, ?)`,
+    ).run(benId, new Date().toISOString());
+    flashMock.result = {
+      category_id: "cat-apparel", // would be wrong but Flash shouldn't be called
+      subcategory_id: "sub-clothes",
+      confidence: "high",
+    };
+
+    const r = await postExpense(benToken, { amount: 10, merchant: "billa", currency: "EUR" });
+    const body = await r.json() as any;
+    await flushPostInsertWork();
+
+    const row = db.prepare(
+      `SELECT category_id FROM expenses WHERE id = ?`,
+    ).get(body.id) as { category_id: string };
+    // Memory's value wins; Flash mock's value is ignored.
+    expect(row.category_id).toBe("cat-food");
+  });
+
+  it("Flash does NOT run when GEMINI_API_KEY is absent (isFlashEnabled=false)", async () => {
+    flashMock.enabled = false;
+    flashMock.result = {
+      category_id: "cat-food",
+      subcategory_id: "sub-groceries",
+      confidence: "high",
+    };
+    const r = await postExpense(benToken, { amount: 10, merchant: "newmerchant", currency: "EUR" });
+    const body = await r.json() as any;
+    await flushPostInsertWork();
+    const row = db.prepare(`SELECT category_id FROM expenses WHERE id = ?`).get(body.id) as { category_id: string | null };
+    expect(row.category_id).toBeNull();
+  });
+
+  it("Flash UPDATE is idempotent: doesn't overwrite a manually-confirmed category", async () => {
+    // Slow Flash mock so we can manually confirm the row mid-flight.
+    let resolveFlash!: (v: { category_id: string; subcategory_id: string; confidence: "high" }) => void;
+    const slowFlash = new Promise<{ category_id: string; subcategory_id: string; confidence: "high" }>((resolve) => {
+      resolveFlash = resolve;
+    });
+
+    const flashModule = await import("../lib/flashCategorize.js");
+    const orig = flashModule.categorizeWithFlash;
+    (flashModule.categorizeWithFlash as any) = vi.fn(async () => slowFlash);
+
+    try {
+      const r = await postExpense(benToken, { amount: 10, merchant: "racemerchant", currency: "EUR" });
+      const body = await r.json() as any;
+
+      // Manually confirm the row (as if user opened Confirm before Flash returned).
+      db.prepare(
+        `UPDATE expenses SET category_id = 'cat-apparel', subcategory_id = 'sub-clothes', status = 'confirmed' WHERE id = ?`,
+      ).run(body.id);
+
+      // Now let Flash complete with its (different) suggestion.
+      resolveFlash({ category_id: "cat-food", subcategory_id: "sub-groceries", confidence: "high" });
+      await flushPostInsertWork();
+
+      const row = db.prepare(`SELECT category_id, status FROM expenses WHERE id = ?`).get(body.id) as { category_id: string; status: string };
+      // The user's manual choice is preserved; Flash's late update is dropped.
+      expect(row.category_id).toBe("cat-apparel");
+      expect(row.status).toBe("confirmed");
+    } finally {
+      (flashModule.categorizeWithFlash as any) = orig;
+    }
+  });
+});
+
+describe("PATCH /api/pending/:id/confirm — Flash-accepted bumps memory to count=2", () => {
+  it("user accepts Flash suggestion (no prior memory) → merchant_categories inserted at count=2", async () => {
+    flashMock.result = {
+      category_id: "cat-food",
+      subcategory_id: "sub-groceries",
+      confidence: "high",
+    };
+
+    // Apple Pay hits → Flash fills the pending row.
+    const r = await postExpense(benToken, { amount: 10, merchant: "newmerchant", currency: "EUR" });
+    const created = await r.json() as any;
+    await flushPostInsertWork();
+
+    // User confirms with the same (cat, sub) Flash suggested.
+    const benCookie = sessionCookie(seedTestSession(benId));
+    const pendingApp = mountRouter("pending", pending);
+    const confirmRes = await pendingApp.request(
+      `/api/pending/${created.id}/confirm`,
+      jsonInit("PATCH", {
+        cookie: benCookie,
+        body: { category_id: "cat-food", subcategory_id: "sub-groceries" },
+      }),
+    );
+    expect(confirmRes.status).toBe(200);
+
+    // Memory inserted at count=2 → next hit auto-saves.
+    const memory = db.prepare(
+      `SELECT confirmation_count FROM merchant_categories WHERE user_id = ? AND merchant_normalized = ?`,
+    ).get(benId, "newmerchant") as { confirmation_count: number };
+    expect(memory.confirmation_count).toBe(2);
+
+    // Verify: a second hit on the same merchant auto-saves (count >= 2 path).
+    const r2 = await postExpense(benToken, { amount: 5, merchant: "newmerchant", currency: "EUR" });
+    const body2 = await r2.json() as any;
+    expect(body2.status).toBe("confirmed");
+    expect(body2.auto_saved).toBe(true);
+  });
+
+  it("user changes Flash suggestion → memory inserted at count=1 (Flash was wrong)", async () => {
+    flashMock.result = {
+      category_id: "cat-food",
+      subcategory_id: "sub-groceries",
+      confidence: "high",
+    };
+
+    const r = await postExpense(benToken, { amount: 10, merchant: "newmerchant", currency: "EUR" });
+    const created = await r.json() as any;
+    await flushPostInsertWork();
+
+    // User confirms with a DIFFERENT category than Flash suggested.
+    const benCookie = sessionCookie(seedTestSession(benId));
+    const pendingApp = mountRouter("pending", pending);
+    await pendingApp.request(
+      `/api/pending/${created.id}/confirm`,
+      jsonInit("PATCH", {
+        cookie: benCookie,
+        body: { category_id: "cat-apparel", subcategory_id: "sub-clothes" },
+      }),
+    );
+
+    const memory = db.prepare(
+      `SELECT confirmation_count, category_id FROM merchant_categories WHERE user_id = ? AND merchant_normalized = ?`,
+    ).get(benId, "newmerchant") as { confirmation_count: number; category_id: string };
+    expect(memory.confirmation_count).toBe(1);
+    expect(memory.category_id).toBe("cat-apparel");
   });
 });

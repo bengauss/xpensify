@@ -31,6 +31,7 @@ interface ExpenseRow {
   source: string;
   recurring_template_id: string | null;
   deleted: number;
+  auto_saved: number;
   created_at: string;
   updated_at: string;
 }

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import db from "../db/connection.js";
 import { authMiddleware, type Variables } from "../middleware/auth.js";
-import { upsertMerchantMemory } from "../lib/merchantMemory.js";
+import { upsertMerchantMemory, lookupMerchantMemory } from "../lib/merchantMemory.js";
 
 interface PendingRow {
   id: string;
@@ -105,6 +105,23 @@ const pending = new Hono<{ Variables: Variables }>()
     const merchantNormalized = (existing.note ?? "").trim();
     const nowIso = new Date().toISOString();
 
+    // Detect "user accepted a Gemini Flash suggestion": the pending row had a
+    // pre-filled (cat, sub), no merchant_categories row exists yet (so the
+    // pre-fill couldn't have come from memory), and the user confirmed the
+    // suggested values unchanged. In that case we count Flash + user as two
+    // votes and seed the new memory row at count=2 — next hit auto-saves.
+    const hadSuggestion =
+      existing.category_id !== null && existing.subcategory_id !== null;
+    const noMemoryYet =
+      existing.source === "apple-pay" && merchantNormalized
+        ? lookupMerchantMemory(userId, merchantNormalized) === null
+        : false;
+    const flashAccepted =
+      noMemoryYet &&
+      hadSuggestion &&
+      existing.category_id === categoryId &&
+      existing.subcategory_id === subcategoryId;
+
     const commit = db.transaction(() => {
       db.prepare(
         `UPDATE expenses SET
@@ -118,7 +135,14 @@ const pending = new Hono<{ Variables: Variables }>()
       ).run(categoryId, subcategoryId, amountCents, note, id);
 
       if (existing.source === "apple-pay" && merchantNormalized) {
-        upsertMerchantMemory(userId, merchantNormalized, categoryId, subcategoryId, nowIso);
+        upsertMerchantMemory(
+          userId,
+          merchantNormalized,
+          categoryId,
+          subcategoryId,
+          nowIso,
+          flashAccepted ? { initialCount: 2 } : undefined,
+        );
       }
     });
     commit();

@@ -97,6 +97,7 @@ Defined in `.env` (gitignored) and `.env.example`. Loaded by `docker compose` vi
 - `DOMAIN` — e.g. `your-domain.com`. Used by the CSRF middleware to validate the `Origin` header on mutations. **Unset in dev** — CSRF check is skipped so the Vite proxy works.
 - `NODE_ENV=production` — gates static-file serving + the `Secure` flag on session cookies.
 - `ALICE_PASSWORD` / `BOB_PASSWORD` — initial seed passwords. If unset, `seed-runner.ts` generates a random UUID and prints it to stdout **once**, only on first seed (existing users are skipped).
+- `GEMINI_API_KEY` — optional. When set, the Apple Pay webhook calls Gemini Flash to suggest categories for never-seen merchants. Unset → the suggestion path is a silent no-op; pending rows are created without a category and the user picks one in Confirm.
 - `BACKUP_DIR` — declared but currently unused.
 
 ## Design Tokens
@@ -112,6 +113,7 @@ All colors, spacing, and typography tokens live in `client/src/index.css` under 
 - Expense `tags` and `image_url` columns are part of the schema on both ends but not yet surfaced in the UI. The sync route round-trips them; don't remove them.
 - **Tables**: `users`, `sessions`, `categories`, `subcategories`, `expenses`, `recurring_templates`, `push_subscriptions`, `notification_preferences`, `api_tokens` (iOS Shortcuts auth), `merchant_categories` (per-user merchant→category memory).
 - **Expense `status` column**: `'confirmed'` (default, in sync stream) or `'pending'` (Apple Pay awaiting user confirmation, server-only). `category_id` / `subcategory_id` are NULLABLE on purpose so pending rows can have no category yet — see `relaxExpensesNullability()` in `migrate.ts`.
+- **Expense `auto_saved` column**: 1 when the row was inserted by the Apple Pay webhook directly as `'confirmed'` via merchant memory ≥ 2 (no user touch). Drives the apple marker in History and the unreviewed-dot logic. Survives edits — the historical fact that "this entered without your involvement" doesn't change because you later corrected it.
 - **`users.last_history_visit_at`**: timestamp gating the History tab's unreviewed-autosaves dot.
 
 ## API Surface
@@ -218,11 +220,11 @@ After the sync transaction, the engine fetches `/api/recurring`, `/api/pending`,
 
 iOS Shortcut sends every Apple Pay transaction to `POST|GET /api/shortcuts/expense` with a per-user Bearer token. The webhook normalizes the merchant name (`lib/merchantNormalize.ts` strips trailing store IDs, `#` numbers, Austrian city suffixes) and consults `merchant_categories` (`lib/merchantMemory.ts`):
 
-- **0 confirmations** (no row): row inserted with `status='pending'`, `category_id=null`. UI prompts user to categorize.
-- **1 confirmation**: pending row created with the suggested `(category, subcategory)` pre-filled. The Confirm screen mounts CategorySelector with the suggestion already chosen — one tap to confirm.
-- **≥2 confirmations**: row inserted as `status='confirmed'` directly with the memorized category. The user is informed via the History-tab dot rather than a confirmation prompt.
+- **0 confirmations** (no row): row inserted with `status='pending'`, `category_id=null`. **Background**: Gemini Flash is invoked (`lib/flashCategorize.ts`) — if it returns medium/high confidence, the pending row is updated in-place with the suggestion before the user opens Confirm.
+- **1 confirmation**: pending row created with the suggested `(category, subcategory)` pre-filled. Flash is **not** called — user-trained mapping always wins.
+- **≥2 confirmations**: row inserted as `status='confirmed'` directly with the memorized category and `auto_saved=1`. Drives the apple marker in History.
 
-Confirmation flow (`PATCH /api/pending/:id/confirm`) wraps the status flip + merchant memory upsert in a single SQLite transaction. Same-(category,subcategory) confirmation increments `confirmation_count`; different category resets it to 1 (the user disagreed with prior memory, so we start over).
+Confirmation flow (`PATCH /api/pending/:id/confirm`) wraps the status flip + merchant memory upsert in a single SQLite transaction. Same-(category,subcategory) confirmation increments `confirmation_count`; different category resets it to 1 (the user disagreed with prior memory, so we start over). **Flash-accepted special case**: if the row had a Flash suggestion (no prior merchant_categories row, but pending row carried `(cat, sub)`) and the user confirmed unchanged, the new memory row is seeded at `confirmation_count = 2` — Flash + user counts as two votes, so the next hit at that merchant auto-saves.
 
 When the user **edits** an already-confirmed Apple Pay expense and changes its category (sync flow), `sync.ts` calls `resetMerchantMemory()` to flip the count back to 1 — next webhook hit at that merchant goes pending again so the user can re-confirm. This is gated to `source === 'apple-pay'` and `deleted === 0` (soft deletes don't reset memory).
 
@@ -230,11 +232,34 @@ Memory is per-user (composite PK `user_id + merchant_normalized`) — household 
 
 `Settings → Merchants` (`/settings/merchants`) renders the user's full memory; PATCH overrides a mapping (resets count to 1), DELETE removes it. `POST /api/merchants/import` backfills from existing confirmed Apple Pay history — picks the most-frequent (cat, sub) pair per merchant and never overwrites an existing memory row.
 
+### Push notifications
+
+xpensify (not the Shortcut) sends the push for every Apple Pay event. The Shortcut should have its "Show Notification" action removed or it'll duplicate. Variants live in `notifyApplePayExpense` in `jobs/notifications.ts`:
+
+| Path | Title | Body |
+|------|-------|------|
+| Auto-saved (memory ≥ 2) | `auto-saved €X` | `merchant → category` |
+| Memory pre-fill (count = 1) | `tap to confirm €X` | `merchant → category (suggested)` |
+| Flash pre-fill (no memory) | `tap to confirm €X` | `🤖 merchant → category (suggested)` |
+| No suggestion | `tap to categorize €X` | `merchant` |
+
+Push payload includes `tag` (per-expense, so notifications stack on the lock screen) and `data.url` for deep-linking. Pending notifications open `/?confirm=<id>` — the SW navigates the active client there, app.tsx parses the query, and pre-fills `confirmingPending`. Auto-saved notifications open `/history`. The SW also `postMessage`s clients on every push so the open app refreshes pending + history-marker in real time.
+
+Both the push and the Flash call run in a `queueMicrotask`-scheduled background task after the webhook responds 200 — Shortcut latency is unaffected. Flash failures (timeout, error, or low-confidence response) silently fall back to the no-suggestion path; no retries.
+
+### Gemini Flash (`lib/flashCategorize.ts`)
+
+- Model: `gemini-3-flash-preview` via `@google/genai` SDK, `thinkingConfig.thinkingLevel = LOW`.
+- Structured output (`responseMimeType: "application/json"`) with `category` enum locked to the seeded category names; `subcategory` is a free string and validated server-side against the chosen category (mismatch → drop subcategory, keep category if usable).
+- `confidence` is required (`low | medium | high`); `low` is suppressed (treated as no suggestion).
+- Disabled if `GEMINI_API_KEY` is unset — `isFlashEnabled()` returns false and the no-memory path stays "no suggestion" forever, no errors.
+- 8s `AbortSignal`-style timeout via `Promise.race`. One log line per call.
+
 ## Service Worker
 
 `client/src/sw.ts` — Workbox with `skipWaiting()` + `clientsClaim()` for immediate activation on deploy. Precaches the built app shell via `precacheAndRoute(self.__WB_MANIFEST)`. **No runtime caching of `/api/*`** — the offline store is IndexedDB (Dexie), and caching authenticated API responses risks leaking one user's data to the next. A legacy `api-cache` from older builds is explicitly deleted on activate.
 
-`push` event: parses payload JSON and calls `showNotification(title, { body, icon })`. `notificationclick` focuses an existing tab or opens a new one.
+`push` event: parses payload JSON (`title`, `body`, `icon`, `tag`, `url`) and calls `showNotification`. The `data.url` is stashed on the notification so `notificationclick` can deep-link via `client.navigate(target)` (focus existing tab) or `openWindow(target)` (no open tab). The push handler also fans out a `postMessage({ type: "push-received" })` to all controlled clients so the open app refreshes pending + history-marker without waiting for the next sync tick. The scheduler listens for this message in `sync/scheduler.ts`.
 
 Build is wired up through `vite-plugin-pwa` in `strategies: "injectManifest"` mode (`vite.config.ts`) — the plugin compiles `src/sw.ts` and injects the precache manifest at `self.__WB_MANIFEST`. `injectRegister: false` and `manifest: false` because the app registers the SW manually and ships its own `public/manifest.json`. `devOptions.enabled: false` keeps the SW out of the dev server so Vite HMR isn't fighting it.
 

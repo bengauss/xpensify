@@ -46,12 +46,14 @@ function relaxExpensesNullability(): void {
         recurring_template_id TEXT REFERENCES recurring_templates(id),
         deleted INTEGER NOT NULL DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'confirmed',
+        auto_saved INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
       INSERT INTO expenses_new
         SELECT id, user_id, category_id, subcategory_id, amount, note, tags, image_url,
-               timestamp, source, recurring_template_id, deleted, status, created_at, updated_at
+               timestamp, source, recurring_template_id, deleted, status, auto_saved,
+               created_at, updated_at
         FROM expenses;
       DROP TABLE expenses;
       ALTER TABLE expenses_new RENAME TO expenses;
@@ -75,6 +77,10 @@ export function runMigrations(): void {
 
   addColumnIfMissing("recurring_templates", "start_date", "TEXT");
   addColumnIfMissing("expenses", "status", "TEXT NOT NULL DEFAULT 'confirmed'");
+  // auto_saved: 1 when the row was inserted by the Apple Pay webhook directly
+  // as 'confirmed' via merchant memory ≥2 — i.e. the user never confirmed it.
+  // Drives the apple marker in History so they can spot-check accuracy.
+  addColumnIfMissing("expenses", "auto_saved", "INTEGER NOT NULL DEFAULT 0");
   // last_history_visit_at: per-user marker for "have I seen the History tab
   // since the last auto-saved Apple Pay expense?". The BottomNav dot reads
   // this to decide whether to show the unreviewed indicator.

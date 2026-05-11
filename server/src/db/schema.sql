@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   recurring_template_id TEXT REFERENCES recurring_templates(id),
   deleted INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'confirmed',
+  auto_saved INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

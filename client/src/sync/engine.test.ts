@@ -56,6 +56,7 @@ function makeExpense(overrides: Partial<Expense> = {}): Expense {
     recurring_template_id: null,
     deleted: 0,
     status: "confirmed",
+    auto_saved: 0,
     sync_status: "synced",
     created_at: "2026-04-30T12:00:00.000Z",
     updated_at: "2026-04-30T12:00:00.000Z",

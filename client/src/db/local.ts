@@ -24,6 +24,12 @@ export interface Expense {
    * always 'confirmed'. Stored on the type for completeness only.
    */
   status: 'pending' | 'confirmed';
+  /**
+   * 1 when the row entered as 'confirmed' directly from the Apple Pay webhook
+   * via merchant memory (count ≥ 2) without user confirmation. Survives edits.
+   * Drives the apple marker in History so the user can spot-check accuracy.
+   */
+  auto_saved: number;
   /** Client-only field — never synced to server */
   sync_status: 'pending' | 'synced' | 'error';
   created_at: string;

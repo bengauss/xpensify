@@ -200,6 +200,7 @@ export function AddScreen() {
       recurring_template_id: null,
       deleted: 0,
       status: "confirmed",
+      auto_saved: 0,
       sync_status: "pending",
       created_at: now,
       updated_at: now,
@@ -552,7 +553,7 @@ export function AddScreen() {
       {/* Edit-mode save bar — fixed above the tab bar */}
       {isEditing && (
         <div
-          class="fixed left-0 right-0 mx-auto max-w-[480px] z-40 px-4"
+          class="fixed left-0 right-0 mx-auto max-w-[560px] z-40 px-4"
           style={{
             bottom: "calc(68px + env(safe-area-inset-bottom))",
             backgroundColor: "var(--color-bg-primary)",

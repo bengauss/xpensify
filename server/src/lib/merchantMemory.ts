@@ -35,6 +35,10 @@ export function lookupMerchantMemory(
  * incremented. If the mapping exists but disagrees, the row is rewritten and
  * the count resets to 1 — the user just disagreed with prior memory, so we
  * start over rather than keep accumulating against a stale mapping.
+ *
+ * `initialCount` lets the caller insert a fresh mapping at a count > 1 — used
+ * when the user accepts a Gemini Flash suggestion: that counts as two votes
+ * (Flash + user), so the very next hit at the merchant auto-saves.
  */
 export function upsertMerchantMemory(
   userId: string,
@@ -42,6 +46,7 @@ export function upsertMerchantMemory(
   categoryId: string,
   subcategoryId: string,
   nowIso: string,
+  options?: { initialCount?: number },
 ): void {
   if (!merchantNormalized) return;
   const existing = db
@@ -55,12 +60,13 @@ export function upsertMerchantMemory(
     | undefined;
 
   if (!existing) {
+    const count = options?.initialCount ?? 1;
     db.prepare(
       `INSERT INTO merchant_categories
          (user_id, merchant_normalized, category_id, subcategory_id,
           confirmation_count, last_confirmed_at)
-       VALUES (?, ?, ?, ?, 1, ?)`,
-    ).run(userId, merchantNormalized, categoryId, subcategoryId, nowIso);
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(userId, merchantNormalized, categoryId, subcategoryId, count, nowIso);
     return;
   }
 

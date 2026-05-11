@@ -15,14 +15,13 @@ const historyMarker = new Hono<{ Variables: Variables }>()
 
     const row = db
       .prepare(
-        // Auto-saved expenses are status='confirmed' from the shortcut
-        // webhook (skipped the pending/confirm step). Compare created_at
-        // against last_history_visit_at; if the user never visited
-        // History, every Apple Pay confirmed expense counts.
+        // Auto-saved expenses bypass user confirmation (merchant memory ≥ 2).
+        // Other Apple Pay rows passed through Confirm and are already in the
+        // user's conscious memory, so they don't count as unreviewed.
         `SELECT 1 AS has_unreviewed
          FROM expenses
          WHERE user_id = ?
-           AND source = 'apple-pay'
+           AND auto_saved = 1
            AND status = 'confirmed'
            AND deleted = 0
            ${lastVisit ? "AND created_at > ?" : ""}

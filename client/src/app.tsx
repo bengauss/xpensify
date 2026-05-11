@@ -7,6 +7,11 @@ import { checkAuth, currentUser } from "@/lib/auth";
 import { startSyncScheduler, stopSyncScheduler } from "@/sync/scheduler";
 import { TabTransitionContainer } from "@/components/TabTransitionContainer";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import {
+  pendingExpenses,
+  refreshPendingExpenses,
+  confirmingPending,
+} from "@/lib/pending";
 
 const LoginScreen = lazy(() => import("@/screens/Login"));
 
@@ -36,6 +41,25 @@ function AuthGate() {
     return () => stopSyncScheduler();
   }, [currentUser.value]);
 
+  // Deep-link from a "tap to confirm" push notification: ?confirm=<id> on
+  // load. We pull the pending list, find the row, set the confirming signal,
+  // and clean the URL. If the row isn't found (race: the user already
+  // confirmed it elsewhere, or the id is stale), we silently drop the deep
+  // link and stay on /.
+  useEffect(() => {
+    if (!currentUser.value) return;
+    const params = new URLSearchParams(window.location.search);
+    const confirmId = params.get("confirm");
+    if (!confirmId) return;
+    refreshPendingExpenses().finally(() => {
+      const found = pendingExpenses.value.find((p) => p.id === confirmId);
+      if (found) confirmingPending.value = found;
+      // Strip the query param either way so a refresh doesn't re-trigger.
+      window.history.replaceState(null, "", window.location.pathname);
+      route("/");
+    });
+  }, [currentUser.value]);
+
   return null;
 }
 
@@ -47,16 +71,16 @@ function AuthGate() {
 function AuthenticatedShell() {
   const { route } = useLocation();
 
-  // Cap the app column at 480px on iPad/laptop. Fixed children (BottomNav,
-  // Toast, edit save bar) apply their own `max-w-[480px] mx-auto` so they
-  // align with the column. We deliberately do NOT set a transform on the
-  // shell: a transformed ancestor promotes itself to the containing block
+  // Cap the app column at 560px on iPad/laptop. Fixed children (BottomNav,
+  // Toast, edit save bar, DetailSheet) apply their own `max-w-[560px] mx-auto`
+  // so they align with the column. We deliberately do NOT set a transform on
+  // the shell: a transformed ancestor promotes itself to the containing block
   // for `position: fixed` descendants, and iOS Safari PWA cold-start
   // mis-measures that ancestor — leaving the bottom nav floating above the
   // home indicator until the first touch triggers a reflow.
   return (
     <div
-      class="flex flex-col bg-bg-primary overflow-hidden mx-auto w-full max-w-[480px] h-full"
+      class="flex flex-col bg-bg-primary overflow-hidden mx-auto w-full max-w-[560px] h-full"
     >
       <Header onSettingsClick={() => route("/settings")} />
       <TabTransitionContainer />

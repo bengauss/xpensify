@@ -30,7 +30,7 @@ interface NotificationPrefsRow {
 /** Send a push notification to all subscriptions belonging to a user. */
 async function sendToUser(
   userId: string,
-  payload: { title: string; body: string }
+  payload: { title: string; body: string; tag?: string; url?: string }
 ): Promise<void> {
   if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
     console.warn("[notifications] VAPID keys not configured — skipping push");
@@ -141,4 +141,69 @@ export function sendWeeklySummaries(): void {
       console.error(`[notifications] sendWeeklySummaries error for ${user_id}:`, err)
     );
   }
+}
+
+/** Format euro amount for notification text. €12.40, €1.00, etc. */
+function formatEur(amountCents: number): string {
+  return `€${(amountCents / 100).toFixed(2)}`;
+}
+
+interface ApplePayNotificationInput {
+  expenseId: string;
+  merchant: string;
+  amountCents: number;
+  /** Path the SW should deep-link to. Pending → `/?confirm=<id>`; auto-saved → `/history`. */
+  url: string;
+}
+
+interface SuggestionNames {
+  category: string;
+  subcategory: string;
+}
+
+/**
+ * Send a push notification for an Apple Pay event. Runs out of band relative
+ * to the Shortcut webhook; never throws.
+ *
+ * Variants:
+ *  - `auto-saved`     — memory ≥ 2; row already confirmed.
+ *  - `memory-suggest` — memory = 1; row is pending with pre-fill.
+ *  - `flash-suggest`  — Flash returned a usable suggestion; row is pending.
+ *  - `no-suggest`     — no memory and no Flash result; row is pending.
+ */
+export async function notifyApplePayExpense(
+  userId: string,
+  kind: "auto-saved" | "memory-suggest" | "flash-suggest" | "no-suggest",
+  input: ApplePayNotificationInput,
+  suggestion?: SuggestionNames,
+): Promise<void> {
+  const amount = formatEur(input.amountCents);
+  const merchant = input.merchant;
+
+  let title: string;
+  let body: string;
+
+  if (kind === "auto-saved") {
+    if (!suggestion) return; // shouldn't happen; auto-save always has a memory mapping
+    title = `auto-saved ${amount}`;
+    body = `${merchant} → ${suggestion.category}`;
+  } else if (kind === "memory-suggest") {
+    if (!suggestion) return;
+    title = `tap to confirm ${amount}`;
+    body = `${merchant} → ${suggestion.category} (suggested)`;
+  } else if (kind === "flash-suggest") {
+    if (!suggestion) return;
+    title = `tap to confirm ${amount}`;
+    body = `🤖 ${merchant} → ${suggestion.category} (suggested)`;
+  } else {
+    title = `tap to categorize ${amount}`;
+    body = merchant;
+  }
+
+  await sendToUser(userId, {
+    title,
+    body,
+    tag: `xpensify-expense-${input.expenseId}`,
+    url: input.url,
+  });
 }

@@ -3,6 +3,8 @@ import { createHash } from "crypto";
 import db from "../db/connection.js";
 import { normalizeMerchant } from "../lib/merchantNormalize.js";
 import { lookupMerchantMemory } from "../lib/merchantMemory.js";
+import { categorizeWithFlash, isFlashEnabled } from "../lib/flashCategorize.js";
+import { notifyApplePayExpense } from "../jobs/notifications.js";
 
 const MAX_MERCHANT_LENGTH = 200;
 const MAX_AMOUNT_EUR = 10000;
@@ -191,26 +193,33 @@ function ingestExpense(
   const nowIso = new Date().toISOString();
 
   // Merchant memory: 2+ prior confirmations → auto-save; 1 → pending with
-  // pre-filled suggestion; 0 → pending with no suggestion.
+  // pre-filled suggestion; 0 → pending with no suggestion (and we kick off a
+  // Gemini Flash inference in the background to maybe fill it in shortly).
   const memory = lookupMerchantMemory(tokenRow.user_id, note);
   let status: "pending" | "confirmed";
+  let autoSaved = 0;
   let categoryId: string | null;
   let subcategoryId: string | null;
   let categoryName: string | null = null;
   let subcategoryName: string | null = null;
+  let notificationKind: "auto-saved" | "memory-suggest" | "no-suggest";
 
   if (memory && memory.confirmation_count >= 2) {
     status = "confirmed";
+    autoSaved = 1;
     categoryId = memory.category_id;
     subcategoryId = memory.subcategory_id;
+    notificationKind = "auto-saved";
   } else if (memory && memory.confirmation_count === 1) {
     status = "pending";
     categoryId = memory.category_id;
     subcategoryId = memory.subcategory_id;
+    notificationKind = "memory-suggest";
   } else {
     status = "pending";
     categoryId = null;
     subcategoryId = null;
+    notificationKind = "no-suggest";
   }
 
   if (categoryId && subcategoryId) {
@@ -231,8 +240,8 @@ function ingestExpense(
     db.prepare(
       `INSERT INTO expenses
          (id, user_id, category_id, subcategory_id, amount, note, tags, image_url,
-          timestamp, source, recurring_template_id, deleted, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, 'apple-pay', NULL, 0, ?, ?, ?)`,
+          timestamp, source, recurring_template_id, deleted, status, auto_saved, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, 'apple-pay', NULL, 0, ?, ?, ?, ?)`,
     ).run(
       id,
       tokenRow.user_id,
@@ -242,6 +251,7 @@ function ingestExpense(
       note,
       timestamp,
       status,
+      autoSaved,
       nowIso,
       nowIso,
     );
@@ -254,6 +264,18 @@ function ingestExpense(
       memory ? ` memory.count=${memory.confirmation_count}` : ""
     }`,
   );
+
+  // Fire-and-forget post-insert work: push notification, plus (in the
+  // no-memory case) a Gemini Flash inference that may upgrade the pending
+  // row from 'no-suggest' to 'flash-suggest' before the user even opens the
+  // app. Errors are logged and never thrown.
+  const userId = tokenRow.user_id;
+  const captured = { categoryName, subcategoryName, notificationKind, status, autoSaved };
+  queueMicrotask(() => {
+    runPostInsertWork(id, userId, note, amountCents, captured).catch((err) => {
+      console.error(`[shortcuts] post-insert work failed for ${id}:`, err);
+    });
+  });
 
   c.header("Cache-Control", "no-store");
   if (status === "confirmed") {
@@ -277,6 +299,93 @@ function ingestExpense(
       suggested_subcategory: subcategoryName,
     },
     200,
+  );
+}
+
+interface PostInsertCaptured {
+  categoryName: string | null;
+  subcategoryName: string | null;
+  notificationKind: "auto-saved" | "memory-suggest" | "no-suggest";
+  status: "pending" | "confirmed";
+  autoSaved: number;
+}
+
+/** Look up (category, subcategory) display names by id pair. */
+function lookupNames(
+  categoryId: string,
+  subcategoryId: string,
+): { category: string; subcategory: string } | null {
+  const row = db
+    .prepare(
+      `SELECT c.name AS category, s.name AS subcategory
+       FROM categories c JOIN subcategories s ON s.category_id = c.id
+       WHERE c.id = ? AND s.id = ?`,
+    )
+    .get(categoryId, subcategoryId) as
+    | { category: string; subcategory: string }
+    | undefined;
+  return row ?? null;
+}
+
+/**
+ * Post-insert background work: run Flash if eligible (no memory) and fire the
+ * push notification. Both are non-blocking from the Shortcut's perspective —
+ * the webhook already returned 200 by the time this runs.
+ */
+async function runPostInsertWork(
+  expenseId: string,
+  userId: string,
+  merchantNormalized: string,
+  amountCents: number,
+  captured: PostInsertCaptured,
+): Promise<void> {
+  let kind: "auto-saved" | "memory-suggest" | "flash-suggest" | "no-suggest" =
+    captured.notificationKind;
+  let categoryName = captured.categoryName;
+  let subcategoryName = captured.subcategoryName;
+
+  // Flash only fires on the no-memory path. The auto-save and memory-suggest
+  // paths trust the user-trained mapping and never call out to Gemini.
+  if (kind === "no-suggest" && isFlashEnabled()) {
+    const suggestion = await categorizeWithFlash(merchantNormalized, amountCents);
+    if (suggestion) {
+      // Idempotent UPDATE: only writes if the row is still pending and still
+      // has no category. Guards against the user manually confirming, the
+      // row being deleted, or a second hit auto-saving via newly-inserted
+      // memory while Flash was running.
+      const result = db
+        .prepare(
+          `UPDATE expenses
+              SET category_id = ?,
+                  subcategory_id = ?,
+                  updated_at = datetime('now')
+            WHERE id = ?
+              AND status = 'pending'
+              AND deleted = 0
+              AND category_id IS NULL`,
+        )
+        .run(suggestion.category_id, suggestion.subcategory_id, expenseId);
+      if (result.changes === 1) {
+        const names = lookupNames(suggestion.category_id, suggestion.subcategory_id);
+        if (names) {
+          kind = "flash-suggest";
+          categoryName = names.category;
+          subcategoryName = names.subcategory;
+        }
+      } else {
+        console.log(`[shortcuts] flash result discarded for ${expenseId} (row no longer eligible)`);
+      }
+    }
+  }
+
+  const url = captured.status === "confirmed" ? "/history" : `/?confirm=${expenseId}`;
+  const suggestion =
+    categoryName && subcategoryName ? { category: categoryName, subcategory: subcategoryName } : undefined;
+  await notifyApplePayExpense(
+    userId,
+    kind,
+    { expenseId, merchant: merchantNormalized, amountCents, url },
+    suggestion,
   );
 }
 

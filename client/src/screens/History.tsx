@@ -198,6 +198,7 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
 
   const isRecurring = expense.source === "recurring";
   const isPending = expense.sync_status === "pending";
+  const isAutoSaved = expense.auto_saved === 1;
 
   const press = usePressScale<HTMLButtonElement>(0.97);
 
@@ -284,6 +285,16 @@ function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) 
               }}
             >
               pending
+            </span>
+          )}
+          {isAutoSaved && (
+            <span
+              class="text-base leading-none"
+              style={{ lineHeight: 1 }}
+              aria-label="auto-saved from Apple Pay"
+              title="auto-saved from Apple Pay"
+            >
+              🍎
             </span>
           )}
         </div>
