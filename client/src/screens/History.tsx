@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "preact/hooks";
 import { useLocation } from "preact-iso";
+import Dexie from "dexie";
 import { db } from "@/db/local";
 import type { Expense, Category, Subcategory } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -624,12 +625,14 @@ export default function HistoryScreen() {
     markHistoryVisited().catch(() => {});
   }, []);
 
-  // Load all non-deleted expenses sorted by timestamp DESC
+  // Range-scan via the [deleted+timestamp] compound index: returns only
+  // non-deleted rows in timestamp order without loading every expense and
+  // JS-filtering. .reverse() on a between() walks the index backwards.
   const expenses = useLiveQuery(
     () => db.expenses
-      .orderBy("timestamp")
+      .where("[deleted+timestamp]")
+      .between([0, Dexie.minKey], [0, Dexie.maxKey])
       .reverse()
-      .filter((e) => e.deleted === 0)
       .toArray(),
     []
   );

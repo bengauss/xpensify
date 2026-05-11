@@ -123,6 +123,21 @@ class XpensifyDB extends Dexie {
       recurring_templates:
         'id, user_id, category_id, frequency, active, next_due',
     });
+
+    // v3: add [deleted+timestamp] compound index so History can range-scan
+    // non-deleted rows in timestamp order without loading every expense and
+    // JS-filtering. With a year+ of data this matters; without the index
+    // Dexie ignored the .filter(deleted=0) optimizer hint.
+    this.version(3).stores({
+      expenses:
+        'id, timestamp, category_id, sync_status, updated_at, [deleted+timestamp]',
+      categories:
+        'id',
+      subcategories:
+        'id, category_id',
+      recurring_templates:
+        'id, user_id, category_id, frequency, active, next_due',
+    });
   }
 }
 

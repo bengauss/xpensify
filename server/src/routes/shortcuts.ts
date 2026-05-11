@@ -162,7 +162,11 @@ function ingestExpense(
     console.warn(`[shortcuts] bad amount ${JSON.stringify(raw.amount)} src=${rawForLog.slice(0, 500)}`);
     return c.json({ error: "amount must be a positive number under 10000" }, 400);
   }
-  if (Math.round(amount * 100) !== amount * 100) {
+  // Tolerant precision check: floating-point representation of values like
+  // 18.40 doesn't multiply cleanly to 1840, so the strict equality form
+  // false-rejects perfectly valid Apple Pay amounts. Allow up to 0.001 cents
+  // of FP drift before flagging as a >2-decimal-places problem.
+  if (Math.abs(Math.round(amount * 100) - amount * 100) > 0.001) {
     console.warn(`[shortcuts] amount precision ${amount} src=${rawForLog.slice(0, 500)}`);
     return c.json({ error: "amount may have at most 2 decimal places" }, 400);
   }
@@ -191,6 +195,40 @@ function ingestExpense(
   const id = crypto.randomUUID();
   const amountCents = Math.round(amount * 100);
   const nowIso = new Date().toISOString();
+
+  // Idempotency: iOS Shortcuts retries on transient network errors and we
+  // have no client-side dedupe key. A retry hits with the same (user, amount,
+  // normalized merchant, transaction timestamp) tuple — the timestamp comes
+  // from Apple Wallet and is deterministic per real transaction, so two
+  // legit twin purchases will differ by at least a second. Within a 5-min
+  // window we treat an exact match as a retry and short-circuit.
+  const existingDupe = db
+    .prepare(
+      `SELECT id, status, category_id, subcategory_id
+       FROM expenses
+       WHERE user_id = ? AND amount = ? AND note = ? AND source = 'apple-pay'
+         AND timestamp = ?
+         AND created_at > datetime('now', '-300 seconds')
+       LIMIT 1`,
+    )
+    .get(tokenRow.user_id, amountCents, note, timestamp) as
+    | { id: string; status: string; category_id: string | null; subcategoryId: string | null }
+    | undefined;
+  if (existingDupe) {
+    console.log(
+      `[shortcuts] dedupe ${existingDupe.id} amount=${amountCents} merchant="${note}" timestamp=${timestamp}`,
+    );
+    c.header("Cache-Control", "no-store");
+    return c.json(
+      {
+        id: existingDupe.id,
+        status: existingDupe.status,
+        auto_saved: existingDupe.status === "confirmed",
+        deduped: true,
+      },
+      200,
+    );
+  }
 
   // Merchant memory: 2+ prior confirmations → auto-save; 1 → pending with
   // pre-filled suggestion; 0 → pending with no suggestion (and we kick off a
@@ -270,7 +308,15 @@ function ingestExpense(
   // row from 'no-suggest' to 'flash-suggest' before the user even opens the
   // app. Errors are logged and never thrown.
   const userId = tokenRow.user_id;
-  const captured = { categoryName, subcategoryName, notificationKind, status, autoSaved };
+  const captured: PostInsertCaptured = {
+    categoryId,
+    subcategoryId,
+    categoryName,
+    subcategoryName,
+    notificationKind,
+    status,
+    autoSaved,
+  };
   queueMicrotask(() => {
     runPostInsertWork(id, userId, note, amountCents, captured).catch((err) => {
       console.error(`[shortcuts] post-insert work failed for ${id}:`, err);
@@ -303,6 +349,8 @@ function ingestExpense(
 }
 
 interface PostInsertCaptured {
+  categoryId: string | null;
+  subcategoryId: string | null;
   categoryName: string | null;
   subcategoryName: string | null;
   notificationKind: "auto-saved" | "memory-suggest" | "no-suggest";
@@ -341,6 +389,8 @@ async function runPostInsertWork(
 ): Promise<void> {
   let kind: "auto-saved" | "memory-suggest" | "flash-suggest" | "no-suggest" =
     captured.notificationKind;
+  let categoryId = captured.categoryId;
+  let subcategoryId = captured.subcategoryId;
   let categoryName = captured.categoryName;
   let subcategoryName = captured.subcategoryName;
 
@@ -369,6 +419,8 @@ async function runPostInsertWork(
         const names = lookupNames(suggestion.category_id, suggestion.subcategory_id);
         if (names) {
           kind = "flash-suggest";
+          categoryId = suggestion.category_id;
+          subcategoryId = suggestion.subcategory_id;
           categoryName = names.category;
           subcategoryName = names.subcategory;
         }
@@ -380,7 +432,14 @@ async function runPostInsertWork(
 
   const url = captured.status === "confirmed" ? "/history" : `/?confirm=${expenseId}`;
   const suggestion =
-    categoryName && subcategoryName ? { category: categoryName, subcategory: subcategoryName } : undefined;
+    categoryName && subcategoryName && categoryId && subcategoryId
+      ? {
+          category: categoryName,
+          subcategory: subcategoryName,
+          categoryId,
+          subcategoryId,
+        }
+      : undefined;
   await notifyApplePayExpense(
     userId,
     kind,

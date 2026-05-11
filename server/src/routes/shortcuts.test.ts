@@ -128,6 +128,22 @@ describe("POST /api/shortcuts/expense — validation", () => {
     expect(res.status).toBe(200);
   });
 
+  it("accepts amounts whose float representation has FP drift (e.g. 18.40)", async () => {
+    // 18.40 * 100 = 1839.9999999999998 in IEEE 754 — the strict equality
+    // form of the precision check rejects this. The tolerant form accepts
+    // it and rounds to 1840 cents.
+    const res = await postExpense(benToken, { amount: 18.4, merchant: "billa", currency: "EUR" });
+    expect(res.status).toBe(200);
+    const body = await res.json() as any;
+    const row = db.prepare(`SELECT amount FROM expenses WHERE id = ?`).get(body.id) as { amount: number };
+    expect(row.amount).toBe(1840);
+  });
+
+  it("still rejects amounts with truly-more-than-2-decimals (e.g. 12.345)", async () => {
+    const res = await postExpense(benToken, { amount: 12.345, merchant: "billa", currency: "EUR" });
+    expect(res.status).toBe(400);
+  });
+
   it("returns 400 for invalid JSON", async () => {
     const res = await app.request("/api/shortcuts/expense", {
       method: "POST",
@@ -328,6 +344,46 @@ describe("GET /api/shortcuts/expense — query string variant", () => {
     const row = db.prepare(`SELECT amount, note FROM expenses WHERE id = ?`).get(body.id) as { amount: number; note: string };
     expect(row.amount).toBe(1050);
     expect(row.note).toBe("billa");
+  });
+});
+
+describe("POST /api/shortcuts/expense — idempotency", () => {
+  it("retried request with same (amount, merchant, timestamp) returns the existing id, no duplicate row", async () => {
+    const tx = { amount: 12.5, merchant: "billa", currency: "EUR", timestamp: "2026-04-30T12:00:00Z" };
+    const r1 = await postExpense(benToken, tx);
+    const b1 = await r1.json() as any;
+
+    const r2 = await postExpense(benToken, tx);
+    const b2 = await r2.json() as any;
+
+    expect(r2.status).toBe(200);
+    expect(b2.id).toBe(b1.id);
+    expect(b2.deduped).toBe(true);
+
+    const count = db.prepare(`SELECT COUNT(*) as c FROM expenses WHERE note = 'billa'`).get() as { c: number };
+    expect(count.c).toBe(1);
+  });
+
+  it("two real twin transactions (different timestamps) are not deduped", async () => {
+    const r1 = await postExpense(benToken, { amount: 4.5, merchant: "spar", currency: "EUR", timestamp: "2026-04-30T10:00:00Z" });
+    const r2 = await postExpense(benToken, { amount: 4.5, merchant: "spar", currency: "EUR", timestamp: "2026-04-30T10:00:01Z" });
+    const b1 = await r1.json() as any;
+    const b2 = await r2.json() as any;
+    expect(b1.id).not.toBe(b2.id);
+
+    const count = db.prepare(`SELECT COUNT(*) as c FROM expenses WHERE note = 'spar'`).get() as { c: number };
+    expect(count.c).toBe(2);
+  });
+
+  it("dedupe is per-user (Bob's identical tx is not a dupe of Alice's)", async () => {
+    const tx = { amount: 7, merchant: "lidl", currency: "EUR", timestamp: "2026-04-30T08:00:00Z" };
+    await postExpense(benToken, tx);
+    const r2 = await postExpense(yaraToken, tx);
+    const b2 = await r2.json() as any;
+    expect(b2.deduped).toBeUndefined();
+
+    const count = db.prepare(`SELECT COUNT(*) as c FROM expenses WHERE note = 'lidl'`).get() as { c: number };
+    expect(count.c).toBe(2);
   });
 });
 

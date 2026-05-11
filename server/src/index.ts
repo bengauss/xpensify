@@ -18,6 +18,7 @@ import historyMarkerRouter from "./routes/historyMarker.js";
 import { processRecurringTemplates } from "./jobs/recurring.js";
 import { sendDailyReminders, sendWeeklySummaries } from "./jobs/notifications.js";
 import { sweepExpiredSessions } from "./jobs/sessions.js";
+import { runBackup } from "./jobs/backup.js";
 import { csrfMiddleware, noStoreMiddleware } from "./middleware/csrf.js";
 import { runMigrations } from "./db/migrate.js";
 import db from "./db/connection.js";
@@ -125,5 +126,11 @@ cron.schedule(
   },
   { timezone: "Europe/Vienna" }
 );
+
+// Daily SQLite snapshot at 03:30 (after the session sweep, before any AM
+// activity). No-op when BACKUP_DIR is unset.
+cron.schedule("30 3 * * *", () => {
+  runBackup().catch((err) => console.error("[backup] cron failed:", err));
+});
 
 export type AppType = typeof app;

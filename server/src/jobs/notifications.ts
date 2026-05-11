@@ -30,7 +30,16 @@ interface NotificationPrefsRow {
 /** Send a push notification to all subscriptions belonging to a user. */
 async function sendToUser(
   userId: string,
-  payload: { title: string; body: string; tag?: string; url?: string }
+  payload: {
+    title: string;
+    body: string;
+    tag?: string;
+    url?: string;
+    expenseId?: string;
+    suggestedCategoryId?: string;
+    suggestedSubcategoryId?: string;
+    showActions?: boolean;
+  }
 ): Promise<void> {
   if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
     console.warn("[notifications] VAPID keys not configured — skipping push");
@@ -159,6 +168,11 @@ interface ApplePayNotificationInput {
 interface SuggestionNames {
   category: string;
   subcategory: string;
+  /** IDs are forwarded to the SW so the lock-screen "looks right" action
+   *  button can confirm via PATCH /api/pending/:id/confirm without opening
+   *  the app. */
+  categoryId: string;
+  subcategoryId: string;
 }
 
 /**
@@ -205,5 +219,11 @@ export async function notifyApplePayExpense(
     body,
     tag: `xpensify-expense-${input.expenseId}`,
     url: input.url,
+    expenseId: input.expenseId,
+    suggestedCategoryId: suggestion?.categoryId,
+    suggestedSubcategoryId: suggestion?.subcategoryId,
+    // Actions only make sense when there's a suggestion to confirm against.
+    showActions:
+      kind === "memory-suggest" || kind === "flash-suggest",
   });
 }
