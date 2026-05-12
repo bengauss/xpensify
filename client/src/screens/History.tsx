@@ -641,12 +641,14 @@ export default function HistoryScreen() {
   const subcategories = SUBCATEGORIES;
 
   // Entrance animation: text slides in, then amounts fade in.
-  // Re-run when rows are added (infinite scroll, filter change, initial data
-  // load) so new rows get marked revealed instead of staying CSS-hidden.
+  // Depend on the expenses reference (not just length) so date-edits that
+  // reorder rows across day groups — which remount the row into a new parent
+  // and lose its [data-revealed] attribute — re-trigger the reveal pass.
+  // animateRowEntrance is idempotent; revealed rows are skipped.
   useEntrance(() => {
     if (!listRef.current) return;
     return animateRowEntrance(listRef.current);
-  }, [visibleDays, searchQuery, expenses?.length]);
+  }, [visibleDays, searchQuery, expenses]);
 
   // Build lookup maps
   const categoryMap = new Map<string, Category>(

@@ -12,11 +12,13 @@ interface MerchantRow {
   category_icon: string | null;
   category_color: string | null;
   subcategory_name: string | null;
+  auto_saved_count: number;
 }
 
 const merchants = new Hono<{ Variables: Variables }>()
   .use("/*", authMiddleware)
   // GET / — list current user's merchant memory entries with category names
+  // and a count of how many times we've auto-saved an expense at each merchant.
   .get("/", (c) => {
     const userId = c.get("userId");
     const rows = db
@@ -24,10 +26,17 @@ const merchants = new Hono<{ Variables: Variables }>()
         `SELECT m.merchant_normalized, m.category_id, m.subcategory_id,
                 m.confirmation_count, m.last_confirmed_at,
                 c.name AS category_name, c.icon AS category_icon, c.color AS category_color,
-                s.name AS subcategory_name
+                s.name AS subcategory_name,
+                COALESCE(a.auto_saved_count, 0) AS auto_saved_count
          FROM merchant_categories m
          LEFT JOIN categories c ON c.id = m.category_id
          LEFT JOIN subcategories s ON s.id = m.subcategory_id
+         LEFT JOIN (
+           SELECT note, user_id, COUNT(*) AS auto_saved_count
+           FROM expenses
+           WHERE source = 'apple-pay' AND auto_saved = 1 AND deleted = 0
+           GROUP BY user_id, note
+         ) a ON a.user_id = m.user_id AND a.note = m.merchant_normalized
          WHERE m.user_id = ?
          ORDER BY m.confirmation_count DESC, m.last_confirmed_at DESC`,
       )

@@ -216,7 +216,7 @@ function ingestExpense(
     | undefined;
   if (existingDupe) {
     console.log(
-      `[shortcuts] dedupe ${existingDupe.id} amount=${amountCents} merchant="${note}" timestamp=${timestamp}`,
+      `[shortcuts] dedupe ${existingDupe.id} amount=${amountCents} raw="${merchant}" merchant="${note}" timestamp=${timestamp}`,
     );
     c.header("Cache-Control", "no-store");
     return c.json(
@@ -298,7 +298,7 @@ function ingestExpense(
   })();
 
   console.log(
-    `[shortcuts] ${status === "confirmed" ? "auto-saved" : "logged pending"} ${id} amount=${amountCents} merchant="${note}"${
+    `[shortcuts] ${status === "confirmed" ? "auto-saved" : "logged pending"} ${id} amount=${amountCents} raw="${merchant}" merchant="${note}"${
       memory ? ` memory.count=${memory.confirmation_count}` : ""
     }`,
   );

@@ -98,7 +98,7 @@ Defined in `.env` (gitignored) and `.env.example`. Loaded by `docker compose` vi
 - `NODE_ENV=production` — gates static-file serving + the `Secure` flag on session cookies.
 - `ALICE_PASSWORD` / `BOB_PASSWORD` — initial seed passwords. If unset, `seed-runner.ts` generates a random UUID and prints it to stdout **once**, only on first seed (existing users are skipped).
 - `GEMINI_API_KEY` — optional. When set, the Apple Pay webhook calls Gemini Flash to suggest categories for never-seen merchants. Unset → the suggestion path is a silent no-op; pending rows are created without a category and the user picks one in Confirm.
-- `BACKUP_DIR` — declared but currently unused.
+- `BACKUP_DIR` — when set, the daily 03:30 cron snapshots SQLite via the online backup API into this directory (`xpensify-YYYY-MM-DD-HHMM.db`, 30-day retention by mtime). Unset → backups disabled, silent no-op. In Docker, point inside `/app/data` so it lands on the mounted volume.
 
 ## Design Tokens
 
@@ -238,9 +238,9 @@ xpensify (not the Shortcut) sends the push for every Apple Pay event. The Shortc
 
 | Path | Title | Body |
 |------|-------|------|
-| Auto-saved (memory ≥ 2) | `auto-saved €X` | `merchant → category` |
-| Memory pre-fill (count = 1) | `tap to confirm €X` | `merchant → category (suggested)` |
-| Flash pre-fill (no memory) | `tap to confirm €X` | `🤖 merchant → category (suggested)` |
+| Auto-saved (memory ≥ 2) | `auto-saved €X` | `merchant → category · subcategory` |
+| Memory pre-fill (count = 1) | `tap to confirm €X` | `merchant → category · subcategory (suggested)` |
+| Flash pre-fill (no memory) | `tap to confirm €X` | `🤖 merchant → category · subcategory (suggested)` |
 | No suggestion | `tap to categorize €X` | `merchant` |
 
 Push payload includes `tag` (per-expense, so notifications stack on the lock screen) and `data.url` for deep-linking. Pending notifications open `/?confirm=<id>` — the SW navigates the active client there, app.tsx parses the query, and pre-fills `confirmingPending`. Auto-saved notifications open `/history`. The SW also `postMessage`s clients on every push so the open app refreshes pending + history-marker in real time.
@@ -277,7 +277,7 @@ Three stages in `Dockerfile`:
 - Dockerfile header is `# syntax=docker/dockerfile:1.7` so BuildKit cache-mount syntax works. Every `npm ci` uses `--mount=type=cache,target=/root/.npm,sharing=locked` plus `--prefer-offline --no-audit --no-fund`. A `package-lock.json` bump still busts the layer, but npm's on-disk cache survives, so the re-install copies from disk instead of re-downloading from the registry.
 - Cold build on the VPS is ~40s; fully cached rebuild is ~1s. The single largest step is client `tsc && vite build` (~16s).
 - `rollup-plugin-visualizer` emits `client/dist/bundle-stats.html` (treemap, gzip sizes) on every production build. Manual chunks split `motion` and `dexie` out of the main bundle (see `vite.config.ts`).
-- The VPS runs a **weekly Docker prune** via root's crontab: `0 4 * * 0 docker buildx prune -f --keep-storage 5GB && docker image prune -af --filter "until=168h"`, logged to `./data/docker-prune.log`. The original trigger was disk pressure (85% full) from 84 GB of accumulated buildx cache silently slowing overlay2 writes. Don't remove this cron without replacing it — the cache grows unbounded otherwise.
+- The VPS runs a **weekly Docker prune** via alice's user crontab: `0 4 * * 0 docker buildx prune -f --keep-storage 5GB && docker image prune -af --filter "until=168h"`, logged to `./data/docker-prune.log`. The original trigger was disk pressure (85% full) from 84 GB of accumulated buildx cache silently slowing overlay2 writes. Don't remove this cron without replacing it — the cache grows unbounded otherwise. The R2 off-site backup sync lives in **root's** crontab (separate file) because the rclone config is at `/root/.config/rclone/rclone.conf` and the snapshot directory is root-owned.
 
 ## Test Infrastructure
 

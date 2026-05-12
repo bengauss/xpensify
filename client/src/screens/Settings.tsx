@@ -684,70 +684,56 @@ function SetupInstructions() {
         <li>
           <div class="font-medium" style={{ color: "var(--color-text-primary)" }}>generate a token</div>
           <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-            if you haven't yet, tap "generate new token" and copy it.
+            if you haven't yet, tap "generate new token" and copy it. you'll paste it in step 3.
           </p>
         </li>
         <li>
-          <div class="font-medium" style={{ color: "var(--color-text-primary)" }}>open the shortcuts app on your iphone</div>
-          <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>it's pre-installed.</p>
-        </li>
-        <li>
-          <div class="font-medium" style={{ color: "var(--color-text-primary)" }}>
-            go to the automation tab → create personal automation
+          <div class="font-medium mb-1" style={{ color: "var(--color-text-primary)" }}>
+            install the prebuilt shortcut on your iphone
           </div>
+          <p class="text-xs mb-2" style={{ color: "var(--color-text-secondary)" }}>
+            open this link on the iphone you pay with — tap "add shortcut" when the shortcuts app prompts.
+          </p>
+          <a
+            href="https://www.icloud.com/shortcuts/c8e046508fe8429fabe7ca92c2596b8d"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-md"
+            style={{
+              background: "var(--color-bg-elevated)",
+              color: "var(--color-accent)",
+              border: "1px solid var(--color-border)",
+            }}
+          >
+            get the xpensify shortcut →
+          </a>
         </li>
         <li>
-          <div class="font-medium" style={{ color: "var(--color-text-primary)" }}>choose "wallet" (or "transaction" on older ios)</div>
-          <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-            under "when i tap", select all the cards you want to track. we recommend selecting
-            all of them.
+          <div class="font-medium mb-1" style={{ color: "var(--color-text-primary)" }}>
+            paste your token into the shortcut
+          </div>
+          <p class="text-xs mb-2" style={{ color: "var(--color-text-secondary)" }}>
+            in the shortcuts app, open the imported "xpensify apple pay" shortcut, find the
+            "get contents of url" action, expand "headers", and replace the placeholder in the
+            Authorization header with your token:
+          </p>
+          <CopyableValue value="Bearer YOUR_TOKEN_HERE" label="copy header value" />
+          <p class="text-xs mt-1" style={{ color: "var(--color-text-tertiary)" }}>
+            replace YOUR_TOKEN_HERE with the token from step 1. tap done to save.
           </p>
         </li>
         <li>
-          <div class="font-medium" style={{ color: "var(--color-text-primary)" }}>tap next, then "add action"</div>
-        </li>
-        <li>
           <div class="font-medium" style={{ color: "var(--color-text-primary)" }}>
-            search for "get contents of url" and add it
+            wire it up to apple pay
           </div>
+          <p class="text-xs mt-1" style={{ color: "var(--color-text-secondary)" }}>
+            in the shortcuts app, go to the automation tab → new automation → "wallet"
+            (or "transaction" on older ios). under "when i tap", select all the cards you want
+            to track. tap next → "run shortcut" → pick "xpensify apple pay".
+          </p>
         </li>
         <li>
-          <div class="font-medium mb-1" style={{ color: "var(--color-text-primary)" }}>configure the action:</div>
-          <div class="flex flex-col gap-2">
-            <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-              method: GET
-            </p>
-            <div>
-              <p class="text-xs mb-1" style={{ color: "var(--color-text-secondary)" }}>
-                URL — paste this exactly, then long-press each magic-var slot
-                and replace it with the matching shortcut input:
-              </p>
-              <CopyableValue
-                value="https://your-domain.com/api/shortcuts/expense?amount=AMOUNT&merchant=MERCHANT&currency=EUR&timestamp=DATE"
-                label="copy URL template"
-              />
-              <ul class="text-xs flex flex-col gap-0.5 pl-4 mt-1" style={{ color: "var(--color-text-secondary)", listStyle: "disc" }}>
-                <li>replace AMOUNT with shortcut input → Amount</li>
-                <li>replace MERCHANT with shortcut input → Merchant</li>
-                <li>replace DATE with shortcut input → Date</li>
-              </ul>
-            </div>
-            <div>
-              <p class="text-xs mb-1" style={{ color: "var(--color-text-secondary)" }}>
-                headers (expand the action → "show more" → "add new header"):
-              </p>
-              <CopyableValue value="Authorization: Bearer YOUR_TOKEN_HERE" label="copy auth header" />
-              <p class="text-xs mt-1" style={{ color: "var(--color-text-tertiary)" }}>
-                replace YOUR_TOKEN_HERE with the token you generated above.
-              </p>
-            </div>
-            <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-              leave the request body empty.
-            </p>
-          </div>
-        </li>
-        <li>
-          <div class="font-medium" style={{ color: "var(--color-text-primary)" }}>tap save</div>
+          <div class="font-medium" style={{ color: "var(--color-text-primary)" }}>save the automation</div>
           <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
             turn off "ask before running" so it runs silently.
           </p>
@@ -763,27 +749,22 @@ function SetupInstructions() {
       </ol>
 
       <div class="flex flex-col gap-1 pt-2">
-        <p class="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>silent notifications (optional)</p>
+        <p class="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>about notifications</p>
         <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-          the response includes <code style={{ fontFamily: "ui-monospace, monospace" }}>auto_saved</code>,
-          <code style={{ fontFamily: "ui-monospace, monospace" }}> category</code>, and
-          <code style={{ fontFamily: "ui-monospace, monospace" }}> subcategory</code> fields. add a
-          "Show Notification" action after the URL fetch and pull these from
-          the JSON dictionary to display "logged X.XX at &lt;merchant&gt; as
-          &lt;category&gt; → &lt;subcategory&gt;" on auto-save, or "needs
-          confirmation" when pending.
+          xpensify sends its own push notification for every apple pay tap
+          (auto-saved, tap to confirm, etc). the prebuilt shortcut has no
+          "show notification" action — don't add one, or you'll get duplicates.
+          enable push under settings → notifications if you haven't.
         </p>
       </div>
 
       <div class="flex flex-col gap-1 pt-2">
-        <p class="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>sharing with another user</p>
+        <p class="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>sharing with the other person in this account</p>
         <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-          to set this up for the other person in this account: in the shortcuts
-          app, open the automation, tap the share icon, and send them the
-          icloud link. they import it, then edit only the Authorization header
-          and replace your token with one they generate themselves under
-          settings → apple pay automation. their pending expenses land under
-          their own user.
+          send them this same setup screen — they install the shortcut from
+          the link above, generate their own token under settings → apple pay
+          automation, and paste it into their copy of the shortcut. their
+          pending expenses land under their own user.
         </p>
       </div>
 
@@ -1019,7 +1000,7 @@ function AboutSection() {
     <Section title="about">
       <Row>
         <span class="flex-1 text-sm">version</span>
-        <span class="text-sm" style={{ color: "var(--color-text-secondary)" }}>v1.5.0</span>
+        <span class="text-sm" style={{ color: "var(--color-text-secondary)" }}>v2.1</span>
       </Row>
       {confirmLogout ? (
         <div class="px-4 py-2">

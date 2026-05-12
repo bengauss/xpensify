@@ -19,6 +19,16 @@ interface MerchantRow {
   category_icon: string | null;
   category_color: string | null;
   subcategory_name: string | null;
+  auto_saved_count: number;
+}
+
+function AppleLogo({ size = 11 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M17.72 6.4c-1.45 0-2.46.65-3.36.65-.9 0-1.86-.62-3.16-.62-1.7 0-3.34.97-4.27 2.55-1.83 3.18-.47 7.86 1.31 10.43.86 1.26 1.9 2.66 3.27 2.66 1.32 0 1.79-.83 3.34-.83 1.55 0 1.97.83 3.32.83 1.39 0 2.27-1.27 3.13-2.55a11.27 11.27 0 0 0 1.42-2.93c-.04-.02-2.73-1.06-2.73-4.16 0-2.69 2.16-3.97 2.26-4.04-1.24-1.83-3.13-2.04-3.78-2.04-1.7 0-3.07.95-3.83.95Z" />
+      <path d="M14.93 4.4c.69-.83 1.16-1.96 1.04-3.1-.99.05-2.16.65-2.85 1.48-.62.74-1.18 1.92-1.04 3.05 1.07.08 2.16-.55 2.85-1.43Z" />
+    </svg>
+  );
 }
 
 function formatFull(iso: string): string {
@@ -175,6 +185,85 @@ function MerchantEditor({
   );
 }
 
+function MerchantSection({
+  title,
+  hint,
+  count,
+  rows,
+  onSelect,
+  variant,
+}: {
+  title: string;
+  hint: string;
+  count: number;
+  rows: MerchantRow[];
+  onSelect: (m: MerchantRow) => void;
+  variant: "auto" | "learning";
+}) {
+  return (
+    <div>
+      <div class="flex items-baseline justify-between px-1 pb-1.5">
+        <span class="text-xs font-semibold lowercase" style={{ color: "var(--color-text-tertiary)" }}>
+          {title} · {count}
+        </span>
+      </div>
+      <p class="text-xs px-1 pb-2" style={{ color: "var(--color-text-tertiary)" }}>
+        {hint}
+      </p>
+      <div class="flex flex-col">
+        {rows.map((m) => {
+          const Icon = m.category_icon ? categoryIcons[m.category_icon] : null;
+          const color = m.category_color ?? "#868e96";
+          return (
+            <button
+              key={m.merchant_normalized}
+              onClick={() => onSelect(m)}
+              class="w-full text-left flex items-center gap-3 px-1 py-2.5 cursor-pointer bg-transparent border-0"
+              style={{ WebkitTapHighlightColor: "transparent" }}
+            >
+              <div
+                class="flex-shrink-0 flex items-center justify-center rounded-xl"
+                style={{ width: 36, height: 36, backgroundColor: `${color}1a` }}
+              >
+                {Icon && <Icon color={color} size={20} />}
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-base truncate" style={{ color: "var(--color-text-primary)" }}>
+                  {m.merchant_normalized}
+                </p>
+                <p class="text-sm truncate" style={{ color: "var(--color-text-secondary)" }}>
+                  {m.category_name ?? "—"} · {m.subcategory_name ?? "—"}
+                </p>
+              </div>
+              {variant === "auto" ? (
+                <span
+                  class="flex-shrink-0 inline-flex items-center gap-1 text-xs tabular-nums"
+                  style={{ color: "var(--color-text-tertiary)" }}
+                  title={`auto-saved ${m.auto_saved_count} ${m.auto_saved_count === 1 ? "time" : "times"}`}
+                >
+                  <AppleLogo />
+                  {m.auto_saved_count}
+                </span>
+              ) : (
+                <span
+                  class="flex-shrink-0 text-xs tabular-nums px-2 py-0.5 rounded-full"
+                  style={{
+                    color: "#ff9f0a",
+                    backgroundColor: "rgba(255,159,10,0.12)",
+                  }}
+                  title="needs one more confirmation"
+                >
+                  1/2
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsMerchantsScreen() {
   const { route } = useLocation();
   const [rows, setRows] = useState<MerchantRow[] | null>(null);
@@ -232,43 +321,34 @@ export default function SettingsMerchantsScreen() {
         </div>
       )}
 
-      {rows && rows.length > 0 && (
-        <div class="flex flex-col">
-          {rows.map((m) => {
-            const Icon = m.category_icon ? categoryIcons[m.category_icon] : null;
-            const color = m.category_color ?? "#868e96";
-            return (
-              <button
-                key={m.merchant_normalized}
-                onClick={() => setSelected(m)}
-                class="w-full text-left flex items-center gap-3 px-1 py-2.5 cursor-pointer bg-transparent border-0"
-                style={{ WebkitTapHighlightColor: "transparent" }}
-              >
-                <div
-                  class="flex-shrink-0 flex items-center justify-center rounded-xl"
-                  style={{ width: 36, height: 36, backgroundColor: `${color}1a` }}
-                >
-                  {Icon && <Icon color={color} size={20} />}
-                </div>
-                <div class="flex-1 min-w-0">
-                  <p class="text-base truncate" style={{ color: "var(--color-text-primary)" }}>
-                    {m.merchant_normalized}
-                  </p>
-                  <p class="text-sm truncate" style={{ color: "var(--color-text-secondary)" }}>
-                    {m.category_name ?? "—"} · {m.subcategory_name ?? "—"}
-                  </p>
-                </div>
-                <span
-                  class="flex-shrink-0 text-xs tabular-nums"
-                  style={{ color: "var(--color-text-tertiary)" }}
-                >
-                  {m.confirmation_count} {m.confirmation_count === 1 ? "confirmation" : "confirmations"}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {rows && rows.length > 0 && (() => {
+        const autoLogging = rows.filter((m) => m.confirmation_count >= 2);
+        const learning = rows.filter((m) => m.confirmation_count < 2);
+        return (
+          <div class="flex flex-col gap-5">
+            {autoLogging.length > 0 && (
+              <MerchantSection
+                title="auto-logging"
+                hint="confirmed ≥ 2× — next transaction saves without asking"
+                count={autoLogging.length}
+                rows={autoLogging}
+                onSelect={setSelected}
+                variant="auto"
+              />
+            )}
+            {learning.length > 0 && (
+              <MerchantSection
+                title="learning"
+                hint="confirmed once — next transaction will be pending again"
+                count={learning.length}
+                rows={learning}
+                onSelect={setSelected}
+                variant="learning"
+              />
+            )}
+          </div>
+        );
+      })()}
 
       <DetailSheet open={selected !== null} onClose={() => setSelected(null)}>
         {selected && (

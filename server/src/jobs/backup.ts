@@ -2,7 +2,7 @@ import { mkdirSync, readdirSync, unlinkSync, statSync } from "fs";
 import { resolve, join, basename } from "path";
 import db from "../db/connection.js";
 
-const RETENTION_DAYS = 14;
+const RETENTION_DAYS = 30;
 const BACKUP_PREFIX = "xpensify-";
 
 function dateStamp(): string {

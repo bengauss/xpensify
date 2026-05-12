@@ -57,6 +57,34 @@ describe("GET /api/merchants — list", () => {
     expect(data[1].merchant_normalized).toBe("recent");
   });
 
+  it("includes auto_saved_count from matching apple-pay expenses", async () => {
+    seedMemory(benId, "billa", "cat-food", "sub-groceries", 5, "2026-04-30T10:00:00Z");
+    seedMemory(benId, "spar", "cat-food", "sub-groceries", 1, "2026-04-30T10:00:00Z");
+
+    // 3 auto-saved, 1 manually confirmed, 1 deleted — only the auto-saved 3 count.
+    for (let i = 0; i < 3; i++) {
+      db.prepare(
+        `INSERT INTO expenses (id, user_id, category_id, subcategory_id, amount, note, timestamp, source, auto_saved, status, deleted, created_at, updated_at)
+         VALUES (?, ?, 'cat-food', 'sub-groceries', 100, 'billa', '2026-04-30T10:00:00Z', 'apple-pay', 1, 'confirmed', 0, '2026-04-30T10:00:00Z', '2026-04-30T10:00:00Z')`,
+      ).run(crypto.randomUUID(), benId);
+    }
+    db.prepare(
+      `INSERT INTO expenses (id, user_id, category_id, subcategory_id, amount, note, timestamp, source, auto_saved, status, deleted, created_at, updated_at)
+       VALUES (?, ?, 'cat-food', 'sub-groceries', 100, 'billa', '2026-04-30T10:00:00Z', 'apple-pay', 0, 'confirmed', 0, '2026-04-30T10:00:00Z', '2026-04-30T10:00:00Z')`,
+    ).run(crypto.randomUUID(), benId);
+    db.prepare(
+      `INSERT INTO expenses (id, user_id, category_id, subcategory_id, amount, note, timestamp, source, auto_saved, status, deleted, created_at, updated_at)
+       VALUES (?, ?, 'cat-food', 'sub-groceries', 100, 'billa', '2026-04-30T10:00:00Z', 'apple-pay', 1, 'confirmed', 1, '2026-04-30T10:00:00Z', '2026-04-30T10:00:00Z')`,
+    ).run(crypto.randomUUID(), benId);
+
+    const res = await app.request("/api/merchants", { headers: { cookie: benCookie } });
+    const data = (await res.json()) as any[];
+    const billa = data.find((d) => d.merchant_normalized === "billa");
+    const spar = data.find((d) => d.merchant_normalized === "spar");
+    expect(billa.auto_saved_count).toBe(3);
+    expect(spar.auto_saved_count).toBe(0);
+  });
+
   it("returns 401 with no session", async () => {
     const res = await app.request("/api/merchants");
     expect(res.status).toBe(401);

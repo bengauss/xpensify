@@ -188,18 +188,20 @@ export async function notifyApplePayExpense(
   let title: string;
   let body: string;
 
+  const label = suggestion ? `${suggestion.category} · ${suggestion.subcategory}` : "";
+
   if (kind === "auto-saved") {
     if (!suggestion) return; // shouldn't happen; auto-save always has a memory mapping
     title = `auto-saved ${amount}`;
-    body = `${merchant} → ${suggestion.category}`;
+    body = `${merchant} → ${label}`;
   } else if (kind === "memory-suggest") {
     if (!suggestion) return;
     title = `tap to confirm ${amount}`;
-    body = `${merchant} → ${suggestion.category} (suggested)`;
+    body = `${merchant} → ${label} (suggested)`;
   } else if (kind === "flash-suggest") {
     if (!suggestion) return;
     title = `tap to confirm ${amount}`;
-    body = `🤖 ${merchant} → ${suggestion.category} (suggested)`;
+    body = `🤖 ${merchant} → ${label} (suggested)`;
   } else {
     title = `tap to categorize ${amount}`;
     body = merchant;
