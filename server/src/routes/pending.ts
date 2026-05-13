@@ -16,13 +16,18 @@ interface PendingRow {
   updated_at: string;
 }
 
+/** Server-decided origin of a suggestion attached to a pending row. */
+type SuggestionSource = "memory" | "flash" | null;
+
 const MAX_NOTE_LENGTH = 1000;
 
 const pending = new Hono<{ Variables: Variables }>()
   .use("/*", authMiddleware)
   // GET / — pending expenses for the current user. category_id/subcategory_id
-  // are non-null when the shortcut webhook attached a 1-confirmation merchant
-  // suggestion; the client uses that to pre-select in confirm mode.
+  // are non-null when the shortcut webhook attached a suggestion. The origin
+  // (user-trained memory vs Gemini Flash) decides the Confirm-screen hint:
+  // memory → "confirmed once before", flash → "AI suggestion". Inferred from
+  // merchant_categories presence rather than stored on the row.
   .get("/", (c) => {
     const userId = c.get("userId");
     const rows = db
@@ -34,7 +39,17 @@ const pending = new Hono<{ Variables: Variables }>()
          ORDER BY timestamp DESC`
       )
       .all(userId) as Array<Omit<PendingRow, "user_id" | "updated_at">>;
-    return c.json(rows);
+    const enriched = rows.map((r) => {
+      let suggestion_source: SuggestionSource = null;
+      if (r.category_id && r.subcategory_id && r.source === "apple-pay") {
+        const merchant = (r.note ?? "").trim();
+        suggestion_source = merchant && lookupMerchantMemory(userId, merchant)
+          ? "memory"
+          : "flash";
+      }
+      return { ...r, suggestion_source };
+    });
+    return c.json(enriched);
   })
   // PATCH /:id/confirm — assign category, optionally edit amount/note, flip status
   .patch("/:id/confirm", async (c) => {

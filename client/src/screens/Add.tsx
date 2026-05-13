@@ -60,9 +60,11 @@ export function AddScreen() {
   const [pendingSubcategoryId, setPendingSubcategoryId] = useState<string>(
     editing?.subcategory_id ?? confirming?.subcategory_id ?? "",
   );
-  // True when the pending row arrived with a suggestion attached — drives the
-  // "✓ confirmed once before" hint under the date row.
-  const hasSuggestion = !!(confirming && confirming.category_id && confirming.subcategory_id);
+  // True when the pending row arrived with a suggestion attached. The
+  // origin (memory vs Flash) drives a different hint under the date row.
+  const suggestionSource = confirming && confirming.category_id && confirming.subcategory_id
+    ? (confirming.suggestion_source ?? "memory")
+    : null;
 
   // Deep-link race: when the user opens the app via /?confirm=<id>, AddScreen
   // mounts BEFORE app.tsx's effect has fetched /pending and set the
@@ -483,9 +485,11 @@ export function AddScreen() {
         )}
       </div>
 
-      {/* "Confirmed once before" hint — only shown in confirm mode when the
-          pending expense arrived with a 1-confirmation merchant suggestion. */}
-      {isConfirming && hasSuggestion && (
+      {/* Suggestion hint — only shown in confirm mode when the pending expense
+          arrived with a suggestion. Memory and Flash get distinct wording so
+          the user knows whether they're agreeing with their own past choice
+          or with an AI guess. */}
+      {isConfirming && suggestionSource && (
         <div
           style={{
             marginTop: -8,
@@ -494,7 +498,7 @@ export function AddScreen() {
             color: "var(--color-text-tertiary)",
           }}
         >
-          ✓ confirmed once before
+          {suggestionSource === "memory" ? "✓ confirmed once before" : "🤖 AI suggestion"}
         </div>
       )}
 

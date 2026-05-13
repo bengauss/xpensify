@@ -43,10 +43,14 @@ export interface PendingExpense {
   timestamp: string;
   source: string;
   created_at: string;
-  /** Pre-filled merchant memory suggestion (1-confirmation case). Null when
-   *  the merchant is unknown — the confirm screen renders no pre-selection. */
+  /** Pre-filled suggestion (memory or Flash). Null when the merchant is unknown
+   *  AND Flash didn't infer anything — the confirm screen renders no pre-selection. */
   category_id: string | null;
   subcategory_id: string | null;
+  /** Origin of the suggestion. "memory" means the user has confirmed this
+   *  merchant once before; "flash" means Gemini inferred it with no prior
+   *  user input. Drives the hint text on the Confirm screen. */
+  suggestion_source?: "memory" | "flash" | null;
 }
 
 export interface Category {

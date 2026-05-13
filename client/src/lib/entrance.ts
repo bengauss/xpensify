@@ -107,6 +107,17 @@ export function animateRowEntrance(container: HTMLElement): () => void {
       { ...springs.snappy, delay: i * stagger.text, ...getReducedMotionOverride() },
     );
     anims.push(a);
+    // When the animation completes naturally, clear the inline pins so the
+    // element falls back to its default-visible state. Without this, the
+    // pinned opacity:0 can outlive the animation if WAAPI drops it (observed
+    // on iOS PWA cold-start via a notification deep-link — rows stayed
+    // invisible below the first couple while their amounts revealed normally).
+    Promise.resolve((a as unknown as PromiseLike<unknown>))
+      .then(() => {
+        textEl.style.opacity = "";
+        textEl.style.transform = "";
+      })
+      .catch(() => {});
   }
 
   // Rows beyond the animation window: reveal instantly.
@@ -133,6 +144,22 @@ export function animateRowEntrance(container: HTMLElement): () => void {
   for (let i = count; i < unrevealed.length; i++) {
     unrevealed[i].querySelector<HTMLElement>("[data-row-amount]")?.setAttribute("data-revealed", "1");
   }
+
+  // Safety net: well after every animation should have completed, force the
+  // pinned inline styles off any text element that's still hidden. Belt-and-
+  // braces guard for environments where WAAPI silently drops the animation
+  // without resolving its promise (seen on iOS PWA cold-start). If everything
+  // worked, this is a no-op since the inline styles were already cleared.
+  const safetyDelay = count * textStaggerMs + 1200;
+  const safetyTimer = window.setTimeout(() => {
+    for (const el of animatedTextEls) {
+      if (el.style.opacity === "0" || el.style.transform) {
+        el.style.opacity = "";
+        el.style.transform = "";
+      }
+    }
+  }, safetyDelay);
+  timers.push(safetyTimer);
 
   return () => {
     for (const a of anims) a.stop();

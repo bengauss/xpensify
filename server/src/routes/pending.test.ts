@@ -43,6 +43,56 @@ describe("GET /api/pending — list", () => {
     const data = await res.json() as any[];
     expect(data).toHaveLength(0);
   });
+
+  it("flags memory-backed suggestions with suggestion_source='memory'", async () => {
+    db.prepare(
+      `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+       VALUES (?, 'billa', 'cat-food', 'sub-groceries', 1, '2026-05-01T00:00:00.000Z')`,
+    ).run(benId);
+    insertExpense({
+      user_id: benId,
+      amount: 1000,
+      status: "pending",
+      note: "billa",
+      source: "apple-pay",
+      category_id: "cat-food",
+      subcategory_id: "sub-groceries",
+    });
+    const res = await app.request("/api/pending", { headers: { cookie: benCookie } });
+    const data = await res.json() as any[];
+    expect(data[0].suggestion_source).toBe("memory");
+  });
+
+  it("flags Flash-backed suggestions with suggestion_source='flash'", async () => {
+    // No merchant_categories row — the pre-filled category came from Gemini.
+    insertExpense({
+      user_id: benId,
+      amount: 1000,
+      status: "pending",
+      note: "nordsee",
+      source: "apple-pay",
+      category_id: "cat-food",
+      subcategory_id: "sub-eating-out",
+    });
+    const res = await app.request("/api/pending", { headers: { cookie: benCookie } });
+    const data = await res.json() as any[];
+    expect(data[0].suggestion_source).toBe("flash");
+  });
+
+  it("returns suggestion_source=null when no category is pre-filled", async () => {
+    insertExpense({
+      user_id: benId,
+      amount: 1000,
+      status: "pending",
+      note: "unknown shop",
+      source: "apple-pay",
+      category_id: null,
+      subcategory_id: null,
+    });
+    const res = await app.request("/api/pending", { headers: { cookie: benCookie } });
+    const data = await res.json() as any[];
+    expect(data[0].suggestion_source).toBeNull();
+  });
 });
 
 describe("PATCH /api/pending/:id/confirm — first confirmation", () => {
