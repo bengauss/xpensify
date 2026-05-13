@@ -69,6 +69,47 @@ function relaxExpensesNullability(): void {
   }
 }
 
+// merchant_categories was originally per-user (composite PK user_id + merchant).
+// Switched to household-wide (PK = merchant_normalized only): both users
+// contribute confirmations to the same row, no more re-training the system
+// twice. Migration picks the row with the highest confirmation_count per
+// merchant (ties broken by most recent last_confirmed_at) so we don't lose
+// training when both users had memorized the same merchant.
+function migrateMerchantCategoriesToShared(): void {
+  const cols = db.prepare(`PRAGMA table_info(merchant_categories)`).all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === "user_id")) return;
+
+  console.log("Rebuilding merchant_categories to drop user_id (household-shared memory)");
+  db.pragma("foreign_keys = OFF");
+  try {
+    db.exec(`
+      BEGIN;
+      CREATE TABLE merchant_categories_new (
+        merchant_normalized TEXT PRIMARY KEY,
+        category_id TEXT NOT NULL REFERENCES categories(id),
+        subcategory_id TEXT NOT NULL REFERENCES subcategories(id),
+        confirmation_count INTEGER NOT NULL DEFAULT 1,
+        last_confirmed_at TEXT NOT NULL
+      );
+      INSERT INTO merchant_categories_new (merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+        SELECT merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at
+        FROM merchant_categories m
+        WHERE rowid = (
+          SELECT rowid FROM merchant_categories m2
+          WHERE m2.merchant_normalized = m.merchant_normalized
+          ORDER BY m2.confirmation_count DESC, m2.last_confirmed_at DESC
+          LIMIT 1
+        );
+      DROP INDEX IF EXISTS idx_merchant_categories_user;
+      DROP TABLE merchant_categories;
+      ALTER TABLE merchant_categories_new RENAME TO merchant_categories;
+      COMMIT;
+    `);
+  } finally {
+    db.pragma("foreign_keys = ON");
+  }
+}
+
 export function runMigrations(): void {
   // schema.sql lives next to this file at compile time (server/src/db) and at
   // runtime (server/dist/db, copied by the Dockerfile).
@@ -90,6 +131,7 @@ export function runMigrations(): void {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_expenses_status ON expenses(status)`);
 
   relaxExpensesNullability();
+  migrateMerchantCategoriesToShared();
 }
 
 // When invoked directly via `npm run migrate`, run and log.

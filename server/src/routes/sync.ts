@@ -146,11 +146,11 @@ const sync = new Hono<{ Variables: Variables }>()
           );
           acceptedIds.push(change.id);
 
-          // Recategorization signal: if the user just edited an Apple Pay
+          // Recategorization signal: if a user just edited an Apple Pay
           // expense and changed its category, the auto-save mapping was
-          // wrong for this transaction. Reset merchant memory to count=1
-          // with the new mapping — next transaction at this merchant will
-          // go pending so the user can confirm the corrected category.
+          // wrong for this transaction. Reset the household's merchant
+          // memory to count=1 with the new mapping — next transaction at
+          // this merchant will go pending so it can be confirmed.
           // Skip soft-deletes (deleted=1 isn't a recategorization signal).
           if (
             existing.source === "apple-pay" &&
@@ -160,7 +160,6 @@ const sync = new Hono<{ Variables: Variables }>()
             const merchantNormalized = (existing.note ?? "").trim();
             if (merchantNormalized) {
               resetMerchantMemory(
-                userId,
                 merchantNormalized,
                 change.category_id,
                 change.subcategory_id,

@@ -8,14 +8,13 @@ beforeAll(() => ensureMigrated());
 let benId: string;
 let yaraId: string;
 let benCookie: string;
-let yaraCookie: string;
 const app = mountRouter("merchants", merchants);
 
-function seedMemory(userId: string, merchant: string, categoryId: string, subcategoryId: string, count: number, when: string) {
+function seedMemory(merchant: string, categoryId: string, subcategoryId: string, count: number, when: string) {
   db.prepare(
-    `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(userId, merchant, categoryId, subcategoryId, count, when);
+    `INSERT INTO merchant_categories (merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+     VALUES (?, ?, ?, ?, ?)`,
+  ).run(merchant, categoryId, subcategoryId, count, when);
 }
 
 beforeEach(() => {
@@ -24,22 +23,22 @@ beforeEach(() => {
   benId = users.alice.id;
   yaraId = users.bob.id;
   benCookie = sessionCookie(seedTestSession(benId));
-  yaraCookie = sessionCookie(seedTestSession(yaraId));
 });
 
 describe("GET /api/merchants — list", () => {
-  it("returns the current user's merchants only", async () => {
-    seedMemory(benId, "billa", "cat-food", "sub-groceries", 3, "2026-04-30T10:00:00Z");
-    seedMemory(yaraId, "spar", "cat-food", "sub-groceries", 2, "2026-04-30T10:00:00Z");
+  it("returns all household merchants (no per-user scoping)", async () => {
+    seedMemory("billa", "cat-food", "sub-groceries", 3, "2026-04-30T10:00:00Z");
+    seedMemory("spar", "cat-food", "sub-groceries", 2, "2026-04-30T10:00:00Z");
 
     const res = await app.request("/api/merchants", { headers: { cookie: benCookie } });
     const data = await res.json() as any[];
-    expect(data).toHaveLength(1);
-    expect(data[0].merchant_normalized).toBe("billa");
+    expect(data).toHaveLength(2);
+    const merchants = data.map((d) => d.merchant_normalized).sort();
+    expect(merchants).toEqual(["billa", "spar"]);
   });
 
   it("includes joined category name and icon", async () => {
-    seedMemory(benId, "billa", "cat-food", "sub-groceries", 3, "2026-04-30T10:00:00Z");
+    seedMemory("billa", "cat-food", "sub-groceries", 3, "2026-04-30T10:00:00Z");
     const res = await app.request("/api/merchants", { headers: { cookie: benCookie } });
     const data = await res.json() as any[];
     expect(data[0].category_name).toBe("food");
@@ -47,9 +46,9 @@ describe("GET /api/merchants — list", () => {
   });
 
   it("orders by confirmation_count DESC, then last_confirmed_at DESC", async () => {
-    seedMemory(benId, "rare", "cat-food", "sub-groceries", 1, "2026-04-30T10:00:00Z");
-    seedMemory(benId, "frequent", "cat-food", "sub-groceries", 10, "2026-04-29T10:00:00Z");
-    seedMemory(benId, "recent", "cat-food", "sub-groceries", 1, "2026-04-30T11:00:00Z");
+    seedMemory("rare", "cat-food", "sub-groceries", 1, "2026-04-30T10:00:00Z");
+    seedMemory("frequent", "cat-food", "sub-groceries", 10, "2026-04-29T10:00:00Z");
+    seedMemory("recent", "cat-food", "sub-groceries", 1, "2026-04-30T11:00:00Z");
 
     const res = await app.request("/api/merchants", { headers: { cookie: benCookie } });
     const data = await res.json() as any[];
@@ -57,17 +56,22 @@ describe("GET /api/merchants — list", () => {
     expect(data[1].merchant_normalized).toBe("recent");
   });
 
-  it("includes auto_saved_count from matching apple-pay expenses", async () => {
-    seedMemory(benId, "billa", "cat-food", "sub-groceries", 5, "2026-04-30T10:00:00Z");
-    seedMemory(benId, "spar", "cat-food", "sub-groceries", 1, "2026-04-30T10:00:00Z");
+  it("includes auto_saved_count summed across the household", async () => {
+    seedMemory("billa", "cat-food", "sub-groceries", 5, "2026-04-30T10:00:00Z");
+    seedMemory("spar", "cat-food", "sub-groceries", 1, "2026-04-30T10:00:00Z");
 
-    // 3 auto-saved, 1 manually confirmed, 1 deleted — only the auto-saved 3 count.
-    for (let i = 0; i < 3; i++) {
+    // 2 auto-saved by Alice, 1 auto-saved by Bob, 1 manually confirmed, 1 deleted.
+    // The household auto-saved count is 3 (Alice's 2 + Bob's 1).
+    for (let i = 0; i < 2; i++) {
       db.prepare(
         `INSERT INTO expenses (id, user_id, category_id, subcategory_id, amount, note, timestamp, source, auto_saved, status, deleted, created_at, updated_at)
          VALUES (?, ?, 'cat-food', 'sub-groceries', 100, 'billa', '2026-04-30T10:00:00Z', 'apple-pay', 1, 'confirmed', 0, '2026-04-30T10:00:00Z', '2026-04-30T10:00:00Z')`,
       ).run(crypto.randomUUID(), benId);
     }
+    db.prepare(
+      `INSERT INTO expenses (id, user_id, category_id, subcategory_id, amount, note, timestamp, source, auto_saved, status, deleted, created_at, updated_at)
+       VALUES (?, ?, 'cat-food', 'sub-groceries', 100, 'billa', '2026-04-30T10:00:00Z', 'apple-pay', 1, 'confirmed', 0, '2026-04-30T10:00:00Z', '2026-04-30T10:00:00Z')`,
+    ).run(crypto.randomUUID(), yaraId);
     db.prepare(
       `INSERT INTO expenses (id, user_id, category_id, subcategory_id, amount, note, timestamp, source, auto_saved, status, deleted, created_at, updated_at)
        VALUES (?, ?, 'cat-food', 'sub-groceries', 100, 'billa', '2026-04-30T10:00:00Z', 'apple-pay', 0, 'confirmed', 0, '2026-04-30T10:00:00Z', '2026-04-30T10:00:00Z')`,
@@ -93,7 +97,7 @@ describe("GET /api/merchants — list", () => {
 
 describe("PATCH /api/merchants/:merchant — update", () => {
   it("rewrites mapping and resets count to 1", async () => {
-    seedMemory(benId, "billa", "cat-food", "sub-groceries", 7, "2026-04-30T10:00:00Z");
+    seedMemory("billa", "cat-food", "sub-groceries", 7, "2026-04-30T10:00:00Z");
     const res = await app.request(
       "/api/merchants/billa",
       jsonInit("PATCH", {
@@ -104,14 +108,14 @@ describe("PATCH /api/merchants/:merchant — update", () => {
     expect(res.status).toBe(200);
 
     const row = db
-      .prepare(`SELECT category_id, confirmation_count FROM merchant_categories WHERE user_id = ? AND merchant_normalized = 'billa'`)
-      .get(benId) as { category_id: string; confirmation_count: number };
+      .prepare(`SELECT category_id, confirmation_count FROM merchant_categories WHERE merchant_normalized = 'billa'`)
+      .get() as { category_id: string; confirmation_count: number };
     expect(row.category_id).toBe("cat-household");
     expect(row.confirmation_count).toBe(1);
   });
 
   it("returns 400 for mismatched subcategory", async () => {
-    seedMemory(benId, "billa", "cat-food", "sub-groceries", 3, "2026-04-30T10:00:00Z");
+    seedMemory("billa", "cat-food", "sub-groceries", 3, "2026-04-30T10:00:00Z");
     const res = await app.request(
       "/api/merchants/billa",
       jsonInit("PATCH", {
@@ -133,25 +137,8 @@ describe("PATCH /api/merchants/:merchant — update", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 404 when patching another user's merchant (no leak)", async () => {
-    seedMemory(yaraId, "spar", "cat-food", "sub-groceries", 3, "2026-04-30T10:00:00Z");
-    const res = await app.request(
-      "/api/merchants/spar",
-      jsonInit("PATCH", {
-        cookie: benCookie,
-        body: { category_id: "cat-household", subcategory_id: "sub-hh-other" },
-      }),
-    );
-    expect(res.status).toBe(404);
-    // Bob's mapping unchanged
-    const row = db
-      .prepare(`SELECT category_id FROM merchant_categories WHERE user_id = ? AND merchant_normalized = 'spar'`)
-      .get(yaraId) as { category_id: string };
-    expect(row.category_id).toBe("cat-food");
-  });
-
   it("returns 400 for invalid JSON", async () => {
-    seedMemory(benId, "billa", "cat-food", "sub-groceries", 1, "2026-04-30T10:00:00Z");
+    seedMemory("billa", "cat-food", "sub-groceries", 1, "2026-04-30T10:00:00Z");
     const res = await app.request("/api/merchants/billa", {
       method: "PATCH",
       headers: { "content-type": "application/json", cookie: benCookie },
@@ -163,7 +150,7 @@ describe("PATCH /api/merchants/:merchant — update", () => {
 
 describe("DELETE /api/merchants/:merchant", () => {
   it("removes the mapping", async () => {
-    seedMemory(benId, "billa", "cat-food", "sub-groceries", 3, "2026-04-30T10:00:00Z");
+    seedMemory("billa", "cat-food", "sub-groceries", 3, "2026-04-30T10:00:00Z");
     const res = await app.request("/api/merchants/billa", {
       method: "DELETE",
       headers: { cookie: benCookie },
@@ -171,8 +158,8 @@ describe("DELETE /api/merchants/:merchant", () => {
     expect(res.status).toBe(200);
 
     const exists = db
-      .prepare(`SELECT 1 FROM merchant_categories WHERE user_id = ? AND merchant_normalized = 'billa'`)
-      .get(benId);
+      .prepare(`SELECT 1 FROM merchant_categories WHERE merchant_normalized = 'billa'`)
+      .get();
     expect(exists).toBeUndefined();
   });
 
@@ -182,19 +169,6 @@ describe("DELETE /api/merchants/:merchant", () => {
       headers: { cookie: benCookie },
     });
     expect(res.status).toBe(404);
-  });
-
-  it("does not delete other users' merchants", async () => {
-    seedMemory(yaraId, "billa", "cat-food", "sub-groceries", 3, "2026-04-30T10:00:00Z");
-    const res = await app.request("/api/merchants/billa", {
-      method: "DELETE",
-      headers: { cookie: benCookie },
-    });
-    expect(res.status).toBe(404);
-    const stillThere = db
-      .prepare(`SELECT 1 FROM merchant_categories WHERE user_id = ? AND merchant_normalized = 'billa'`)
-      .get(yaraId);
-    expect(stillThere).toBeDefined();
   });
 });
 
@@ -211,13 +185,28 @@ describe("POST /api/merchants/import — backfill", () => {
     expect(data.skipped).toBe(0);
 
     const memory = db
-      .prepare(`SELECT confirmation_count FROM merchant_categories WHERE user_id = ? AND merchant_normalized = 'billa'`)
-      .get(benId) as { confirmation_count: number };
+      .prepare(`SELECT confirmation_count FROM merchant_categories WHERE merchant_normalized = 'billa'`)
+      .get() as { confirmation_count: number };
     expect(memory.confirmation_count).toBe(3);
   });
 
+  it("aggregates across both household members' apple-pay history", async () => {
+    insertExpense({ user_id: benId, source: "apple-pay", status: "confirmed", note: "spar", amount: 1000, category_id: "cat-food", subcategory_id: "sub-groceries" });
+    insertExpense({ user_id: yaraId, source: "apple-pay", status: "confirmed", note: "spar", amount: 1000, category_id: "cat-food", subcategory_id: "sub-groceries" });
+
+    const res = await app.request("/api/merchants/import", { method: "POST", headers: { cookie: benCookie } });
+    expect(res.status).toBe(200);
+    const data = await res.json() as any;
+    expect(data.inserted).toBe(1);
+
+    const memory = db
+      .prepare(`SELECT confirmation_count FROM merchant_categories WHERE merchant_normalized = 'spar'`)
+      .get() as { confirmation_count: number };
+    expect(memory.confirmation_count).toBe(2);
+  });
+
   it("never overwrites an existing merchant memory entry", async () => {
-    seedMemory(benId, "billa", "cat-household", "sub-hh-other", 1, "2026-04-30T10:00:00Z");
+    seedMemory("billa", "cat-household", "sub-hh-other", 1, "2026-04-30T10:00:00Z");
     insertExpense({ user_id: benId, source: "apple-pay", status: "confirmed", note: "billa", amount: 1000, category_id: "cat-food", subcategory_id: "sub-groceries" });
     insertExpense({ user_id: benId, source: "apple-pay", status: "confirmed", note: "billa", amount: 1000, category_id: "cat-food", subcategory_id: "sub-groceries" });
 
@@ -227,8 +216,8 @@ describe("POST /api/merchants/import — backfill", () => {
     expect(data.skipped).toBe(1);
 
     const memory = db
-      .prepare(`SELECT category_id FROM merchant_categories WHERE user_id = ? AND merchant_normalized = 'billa'`)
-      .get(benId) as { category_id: string };
+      .prepare(`SELECT category_id FROM merchant_categories WHERE merchant_normalized = 'billa'`)
+      .get() as { category_id: string };
     expect(memory.category_id).toBe("cat-household");
   });
 
@@ -242,8 +231,8 @@ describe("POST /api/merchants/import — backfill", () => {
     await app.request("/api/merchants/import", { method: "POST", headers: { cookie: benCookie } });
 
     const memory = db
-      .prepare(`SELECT subcategory_id, confirmation_count FROM merchant_categories WHERE user_id = ? AND merchant_normalized = 'billa'`)
-      .get(benId) as { subcategory_id: string; confirmation_count: number };
+      .prepare(`SELECT subcategory_id, confirmation_count FROM merchant_categories WHERE merchant_normalized = 'billa'`)
+      .get() as { subcategory_id: string; confirmation_count: number };
     expect(memory.subcategory_id).toBe("sub-groceries");
     expect(memory.confirmation_count).toBe(3);
   });

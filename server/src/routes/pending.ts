@@ -43,7 +43,7 @@ const pending = new Hono<{ Variables: Variables }>()
       let suggestion_source: SuggestionSource = null;
       if (r.category_id && r.subcategory_id && r.source === "apple-pay") {
         const merchant = (r.note ?? "").trim();
-        suggestion_source = merchant && lookupMerchantMemory(userId, merchant)
+        suggestion_source = merchant && lookupMerchantMemory(merchant)
           ? "memory"
           : "flash";
       }
@@ -129,7 +129,7 @@ const pending = new Hono<{ Variables: Variables }>()
       existing.category_id !== null && existing.subcategory_id !== null;
     const noMemoryYet =
       existing.source === "apple-pay" && merchantNormalized
-        ? lookupMerchantMemory(userId, merchantNormalized) === null
+        ? lookupMerchantMemory(merchantNormalized) === null
         : false;
     const flashAccepted =
       noMemoryYet &&
@@ -151,7 +151,6 @@ const pending = new Hono<{ Variables: Variables }>()
 
       if (existing.source === "apple-pay" && merchantNormalized) {
         upsertMerchantMemory(
-          userId,
           merchantNormalized,
           categoryId,
           subcategoryId,

@@ -233,7 +233,7 @@ function ingestExpense(
   // Merchant memory: 2+ prior confirmations → auto-save; 1 → pending with
   // pre-filled suggestion; 0 → pending with no suggestion (and we kick off a
   // Gemini Flash inference in the background to maybe fill it in shortly).
-  const memory = lookupMerchantMemory(tokenRow.user_id, note);
+  const memory = lookupMerchantMemory(note);
   let status: "pending" | "confirmed";
   let autoSaved = 0;
   let categoryId: string | null;

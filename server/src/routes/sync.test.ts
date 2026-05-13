@@ -301,9 +301,9 @@ describe("POST /api/sync — recategorization signal", () => {
     });
     // Pretend memory has accumulated 3 confirmations
     db.prepare(
-      `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
-       VALUES (?, 'billa', 'cat-food', 'sub-groceries', 3, '2026-04-29T00:00:00.000Z')`,
-    ).run(benId);
+      `INSERT INTO merchant_categories (merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+       VALUES ('billa', 'cat-food', 'sub-groceries', 3, '2026-04-29T00:00:00.000Z')`,
+    ).run();
 
     // User edits the expense, changing category to household/other
     const res = await postSync(benCookie, {
@@ -324,8 +324,8 @@ describe("POST /api/sync — recategorization signal", () => {
     expect(res.status).toBe(200);
 
     const memory = db
-      .prepare(`SELECT category_id, subcategory_id, confirmation_count FROM merchant_categories WHERE user_id = ? AND merchant_normalized = 'billa'`)
-      .get(benId) as { category_id: string; subcategory_id: string; confirmation_count: number };
+      .prepare(`SELECT category_id, subcategory_id, confirmation_count FROM merchant_categories WHERE merchant_normalized = 'billa'`)
+      .get() as { category_id: string; subcategory_id: string; confirmation_count: number };
     expect(memory.category_id).toBe("cat-household");
     expect(memory.subcategory_id).toBe("sub-hh-other");
     expect(memory.confirmation_count).toBe(1);
@@ -344,9 +344,9 @@ describe("POST /api/sync — recategorization signal", () => {
       updated_at: "2026-04-29 00:00:00",
     });
     db.prepare(
-      `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
-       VALUES (?, 'billa', 'cat-food', 'sub-groceries', 3, '2026-04-29T00:00:00.000Z')`,
-    ).run(benId);
+      `INSERT INTO merchant_categories (merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+       VALUES ('billa', 'cat-food', 'sub-groceries', 3, '2026-04-29T00:00:00.000Z')`,
+    ).run();
 
     await postSync(benCookie, {
       changes: [
@@ -365,8 +365,8 @@ describe("POST /api/sync — recategorization signal", () => {
     });
 
     const memory = db
-      .prepare(`SELECT confirmation_count FROM merchant_categories WHERE user_id = ? AND merchant_normalized = 'billa'`)
-      .get(benId) as { confirmation_count: number };
+      .prepare(`SELECT confirmation_count FROM merchant_categories WHERE merchant_normalized = 'billa'`)
+      .get() as { confirmation_count: number };
     expect(memory.confirmation_count).toBe(3);
   });
 
@@ -383,9 +383,9 @@ describe("POST /api/sync — recategorization signal", () => {
       updated_at: "2026-04-29 00:00:00",
     });
     db.prepare(
-      `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
-       VALUES (?, 'billa', 'cat-food', 'sub-groceries', 3, '2026-04-29T00:00:00.000Z')`,
-    ).run(benId);
+      `INSERT INTO merchant_categories (merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+       VALUES ('billa', 'cat-food', 'sub-groceries', 3, '2026-04-29T00:00:00.000Z')`,
+    ).run();
 
     await postSync(benCookie, {
       changes: [
@@ -404,8 +404,8 @@ describe("POST /api/sync — recategorization signal", () => {
     });
 
     const memory = db
-      .prepare(`SELECT category_id, confirmation_count FROM merchant_categories WHERE user_id = ? AND merchant_normalized = 'billa'`)
-      .get(benId) as { category_id: string; confirmation_count: number };
+      .prepare(`SELECT category_id, confirmation_count FROM merchant_categories WHERE merchant_normalized = 'billa'`)
+      .get() as { category_id: string; confirmation_count: number };
     expect(memory.category_id).toBe("cat-food");
     expect(memory.confirmation_count).toBe(3);
   });
@@ -423,9 +423,9 @@ describe("POST /api/sync — recategorization signal", () => {
       updated_at: "2026-04-29 00:00:00",
     });
     db.prepare(
-      `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
-       VALUES (?, 'billa', 'cat-food', 'sub-groceries', 3, '2026-04-29T00:00:00.000Z')`,
-    ).run(benId);
+      `INSERT INTO merchant_categories (merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+       VALUES ('billa', 'cat-food', 'sub-groceries', 3, '2026-04-29T00:00:00.000Z')`,
+    ).run();
 
     // User soft-deletes the expense — deletion isn't a recategorization
     await postSync(benCookie, {
@@ -446,8 +446,8 @@ describe("POST /api/sync — recategorization signal", () => {
     });
 
     const memory = db
-      .prepare(`SELECT category_id, confirmation_count FROM merchant_categories WHERE user_id = ? AND merchant_normalized = 'billa'`)
-      .get(benId) as { category_id: string; confirmation_count: number };
+      .prepare(`SELECT category_id, confirmation_count FROM merchant_categories WHERE merchant_normalized = 'billa'`)
+      .get() as { category_id: string; confirmation_count: number };
     expect(memory.category_id).toBe("cat-food");
     expect(memory.confirmation_count).toBe(3);
   });

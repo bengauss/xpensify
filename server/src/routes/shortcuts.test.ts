@@ -204,15 +204,15 @@ describe("POST /api/shortcuts/expense — Phase 1 unknown merchant", () => {
 });
 
 describe("POST /api/shortcuts/expense — Phase 2 merchant memory", () => {
-  function seedMemory(userId: string, merchant: string, categoryId: string, subcategoryId: string, count: number) {
+  function seedMemory(merchant: string, categoryId: string, subcategoryId: string, count: number) {
     db.prepare(
-      `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(userId, merchant, categoryId, subcategoryId, count, new Date().toISOString());
+      `INSERT INTO merchant_categories (merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    ).run(merchant, categoryId, subcategoryId, count, new Date().toISOString());
   }
 
   it("count=1 → pending WITH category suggestion", async () => {
-    seedMemory(benId, "billa", "cat-food", "sub-groceries", 1);
+    seedMemory("billa", "cat-food", "sub-groceries", 1);
     const res = await postExpense(benToken, { amount: 10, merchant: "BILLA 0123 WIEN", currency: "EUR" });
     expect(res.status).toBe(200);
     const body = await res.json() as any;
@@ -228,7 +228,7 @@ describe("POST /api/shortcuts/expense — Phase 2 merchant memory", () => {
   });
 
   it("count>=2 → auto-saves as confirmed with source=apple-pay", async () => {
-    seedMemory(benId, "billa", "cat-food", "sub-groceries", 2);
+    seedMemory("billa", "cat-food", "sub-groceries", 2);
     const res = await postExpense(benToken, { amount: 10, merchant: "BILLA 0123 WIEN", currency: "EUR" });
     expect(res.status).toBe(200);
     const body = await res.json() as any;
@@ -245,37 +245,31 @@ describe("POST /api/shortcuts/expense — Phase 2 merchant memory", () => {
 
   it("threshold of 2 is exact: count=1 still pending, count=2 auto-saves", async () => {
     // First merchant with count=1 → pending
-    seedMemory(benId, "shop-a", "cat-food", "sub-groceries", 1);
+    seedMemory("shop-a", "cat-food", "sub-groceries", 1);
     const r1 = await postExpense(benToken, { amount: 10, merchant: "shop-a", currency: "EUR" });
     const b1 = await r1.json() as any;
     expect(b1.status).toBe("pending");
 
     // Second merchant with count=2 → auto-saved
-    seedMemory(benId, "shop-b", "cat-food", "sub-groceries", 2);
+    seedMemory("shop-b", "cat-food", "sub-groceries", 2);
     const r2 = await postExpense(benToken, { amount: 10, merchant: "shop-b", currency: "EUR" });
     const b2 = await r2.json() as any;
     expect(b2.status).toBe("confirmed");
   });
 
-  it("merchant memory is per-user (Alice's billa doesn't affect Bob's first billa)", async () => {
-    seedMemory(benId, "billa", "cat-food", "sub-groceries", 5);
+  it("merchant memory is shared — Alice's billa auto-saves for Bob too", async () => {
+    seedMemory("billa", "cat-food", "sub-groceries", 5);
 
-    // Bob hits Apple Pay endpoint with billa
+    // Bob hits Apple Pay endpoint with billa — the household memory applies.
     const res = await postExpense(yaraToken, { amount: 10, merchant: "BILLA 0123 WIEN", currency: "EUR" });
     const body = await res.json() as any;
-    expect(body.status).toBe("pending");
-    expect(body.auto_saved).toBe(false);
-    expect(body.suggested_category).toBeNull();
+    expect(body.status).toBe("confirmed");
+    expect(body.auto_saved).toBe(true);
+    expect(body.category).toBe("food");
   });
 
   it("auto-saved expense flows through next sync (it's confirmed, not pending)", async () => {
-    function seedMemory(userId: string, merchant: string, categoryId: string, subcategoryId: string, count: number) {
-      db.prepare(
-        `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      ).run(userId, merchant, categoryId, subcategoryId, count, new Date().toISOString());
-    }
-    seedMemory(benId, "billa", "cat-food", "sub-groceries", 3);
+    seedMemory("billa", "cat-food", "sub-groceries", 3);
     const r = await postExpense(benToken, { amount: 10, merchant: "billa", currency: "EUR" });
     const created = await r.json() as any;
     expect(created.status).toBe("confirmed");
@@ -321,9 +315,9 @@ describe("POST /api/shortcuts/expense — merchant normalization", () => {
 
   it("merchant memory hits via the normalized note", async () => {
     db.prepare(
-      `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
-       VALUES (?, 'starbucks coffee', 'cat-food', 'sub-drinks', 5, ?)`,
-    ).run(benId, new Date().toISOString());
+      `INSERT INTO merchant_categories (merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+       VALUES ('starbucks coffee', 'cat-food', 'sub-drinks', 5, ?)`,
+    ).run(new Date().toISOString());
 
     const r = await postExpense(benToken, { amount: 10, merchant: "Starbucks Coffee 1234", currency: "EUR" });
     expect(r.status).toBe(200);
@@ -390,9 +384,9 @@ describe("POST /api/shortcuts/expense — idempotency", () => {
 describe("POST /api/shortcuts/expense — auto_saved column", () => {
   it("auto-saved row has auto_saved=1 (memory ≥ 2 path)", async () => {
     db.prepare(
-      `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
-       VALUES (?, 'billa', 'cat-food', 'sub-groceries', 3, ?)`,
-    ).run(benId, new Date().toISOString());
+      `INSERT INTO merchant_categories (merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+       VALUES ('billa', 'cat-food', 'sub-groceries', 3, ?)`,
+    ).run(new Date().toISOString());
     const r = await postExpense(benToken, { amount: 10, merchant: "billa", currency: "EUR" });
     const body = await r.json() as any;
     expect(body.status).toBe("confirmed");
@@ -402,9 +396,9 @@ describe("POST /api/shortcuts/expense — auto_saved column", () => {
 
   it("memory pre-fill row has auto_saved=0", async () => {
     db.prepare(
-      `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
-       VALUES (?, 'billa', 'cat-food', 'sub-groceries', 1, ?)`,
-    ).run(benId, new Date().toISOString());
+      `INSERT INTO merchant_categories (merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+       VALUES ('billa', 'cat-food', 'sub-groceries', 1, ?)`,
+    ).run(new Date().toISOString());
     const r = await postExpense(benToken, { amount: 10, merchant: "billa", currency: "EUR" });
     const body = await r.json() as any;
     expect(body.status).toBe("pending");
@@ -471,9 +465,9 @@ describe("POST /api/shortcuts/expense — Gemini Flash background fill", () => {
 
   it("Flash does NOT run when memory exists (count=1 path)", async () => {
     db.prepare(
-      `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
-       VALUES (?, 'billa', 'cat-food', 'sub-groceries', 1, ?)`,
-    ).run(benId, new Date().toISOString());
+      `INSERT INTO merchant_categories (merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+       VALUES ('billa', 'cat-food', 'sub-groceries', 1, ?)`,
+    ).run(new Date().toISOString());
     flashMock.result = {
       category_id: "cat-apparel", // would be wrong but Flash shouldn't be called
       subcategory_id: "sub-clothes",
@@ -566,8 +560,8 @@ describe("PATCH /api/pending/:id/confirm — Flash-accepted bumps memory to coun
 
     // Memory inserted at count=2 → next hit auto-saves.
     const memory = db.prepare(
-      `SELECT confirmation_count FROM merchant_categories WHERE user_id = ? AND merchant_normalized = ?`,
-    ).get(benId, "newmerchant") as { confirmation_count: number };
+      `SELECT confirmation_count FROM merchant_categories WHERE merchant_normalized = ?`,
+    ).get("newmerchant") as { confirmation_count: number };
     expect(memory.confirmation_count).toBe(2);
 
     // Verify: a second hit on the same merchant auto-saves (count >= 2 path).
@@ -600,8 +594,8 @@ describe("PATCH /api/pending/:id/confirm — Flash-accepted bumps memory to coun
     );
 
     const memory = db.prepare(
-      `SELECT confirmation_count, category_id FROM merchant_categories WHERE user_id = ? AND merchant_normalized = ?`,
-    ).get(benId, "newmerchant") as { confirmation_count: number; category_id: string };
+      `SELECT confirmation_count, category_id FROM merchant_categories WHERE merchant_normalized = ?`,
+    ).get("newmerchant") as { confirmation_count: number; category_id: string };
     expect(memory.confirmation_count).toBe(1);
     expect(memory.category_id).toBe("cat-apparel");
   });

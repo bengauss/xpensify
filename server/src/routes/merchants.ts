@@ -17,10 +17,9 @@ interface MerchantRow {
 
 const merchants = new Hono<{ Variables: Variables }>()
   .use("/*", authMiddleware)
-  // GET / — list current user's merchant memory entries with category names
-  // and a count of how many times we've auto-saved an expense at each merchant.
+  // GET / — list all household merchant memory entries with joined category
+  // names and a count of household-wide auto-saves at each merchant.
   .get("/", (c) => {
-    const userId = c.get("userId");
     const rows = db
       .prepare(
         `SELECT m.merchant_normalized, m.category_id, m.subcategory_id,
@@ -32,20 +31,18 @@ const merchants = new Hono<{ Variables: Variables }>()
          LEFT JOIN categories c ON c.id = m.category_id
          LEFT JOIN subcategories s ON s.id = m.subcategory_id
          LEFT JOIN (
-           SELECT note, user_id, COUNT(*) AS auto_saved_count
+           SELECT note, COUNT(*) AS auto_saved_count
            FROM expenses
            WHERE source = 'apple-pay' AND auto_saved = 1 AND deleted = 0
-           GROUP BY user_id, note
-         ) a ON a.user_id = m.user_id AND a.note = m.merchant_normalized
-         WHERE m.user_id = ?
+           GROUP BY note
+         ) a ON a.note = m.merchant_normalized
          ORDER BY m.confirmation_count DESC, m.last_confirmed_at DESC`,
       )
-      .all(userId) as MerchantRow[];
+      .all() as MerchantRow[];
     return c.json(rows);
   })
   // PATCH /:merchant — update mapping (resets count to 1; user is overriding)
   .patch("/:merchant", async (c) => {
-    const userId = c.get("userId");
     const merchant = decodeURIComponent(c.req.param("merchant"));
 
     let body: { category_id?: unknown; subcategory_id?: unknown };
@@ -73,9 +70,9 @@ const merchants = new Hono<{ Variables: Variables }>()
              subcategory_id = ?,
              confirmation_count = 1,
              last_confirmed_at = ?
-         WHERE user_id = ? AND merchant_normalized = ?`,
+         WHERE merchant_normalized = ?`,
       )
-      .run(body.category_id, body.subcategory_id, new Date().toISOString(), userId, merchant);
+      .run(body.category_id, body.subcategory_id, new Date().toISOString(), merchant);
 
     if (result.changes === 0) {
       return c.json({ error: "Not found" }, 404);
@@ -84,37 +81,35 @@ const merchants = new Hono<{ Variables: Variables }>()
   })
   // DELETE /:merchant — remove the mapping entirely
   .delete("/:merchant", (c) => {
-    const userId = c.get("userId");
     const merchant = decodeURIComponent(c.req.param("merchant"));
     const result = db
       .prepare(
-        `DELETE FROM merchant_categories WHERE user_id = ? AND merchant_normalized = ?`,
+        `DELETE FROM merchant_categories WHERE merchant_normalized = ?`,
       )
-      .run(userId, merchant);
+      .run(merchant);
     if (result.changes === 0) {
       return c.json({ error: "Not found" }, 404);
     }
     return c.json({ ok: true });
   })
   // POST /import — backfill merchant memory from existing confirmed apple-pay
-  // expenses. Groups by normalized merchant, picks the (category, subcategory)
-  // pair that appears most often, and stamps confirmation_count to that
-  // count. Skips merchants already in memory — never overwrites user input.
+  // expenses across both household members. Groups by normalized merchant,
+  // picks the (category, subcategory) pair that appears most often, and
+  // stamps confirmation_count to that count. Skips merchants already in
+  // memory — never overwrites prior input.
   .post("/import", (c) => {
-    const userId = c.get("userId");
     const rows = db
       .prepare(
         `SELECT note AS merchant, category_id, subcategory_id, COUNT(*) AS count
          FROM expenses
-         WHERE user_id = ?
-           AND source = 'apple-pay'
+         WHERE source = 'apple-pay'
            AND status = 'confirmed'
            AND deleted = 0
            AND note IS NOT NULL AND note <> ''
            AND category_id IS NOT NULL AND subcategory_id IS NOT NULL
          GROUP BY note, category_id, subcategory_id`,
       )
-      .all(userId) as Array<{
+      .all() as Array<{
         merchant: string;
         category_id: string;
         subcategory_id: string;
@@ -140,23 +135,22 @@ const merchants = new Hono<{ Variables: Variables }>()
     const nowIso = new Date().toISOString();
 
     const checkStmt = db.prepare(
-      `SELECT 1 FROM merchant_categories
-       WHERE user_id = ? AND merchant_normalized = ?`,
+      `SELECT 1 FROM merchant_categories WHERE merchant_normalized = ?`,
     );
     const insertStmt = db.prepare(
       `INSERT INTO merchant_categories
-         (user_id, merchant_normalized, category_id, subcategory_id,
+         (merchant_normalized, category_id, subcategory_id,
           confirmation_count, last_confirmed_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?)`,
     );
 
     const importTx = db.transaction(() => {
       for (const [merchant, pick] of best) {
-        if (checkStmt.get(userId, merchant)) {
+        if (checkStmt.get(merchant)) {
           skipped += 1;
           continue;
         }
-        insertStmt.run(userId, merchant, pick.category_id, pick.subcategory_id, pick.count, nowIso);
+        insertStmt.run(merchant, pick.category_id, pick.subcategory_id, pick.count, nowIso);
         inserted += 1;
       }
     });

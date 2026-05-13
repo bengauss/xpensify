@@ -46,9 +46,9 @@ describe("GET /api/pending — list", () => {
 
   it("flags memory-backed suggestions with suggestion_source='memory'", async () => {
     db.prepare(
-      `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
-       VALUES (?, 'billa', 'cat-food', 'sub-groceries', 1, '2026-05-01T00:00:00.000Z')`,
-    ).run(benId);
+      `INSERT INTO merchant_categories (merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+       VALUES ('billa', 'cat-food', 'sub-groceries', 1, '2026-05-01T00:00:00.000Z')`,
+    ).run();
     insertExpense({
       user_id: benId,
       amount: 1000,
@@ -121,8 +121,8 @@ describe("PATCH /api/pending/:id/confirm — first confirmation", () => {
     expect(expense.category_id).toBe("cat-food");
 
     const memory = db
-      .prepare(`SELECT confirmation_count, category_id FROM merchant_categories WHERE user_id = ? AND merchant_normalized = 'billa'`)
-      .get(benId) as { confirmation_count: number; category_id: string };
+      .prepare(`SELECT confirmation_count, category_id FROM merchant_categories WHERE merchant_normalized = 'billa'`)
+      .get() as { confirmation_count: number; category_id: string };
     expect(memory).toBeDefined();
     expect(memory.confirmation_count).toBe(1);
     expect(memory.category_id).toBe("cat-food");
@@ -133,9 +133,9 @@ describe("PATCH /api/pending/:id/confirm — repeat confirmations", () => {
   it("same-category confirmation increments count to 2", async () => {
     // Already-confirmed billa expense established memory
     db.prepare(
-      `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
-       VALUES (?, 'billa', 'cat-food', 'sub-groceries', 1, ?)`,
-    ).run(benId, "2026-04-29T00:00:00.000Z");
+      `INSERT INTO merchant_categories (merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+       VALUES ('billa', 'cat-food', 'sub-groceries', 1, ?)`,
+    ).run("2026-04-29T00:00:00.000Z");
 
     const id = insertExpense({
       user_id: benId,
@@ -155,16 +155,16 @@ describe("PATCH /api/pending/:id/confirm — repeat confirmations", () => {
     expect(res.status).toBe(200);
 
     const memory = db
-      .prepare(`SELECT confirmation_count FROM merchant_categories WHERE user_id = ? AND merchant_normalized = 'billa'`)
-      .get(benId) as { confirmation_count: number };
+      .prepare(`SELECT confirmation_count FROM merchant_categories WHERE merchant_normalized = 'billa'`)
+      .get() as { confirmation_count: number };
     expect(memory.confirmation_count).toBe(2);
   });
 
   it("different-category confirmation rewrites mapping and resets count to 1", async () => {
     db.prepare(
-      `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
-       VALUES (?, 'billa', 'cat-food', 'sub-groceries', 2, ?)`,
-    ).run(benId, "2026-04-29T00:00:00.000Z");
+      `INSERT INTO merchant_categories (merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+       VALUES ('billa', 'cat-food', 'sub-groceries', 2, ?)`,
+    ).run("2026-04-29T00:00:00.000Z");
 
     const id = insertExpense({
       user_id: benId,
@@ -183,8 +183,8 @@ describe("PATCH /api/pending/:id/confirm — repeat confirmations", () => {
     );
 
     const memory = db
-      .prepare(`SELECT category_id, subcategory_id, confirmation_count FROM merchant_categories WHERE user_id = ? AND merchant_normalized = 'billa'`)
-      .get(benId) as { category_id: string; subcategory_id: string; confirmation_count: number };
+      .prepare(`SELECT category_id, subcategory_id, confirmation_count FROM merchant_categories WHERE merchant_normalized = 'billa'`)
+      .get() as { category_id: string; subcategory_id: string; confirmation_count: number };
     expect(memory.category_id).toBe("cat-household");
     expect(memory.subcategory_id).toBe("sub-hh-other");
     expect(memory.confirmation_count).toBe(1);
@@ -192,9 +192,9 @@ describe("PATCH /api/pending/:id/confirm — repeat confirmations", () => {
 
   it("last_confirmed_at advances on every confirmation", async () => {
     db.prepare(
-      `INSERT INTO merchant_categories (user_id, merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
-       VALUES (?, 'billa', 'cat-food', 'sub-groceries', 1, '2020-01-01T00:00:00.000Z')`,
-    ).run(benId);
+      `INSERT INTO merchant_categories (merchant_normalized, category_id, subcategory_id, confirmation_count, last_confirmed_at)
+       VALUES ('billa', 'cat-food', 'sub-groceries', 1, '2020-01-01T00:00:00.000Z')`,
+    ).run();
 
     const id = insertExpense({
       user_id: benId,
@@ -213,8 +213,8 @@ describe("PATCH /api/pending/:id/confirm — repeat confirmations", () => {
     );
 
     const memory = db
-      .prepare(`SELECT last_confirmed_at FROM merchant_categories WHERE user_id = ? AND merchant_normalized = 'billa'`)
-      .get(benId) as { last_confirmed_at: string };
+      .prepare(`SELECT last_confirmed_at FROM merchant_categories WHERE merchant_normalized = 'billa'`)
+      .get() as { last_confirmed_at: string };
     expect(memory.last_confirmed_at > "2020-01-01T00:00:00.000Z").toBe(true);
   });
 });

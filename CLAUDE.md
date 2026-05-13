@@ -272,6 +272,8 @@ Three stages in `Dockerfile`:
 
 `docker-compose.yml` mounts `./data:/app/data` for the SQLite file, attaches to the external `web` network (Caddy lives in a sibling stack named `flowdx`, not in this repo).
 
+**Bump the app version on every deploy.** The version label in [Settings.tsx](client/src/screens/Settings.tsx) (search `v2.`) is the only build-stamp users see — increment it before every `docker compose up -d --build`. Acts as a "did the new bundle actually load?" check from the user side, and a sanity check during incident triage.
+
 ### Build performance
 
 - Dockerfile header is `# syntax=docker/dockerfile:1.7` so BuildKit cache-mount syntax works. Every `npm ci` uses `--mount=type=cache,target=/root/.npm,sharing=locked` plus `--prefer-offline --no-audit --no-fund`. A `package-lock.json` bump still busts the layer, but npm's on-disk cache survives, so the re-install copies from disk instead of re-downloading from the registry.
