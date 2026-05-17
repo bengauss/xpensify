@@ -467,6 +467,13 @@ const shortcuts = new Hono()
     const auth = authenticate(c);
     if (!auth.ok) return c.json(auth.body, auth.status);
 
+    // Diagnostic: log the raw URL exactly as it reached the server so we can
+    // tell whether the Shortcut/iOS/Cloudflare mangled multi-word merchant
+    // strings via missing URL encoding. Trim token query param if present so
+    // the log doesn't leak the bearer.
+    const rawUrl = c.req.url.replace(/([?&])token=[^&]*/g, "$1token=REDACTED");
+    console.log(`[shortcuts] GET raw url: ${rawUrl.slice(0, 800)}`);
+
     const q = c.req.query();
 
     // If `transaction` (or `tx` / `dict`) is present, prefer it: it's the
