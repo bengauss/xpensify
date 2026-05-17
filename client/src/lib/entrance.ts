@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "preact/hooks";
-import { animate } from "motion";
-import { springs, stagger, MOUNT_DELAY_MS, getReducedMotionOverride, shouldReduceMotion } from "@/lib/animations";
+import { stagger, MOUNT_DELAY_MS, shouldReduceMotion } from "@/lib/animations";
 import { transitionDone } from "@/lib/transitions";
 
 const MAX_ANIMATED_ROWS = 15; // only animate above-the-fold
@@ -83,7 +82,6 @@ export function animateRowEntrance(container: HTMLElement): () => void {
     return () => {};
   }
 
-  const anims: { stop: () => void }[] = [];
   const timers: number[] = [];
   const animatedTextEls: HTMLElement[] = [];
   const animatedAmountEls: HTMLElement[] = [];
@@ -91,33 +89,29 @@ export function animateRowEntrance(container: HTMLElement): () => void {
   const textStaggerMs = stagger.text * 1000;
   const amountStaggerMs = stagger.amount * 1000;
 
-  // Phase 1: text slides in from left for the first `count` rows.
+  // Phase 1: text slides in from left for the first `count` rows. We use a
+  // setTimeout + CSS transition (same pattern as Phase 2 amounts) rather than
+  // motion's spring — the WAAPI-backed spring silently drops on iOS PWA cold-
+  // start deep-links from a push notification, stranding rows at opacity:0
+  // while amounts revealed normally. CSS transitions are honoured even when
+  // the page is mid cold-start work.
   for (let i = 0; i < count; i++) {
     const textEl = unrevealed[i].querySelector<HTMLElement>("[data-row-text]");
     if (!textEl) continue;
-    // Pin inline style BEFORE flipping data-revealed, so CSS handoff doesn't flash opacity:1.
+    // Pin inline style BEFORE flipping data-revealed so the CSS handoff
+    // doesn't flash opacity:1 before the transition starts.
     textEl.style.opacity = "0";
     textEl.style.transform = "translateX(-20px)";
     textEl.setAttribute("data-revealed", "1");
     animatedTextEls.push(textEl);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const a = (animate as any)(
-      textEl,
-      { opacity: [0, 1], x: [-20, 0] },
-      { ...springs.snappy, delay: i * stagger.text, ...getReducedMotionOverride() },
-    );
-    anims.push(a);
-    // When the animation completes naturally, clear the inline pins so the
-    // element falls back to its default-visible state. Without this, the
-    // pinned opacity:0 can outlive the animation if WAAPI drops it (observed
-    // on iOS PWA cold-start via a notification deep-link — rows stayed
-    // invisible below the first couple while their amounts revealed normally).
-    Promise.resolve((a as unknown as PromiseLike<unknown>))
-      .then(() => {
-        textEl.style.opacity = "";
-        textEl.style.transform = "";
-      })
-      .catch(() => {});
+    const delay = i * textStaggerMs;
+    const t = window.setTimeout(() => {
+      textEl.style.transition =
+        "opacity 280ms ease, transform 320ms cubic-bezier(0.22, 1, 0.36, 1)";
+      textEl.style.opacity = "1";
+      textEl.style.transform = "";
+    }, delay);
+    timers.push(t);
   }
 
   // Rows beyond the animation window: reveal instantly.
@@ -145,24 +139,7 @@ export function animateRowEntrance(container: HTMLElement): () => void {
     unrevealed[i].querySelector<HTMLElement>("[data-row-amount]")?.setAttribute("data-revealed", "1");
   }
 
-  // Safety net: well after every animation should have completed, force the
-  // pinned inline styles off any text element that's still hidden. Belt-and-
-  // braces guard for environments where WAAPI silently drops the animation
-  // without resolving its promise (seen on iOS PWA cold-start). If everything
-  // worked, this is a no-op since the inline styles were already cleared.
-  const safetyDelay = count * textStaggerMs + 1200;
-  const safetyTimer = window.setTimeout(() => {
-    for (const el of animatedTextEls) {
-      if (el.style.opacity === "0" || el.style.transform) {
-        el.style.opacity = "";
-        el.style.transform = "";
-      }
-    }
-  }, safetyDelay);
-  timers.push(safetyTimer);
-
   return () => {
-    for (const a of anims) a.stop();
     for (const t of timers) clearTimeout(t);
     // Snap mid-animation elements to their final visible state so rapid
     // re-renders (dep changes in useEntrance) don't leave rows stuck partial.
