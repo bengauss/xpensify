@@ -76,4 +76,26 @@ describe("normalizeMerchant", () => {
     const twice = normalizeMerchant(once);
     expect(twice).toBe(once);
   });
+
+  it("strips German POS politeness suffix + trailing terminal id", () => {
+    expect(normalizeMerchant("Billa Dankt 0000388")).toBe("billa");
+    expect(normalizeMerchant("BIPA DANKT 0001234")).toBe("bipa");
+    expect(normalizeMerchant("BIPA DANKT WIEN")).toBe("bipa");
+    expect(normalizeMerchant("Spar Danke")).toBe("spar");
+    expect(normalizeMerchant("Hofer danket 9999")).toBe("hofer");
+    expect(normalizeMerchant("Billa Bedankt sich 0123")).toBe("billa");
+    expect(normalizeMerchant("Merkur bedankt sich")).toBe("merkur");
+  });
+
+  it("preserves brand words that begin with the politeness root", () => {
+    // 'Danke' as part of a longer brand word shouldn't trigger the strip
+    // (word boundary required).
+    expect(normalizeMerchant("Dankeschön Café")).toBe("dankeschön café");
+  });
+
+  it("collapses Billa Dankt variants to the same canonical form as Billa", () => {
+    expect(normalizeMerchant("Billa Dankt 0000388")).toBe(
+      normalizeMerchant("BILLA"),
+    );
+  });
 });

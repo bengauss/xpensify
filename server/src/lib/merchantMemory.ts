@@ -9,6 +9,23 @@ interface MerchantMemoryRow {
 }
 
 /**
+ * Resolve a normalized merchant name to its canonical form via merchant_aliases.
+ * Returns the input unchanged when no alias exists. Walks one level only —
+ * the merge endpoint flattens aliases transitively when they're created, so
+ * we never need to follow chains here.
+ */
+export function resolveCanonical(merchantNormalized: string): string {
+  if (!merchantNormalized) return merchantNormalized;
+  const row = db
+    .prepare(
+      `SELECT canonical_normalized FROM merchant_aliases
+       WHERE alias_normalized = ?`,
+    )
+    .get(merchantNormalized) as { canonical_normalized: string } | undefined;
+  return row ? row.canonical_normalized : merchantNormalized;
+}
+
+/**
  * Look up the household's merchant memory entry for the given merchant.
  * Returns null if no mapping exists. Hot path — called on every Apple Pay
  * shortcut hit.

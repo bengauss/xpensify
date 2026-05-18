@@ -16,6 +16,13 @@ export interface FlashSuggestion {
   category_id: string;
   subcategory_id: string;
   confidence: "low" | "medium" | "high";
+  /**
+   * Flash's guess at the canonical brand name (lowercase, brand-only —
+   * "billa", "spar"). Used to auto-alias POS variants like "billa dankt"
+   * onto the household's existing memory row. Null when Flash declines
+   * (returns empty / same as input) — caller must not invent aliases.
+   */
+  canonical_merchant: string | null;
 }
 
 const MODEL = "gemini-3-flash-preview";
@@ -61,7 +68,9 @@ function buildTaxonomy(): {
 
 const SYSTEM_PROMPT = `You categorize Apple Pay transactions for an Austrian household expense tracker. Transactions originate from Vienna, Austria.
 
-Pick one (category, subcategory) pair from the taxonomy below. Return confidence as low / medium / high based on how confidently you can map the merchant from your knowledge. If you've never heard of the merchant, say low.`;
+Pick one (category, subcategory) pair from the taxonomy below. Return confidence as low / medium / high based on how confidently you can map the merchant from your knowledge. If you've never heard of the merchant, say low.
+
+Also return canonical_merchant: a single lowercase brand name extracted from the input, with terminal IDs, POS politeness words (dankt, danke, bedankt sich), city names, and other receipt noise removed. Examples: "Billa Dankt 0000388" → "billa", "BIPA DANKT WIEN" → "bipa", "Der Mann 12 1010 Wien" → "der mann", "Starbucks Coffee 1234" → "starbucks". If the input is already the brand name unchanged, return it lowercased.`;
 
 /**
  * Ask Gemini Flash to categorize an Apple Pay transaction. Returns null when:
@@ -97,9 +106,10 @@ export async function categorizeWithFlash(
         enum: categoryNames,
       },
       subcategory: { type: Type.STRING },
+      canonical_merchant: { type: Type.STRING },
     },
-    required: ["confidence"],
-    propertyOrdering: ["confidence", "category", "subcategory"],
+    required: ["confidence", "canonical_merchant"],
+    propertyOrdering: ["confidence", "canonical_merchant", "category", "subcategory"],
   };
 
   const userPrompt = `Taxonomy:\n${formatted}\n\nMerchant: ${merchant}\nAmount: €${(amountCents / 100).toFixed(2)}`;
@@ -136,7 +146,12 @@ export async function categorizeWithFlash(
     return null;
   }
 
-  let parsed: { confidence?: string; category?: string; subcategory?: string };
+  let parsed: {
+    confidence?: string;
+    category?: string;
+    subcategory?: string;
+    canonical_merchant?: string;
+  };
   try {
     parsed = JSON.parse(raw);
   } catch {
@@ -152,9 +167,20 @@ export async function categorizeWithFlash(
 
   const ms = Date.now() - startedAt;
 
+  // Normalize canonical_merchant: empty string or same-as-input → null. We
+  // never propagate ambiguous canonicalization downstream (alias auto-creation
+  // refuses to alias a merchant to itself).
+  let canonicalMerchant: string | null = null;
+  if (typeof parsed.canonical_merchant === "string") {
+    const trimmed = parsed.canonical_merchant.trim().toLowerCase();
+    if (trimmed && trimmed !== merchant.toLowerCase().trim()) {
+      canonicalMerchant = trimmed;
+    }
+  }
+
   if (confidence === "low") {
     console.log(
-      `[flash] merchant="${merchant}" → confidence=low (suppressed) latency=${ms}ms`,
+      `[flash] merchant="${merchant}" → confidence=low (suppressed) canonical="${canonicalMerchant ?? ""}" latency=${ms}ms`,
     );
     return null;
   }
@@ -176,11 +202,12 @@ export async function categorizeWithFlash(
   }
 
   console.log(
-    `[flash] merchant="${merchant}" → ${category.name}/${subcategory.name} confidence=${confidence} latency=${ms}ms`,
+    `[flash] merchant="${merchant}" → ${category.name}/${subcategory.name} canonical="${canonicalMerchant ?? ""}" confidence=${confidence} latency=${ms}ms`,
   );
   return {
     category_id: category.id,
     subcategory_id: subcategory.id,
     confidence,
+    canonical_merchant: canonicalMerchant,
   };
 }

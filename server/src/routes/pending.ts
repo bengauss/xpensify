@@ -1,7 +1,11 @@
 import { Hono } from "hono";
 import db from "../db/connection.js";
 import { authMiddleware, type Variables } from "../middleware/auth.js";
-import { upsertMerchantMemory, lookupMerchantMemory } from "../lib/merchantMemory.js";
+import {
+  upsertMerchantMemory,
+  lookupMerchantMemory,
+  resolveCanonical,
+} from "../lib/merchantMemory.js";
 
 interface PendingRow {
   id: string;
@@ -116,8 +120,9 @@ const pending = new Hono<{ Variables: Variables }>()
     const subcategoryId = body.subcategory_id;
     // The pending row's `note` field holds the already-normalized merchant —
     // don't re-normalize. If the user rewrote the note we still key memory on
-    // the original normalized merchant from the pending row.
-    const merchantNormalized = (existing.note ?? "").trim();
+    // the original normalized merchant from the pending row. Re-resolve in
+    // case an alias was created between webhook insert and user confirmation.
+    const merchantNormalized = resolveCanonical((existing.note ?? "").trim());
     const nowIso = new Date().toISOString();
 
     // Detect "user accepted a Gemini Flash suggestion": the pending row had a

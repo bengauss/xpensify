@@ -172,6 +172,140 @@ describe("DELETE /api/merchants/:merchant", () => {
   });
 });
 
+describe("POST /api/merchants/:merchant/merge — alias one merchant into another", () => {
+  it("creates the alias, deletes the source memory row, rewrites untouched notes", async () => {
+    seedMemory("billa dankt", "cat-food", "sub-drinks", 1, "2026-05-18T10:00:00Z");
+    seedMemory("billa", "cat-food", "sub-groceries", 5, "2026-05-18T10:00:00Z");
+    insertExpense({ user_id: benId, source: "apple-pay", status: "confirmed", note: "billa dankt", amount: 1000, category_id: "cat-food", subcategory_id: "sub-groceries" });
+    insertExpense({ user_id: benId, source: "apple-pay", status: "confirmed", note: "billa dankt - mom's birthday", amount: 1000, category_id: "cat-food", subcategory_id: "sub-groceries" });
+
+    const res = await app.request(
+      "/api/merchants/billa%20dankt/merge",
+      jsonInit("POST", { cookie: benCookie, body: { into: "billa" } }),
+    );
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as any;
+    expect(data.canonical).toBe("billa");
+    expect(data.notes_updated).toBe(1);
+
+    const alias = db
+      .prepare(`SELECT canonical_normalized FROM merchant_aliases WHERE alias_normalized = 'billa dankt'`)
+      .get() as { canonical_normalized: string };
+    expect(alias.canonical_normalized).toBe("billa");
+
+    const aliasMemory = db
+      .prepare(`SELECT 1 FROM merchant_categories WHERE merchant_normalized = 'billa dankt'`)
+      .get();
+    expect(aliasMemory).toBeUndefined();
+
+    const billaMemory = db
+      .prepare(`SELECT confirmation_count FROM merchant_categories WHERE merchant_normalized = 'billa'`)
+      .get() as { confirmation_count: number };
+    expect(billaMemory.confirmation_count).toBe(5);
+
+    const notes = db
+      .prepare(`SELECT note FROM expenses WHERE source = 'apple-pay' ORDER BY note`)
+      .all() as Array<{ note: string }>;
+    expect(notes.map((n) => n.note)).toEqual(["billa", "billa dankt - mom's birthday"]);
+  });
+
+  it("flattens chains so the new alias points at the deepest canonical", async () => {
+    seedMemory("billa", "cat-food", "sub-groceries", 5, "2026-05-18T10:00:00Z");
+    // Pre-seed an existing alias billa-old → billa
+    db.prepare(
+      `INSERT INTO merchant_aliases (alias_normalized, canonical_normalized, created_at)
+       VALUES ('billa-old', 'billa', '2026-05-18T10:00:00Z')`,
+    ).run();
+
+    const res = await app.request(
+      "/api/merchants/billa%20dankt/merge",
+      jsonInit("POST", { cookie: benCookie, body: { into: "billa-old" } }),
+    );
+    expect(res.status).toBe(200);
+
+    const row = db
+      .prepare(`SELECT canonical_normalized FROM merchant_aliases WHERE alias_normalized = 'billa dankt'`)
+      .get() as { canonical_normalized: string };
+    expect(row.canonical_normalized).toBe("billa");
+  });
+
+  it("rewrites prior alias rows that point at the alias being collapsed", async () => {
+    seedMemory("billa", "cat-food", "sub-groceries", 5, "2026-05-18T10:00:00Z");
+    db.prepare(
+      `INSERT INTO merchant_aliases (alias_normalized, canonical_normalized, created_at)
+       VALUES ('billa-old', 'billa dankt', '2026-05-18T10:00:00Z')`,
+    ).run();
+
+    await app.request(
+      "/api/merchants/billa%20dankt/merge",
+      jsonInit("POST", { cookie: benCookie, body: { into: "billa" } }),
+    );
+
+    const row = db
+      .prepare(`SELECT canonical_normalized FROM merchant_aliases WHERE alias_normalized = 'billa-old'`)
+      .get() as { canonical_normalized: string };
+    expect(row.canonical_normalized).toBe("billa");
+  });
+
+  it("rejects merging a merchant into itself", async () => {
+    seedMemory("billa", "cat-food", "sub-groceries", 5, "2026-05-18T10:00:00Z");
+    const res = await app.request(
+      "/api/merchants/billa/merge",
+      jsonInit("POST", { cookie: benCookie, body: { into: "billa" } }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects when 'into' is missing", async () => {
+    const res = await app.request(
+      "/api/merchants/billa%20dankt/merge",
+      jsonInit("POST", { cookie: benCookie, body: {} }),
+    );
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("GET /api/merchants/aliases — list", () => {
+  it("returns all alias entries", async () => {
+    db.prepare(
+      `INSERT INTO merchant_aliases (alias_normalized, canonical_normalized, created_at)
+       VALUES ('billa dankt', 'billa', '2026-05-18T10:00:00Z'),
+              ('bipa dankt', 'bipa', '2026-05-18T10:00:00Z')`,
+    ).run();
+    const res = await app.request("/api/merchants/aliases", { headers: { cookie: benCookie } });
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as any[];
+    expect(data).toHaveLength(2);
+    expect(data.map((d) => d.alias_normalized).sort()).toEqual(["billa dankt", "bipa dankt"]);
+  });
+});
+
+describe("DELETE /api/merchants/aliases/:alias", () => {
+  it("removes the alias", async () => {
+    db.prepare(
+      `INSERT INTO merchant_aliases (alias_normalized, canonical_normalized, created_at)
+       VALUES ('billa dankt', 'billa', '2026-05-18T10:00:00Z')`,
+    ).run();
+    const res = await app.request("/api/merchants/aliases/billa%20dankt", {
+      method: "DELETE",
+      headers: { cookie: benCookie },
+    });
+    expect(res.status).toBe(200);
+    const exists = db
+      .prepare(`SELECT 1 FROM merchant_aliases WHERE alias_normalized = 'billa dankt'`)
+      .get();
+    expect(exists).toBeUndefined();
+  });
+
+  it("returns 404 for unknown alias", async () => {
+    const res = await app.request("/api/merchants/aliases/nope", {
+      method: "DELETE",
+      headers: { cookie: benCookie },
+    });
+    expect(res.status).toBe(404);
+  });
+});
+
 describe("POST /api/merchants/import — backfill", () => {
   it("groups confirmed apple-pay expenses by note and inserts memory rows", async () => {
     insertExpense({ user_id: benId, source: "apple-pay", status: "confirmed", note: "billa", amount: 1000, category_id: "cat-food", subcategory_id: "sub-groceries" });

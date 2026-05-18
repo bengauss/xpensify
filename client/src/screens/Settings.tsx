@@ -1000,7 +1000,7 @@ function AboutSection() {
     <Section title="about">
       <Row>
         <span class="flex-1 text-sm">version</span>
-        <span class="text-sm" style={{ color: "var(--color-text-secondary)" }}>v2.15</span>
+        <span class="text-sm" style={{ color: "var(--color-text-secondary)" }}>v2.16</span>
       </Row>
       {confirmLogout ? (
         <div class="px-4 py-2">

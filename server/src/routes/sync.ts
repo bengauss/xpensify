@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import db from "../db/connection.js";
 import { authMiddleware, type Variables } from "../middleware/auth.js";
-import { resetMerchantMemory } from "../lib/merchantMemory.js";
+import { resetMerchantMemory, resolveCanonical } from "../lib/merchantMemory.js";
 
 interface ClientChange {
   id: string;
@@ -157,7 +157,9 @@ const sync = new Hono<{ Variables: Variables }>()
             (change.deleted ?? 0) === 0 &&
             existing.category_id !== change.category_id
           ) {
-            const merchantNormalized = (existing.note ?? "").trim();
+            const merchantNormalized = resolveCanonical(
+              (existing.note ?? "").trim(),
+            );
             if (merchantNormalized) {
               resetMerchantMemory(
                 merchantNormalized,

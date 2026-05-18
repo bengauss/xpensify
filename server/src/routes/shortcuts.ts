@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { createHash } from "crypto";
 import db from "../db/connection.js";
 import { normalizeMerchant } from "../lib/merchantNormalize.js";
-import { lookupMerchantMemory } from "../lib/merchantMemory.js";
+import { lookupMerchantMemory, resolveCanonical } from "../lib/merchantMemory.js";
 import { categorizeWithFlash, isFlashEnabled } from "../lib/flashCategorize.js";
 import { notifyApplePayExpense } from "../jobs/notifications.js";
 
@@ -190,7 +190,10 @@ function ingestExpense(
   const timestamp = parseTimestamp(raw.timestamp) ?? new Date().toISOString();
 
   const normalized = normalizeMerchant(merchant);
-  const note = normalized || merchant.toLowerCase().trim();
+  // Resolve through any user-defined alias so memory lookup, the stored note,
+  // and downstream display all share a single canonical name per merchant.
+  const canonical = resolveCanonical(normalized);
+  const note = canonical || merchant.toLowerCase().trim();
 
   const id = crypto.randomUUID();
   const amountCents = Math.round(amount * 100);
@@ -390,31 +393,88 @@ async function runPostInsertWork(
 
   // Flash only fires on the no-memory path. The auto-save and memory-suggest
   // paths trust the user-trained mapping and never call out to Gemini.
+  let resolvedMerchant = merchantNormalized;
   if (kind === "no-suggest" && isFlashEnabled()) {
     const suggestion = await categorizeWithFlash(merchantNormalized, amountCents);
     if (suggestion) {
+      // Phase 3 auto-alias: if Flash extracted a canonical brand name with
+      // high confidence AND that canonical already lives in merchant memory,
+      // collapse this hit onto the existing row. User-trained category wins
+      // over Flash's own suggestion. Tightly gated — never invents merchants
+      // or aliases low-confidence guesses.
+      let usedCategoryId = suggestion.category_id;
+      let usedSubcategoryId = suggestion.subcategory_id;
+      let aliasCreated = false;
+      let upgradedToAutoSave = false;
+
+      if (
+        suggestion.canonical_merchant &&
+        suggestion.canonical_merchant !== merchantNormalized &&
+        suggestion.confidence === "high"
+      ) {
+        const canonicalMemory = lookupMerchantMemory(suggestion.canonical_merchant);
+        if (canonicalMemory) {
+          const nowIso = new Date().toISOString();
+          db.prepare(
+            `INSERT INTO merchant_aliases (alias_normalized, canonical_normalized, created_at)
+             VALUES (?, ?, ?)
+             ON CONFLICT(alias_normalized) DO NOTHING`,
+          ).run(merchantNormalized, suggestion.canonical_merchant, nowIso);
+          aliasCreated = true;
+          usedCategoryId = canonicalMemory.category_id;
+          usedSubcategoryId = canonicalMemory.subcategory_id;
+          resolvedMerchant = suggestion.canonical_merchant;
+          if (canonicalMemory.confirmation_count >= 2) {
+            upgradedToAutoSave = true;
+          }
+        }
+      }
+
       // Idempotent UPDATE: only writes if the row is still pending and still
       // has no category. Guards against the user manually confirming, the
       // row being deleted, or a second hit auto-saving via newly-inserted
-      // memory while Flash was running.
+      // memory while Flash was running. When the alias path fires we also
+      // rewrite `note` to the canonical name and (when memory count ≥ 2)
+      // flip the row to confirmed with auto_saved=1.
+      const setStatus = upgradedToAutoSave
+        ? `, status = 'confirmed', auto_saved = 1`
+        : "";
+      const setNote = aliasCreated ? `, note = ?` : "";
+      const params: unknown[] = [usedCategoryId, usedSubcategoryId];
+      if (aliasCreated) params.push(resolvedMerchant);
+      params.push(expenseId);
+
       const result = db
         .prepare(
           `UPDATE expenses
               SET category_id = ?,
-                  subcategory_id = ?,
+                  subcategory_id = ?
+                  ${setNote}
+                  ${setStatus},
                   updated_at = datetime('now')
             WHERE id = ?
               AND status = 'pending'
               AND deleted = 0
               AND category_id IS NULL`,
         )
-        .run(suggestion.category_id, suggestion.subcategory_id, expenseId);
+        .run(...params);
       if (result.changes === 1) {
-        const names = lookupNames(suggestion.category_id, suggestion.subcategory_id);
+        const names = lookupNames(usedCategoryId, usedSubcategoryId);
         if (names) {
-          kind = "flash-suggest";
+          if (upgradedToAutoSave) {
+            kind = "auto-saved";
+          } else if (aliasCreated) {
+            kind = "memory-suggest";
+          } else {
+            kind = "flash-suggest";
+          }
           categoryName = names.category;
           subcategoryName = names.subcategory;
+        }
+        if (aliasCreated) {
+          console.log(
+            `[shortcuts] flash auto-alias ${merchantNormalized} → ${resolvedMerchant} (${upgradedToAutoSave ? "auto-saved" : "memory-suggest"}) for ${expenseId}`,
+          );
         }
       } else {
         console.log(`[shortcuts] flash result discarded for ${expenseId} (row no longer eligible)`);
@@ -422,7 +482,9 @@ async function runPostInsertWork(
     }
   }
 
-  const url = captured.status === "confirmed" ? "/history" : `/?confirm=${expenseId}`;
+  const finalStatus =
+    kind === "auto-saved" ? "confirmed" : captured.status;
+  const url = finalStatus === "confirmed" ? "/history" : `/?confirm=${expenseId}`;
   const suggestion =
     categoryName && subcategoryName
       ? { category: categoryName, subcategory: subcategoryName }
@@ -430,7 +492,7 @@ async function runPostInsertWork(
   await notifyApplePayExpense(
     userId,
     kind,
-    { expenseId, merchant: merchantNormalized, amountCents, url },
+    { expenseId, merchant: resolvedMerchant, amountCents, url },
     suggestion,
   );
 }

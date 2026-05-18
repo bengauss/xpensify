@@ -22,6 +22,12 @@ interface MerchantRow {
   auto_saved_count: number;
 }
 
+interface AliasRow {
+  alias_normalized: string;
+  canonical_normalized: string;
+  created_at: string;
+}
+
 function AppleLogo({ size = 11 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -39,12 +45,142 @@ function formatFull(iso: string): string {
   return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}, ${hh}:${mm}`;
 }
 
+function MergePicker({
+  source,
+  candidates,
+  onCancel,
+  onMerge,
+}: {
+  source: MerchantRow;
+  candidates: MerchantRow[];
+  onCancel: () => void;
+  onMerge: (target: MerchantRow) => Promise<void>;
+}) {
+  const [query, setQuery] = useState("");
+  const [merging, setMerging] = useState(false);
+  const cancelPress = usePressScale<HTMLButtonElement>(0.95);
+  const filtered = query.trim()
+    ? candidates.filter((c) =>
+        c.merchant_normalized.toLowerCase().includes(query.trim().toLowerCase()),
+      )
+    : candidates;
+
+  return (
+    <div class="flex flex-col gap-3">
+      <div>
+        <h2 class="text-base font-semibold" style={{ color: "var(--color-text-primary)" }}>
+          merge "{source.merchant_normalized}" into…
+        </h2>
+        <p class="text-xs mt-1" style={{ color: "var(--color-text-secondary)" }}>
+          future apple pay hits as "{source.merchant_normalized}" will be saved
+          under the target merchant's category. existing apple pay history with
+          this name will be relabeled, unless you've edited the note.
+        </p>
+      </div>
+
+      <input
+        type="text"
+        value={query}
+        onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
+        placeholder="search merchants"
+        class="w-full text-sm bg-transparent border-0 outline-none"
+        style={{
+          height: 44,
+          paddingLeft: 14,
+          paddingRight: 14,
+          borderRadius: 12,
+          backgroundColor: "rgba(255,255,255,0.06)",
+          color: "var(--color-text-primary)",
+        }}
+      />
+
+      <div
+        class="flex flex-col"
+        style={{ maxHeight: 320, overflowY: "auto" }}
+      >
+        {filtered.length === 0 ? (
+          <p
+            class="text-sm text-center py-6"
+            style={{ color: "var(--color-text-tertiary)" }}
+          >
+            no other merchants match
+          </p>
+        ) : (
+          filtered.map((m) => {
+            const Icon = m.category_icon ? categoryIcons[m.category_icon] : null;
+            const color = m.category_color ?? "#868e96";
+            return (
+              <button
+                key={m.merchant_normalized}
+                disabled={merging}
+                onClick={async () => {
+                  setMerging(true);
+                  try {
+                    await onMerge(m);
+                  } finally {
+                    setMerging(false);
+                  }
+                }}
+                class="w-full text-left flex items-center gap-3 px-1 py-2.5 cursor-pointer bg-transparent border-0"
+                style={{
+                  WebkitTapHighlightColor: "transparent",
+                  opacity: merging ? 0.5 : 1,
+                }}
+              >
+                <div
+                  class="flex-shrink-0 flex items-center justify-center rounded-xl"
+                  style={{ width: 32, height: 32, backgroundColor: `${color}1a` }}
+                >
+                  {Icon && <Icon color={color} size={18} />}
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p
+                    class="text-base truncate"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
+                    {m.merchant_normalized}
+                  </p>
+                  <p
+                    class="text-xs truncate"
+                    style={{ color: "var(--color-text-tertiary)" }}
+                  >
+                    {m.category_name ?? "—"} · {m.subcategory_name ?? "—"}
+                  </p>
+                </div>
+              </button>
+            );
+          })
+        )}
+      </div>
+
+      <button
+        ref={cancelPress.ref}
+        onPointerDown={cancelPress.onPointerDown}
+        onPointerUp={cancelPress.onPointerUp}
+        onPointerCancel={cancelPress.onPointerCancel}
+        onClick={onCancel}
+        disabled={merging}
+        class="flex items-center justify-center text-sm font-medium cursor-pointer border-0 bg-transparent"
+        style={{
+          height: 44,
+          color: "var(--color-text-secondary)",
+          WebkitTapHighlightColor: "transparent",
+        }}
+      >
+        cancel
+      </button>
+    </div>
+  );
+}
+
 function MerchantEditor({
   merchant,
+  candidates,
   onClose,
   onChanged,
 }: {
   merchant: MerchantRow;
+  candidates: MerchantRow[];
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -52,8 +188,10 @@ function MerchantEditor({
   const [subId, setSubId] = useState(merchant.subcategory_id);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [mergeMode, setMergeMode] = useState(false);
   const savePress = usePressScale<HTMLButtonElement>(0.97);
   const deletePress = usePressScale<HTMLButtonElement>(0.97);
+  const mergePress = usePressScale<HTMLButtonElement>(0.97);
 
   async function handleSave() {
     if (!catId || !subId) return;
@@ -89,6 +227,28 @@ function MerchantEditor({
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleMerge(target: MerchantRow) {
+    const res = await (api.api.merchants[":merchant"].merge.$post as any)({
+      param: { merchant: encodeURIComponent(merchant.merchant_normalized) },
+      json: { into: target.merchant_normalized },
+    });
+    if (res.ok) {
+      onChanged();
+      onClose();
+    }
+  }
+
+  if (mergeMode) {
+    return (
+      <MergePicker
+        source={merchant}
+        candidates={candidates}
+        onCancel={() => setMergeMode(false)}
+        onMerge={handleMerge}
+      />
+    );
   }
 
   return (
@@ -143,42 +303,63 @@ function MerchantEditor({
           onCancel={() => setConfirmDelete(false)}
         />
       ) : (
-        <div class="grid grid-cols-2" style={{ gap: 10 }}>
-          <button
-            ref={savePress.ref}
-            onPointerDown={savePress.onPointerDown}
-            onPointerUp={savePress.onPointerUp}
-            onPointerCancel={savePress.onPointerCancel}
-            onClick={handleSave}
-            disabled={saving || !catId || !subId}
-            class="flex items-center justify-center text-sm font-medium text-white cursor-pointer border-0"
-            style={{
-              height: 48,
-              borderRadius: 14,
-              backgroundColor: "var(--color-accent)",
-              opacity: saving || !catId || !subId ? 0.5 : 1,
-              WebkitTapHighlightColor: "transparent",
-            }}
-          >
-            {saving ? "saving..." : "save changes"}
-          </button>
-          <button
-            ref={deletePress.ref}
-            onPointerDown={deletePress.onPointerDown}
-            onPointerUp={deletePress.onPointerUp}
-            onPointerCancel={deletePress.onPointerCancel}
-            onClick={() => setConfirmDelete(true)}
-            class="flex items-center justify-center text-sm font-medium cursor-pointer border-0"
-            style={{
-              height: 48,
-              borderRadius: 14,
-              backgroundColor: "rgba(255,55,95,0.12)",
-              color: "var(--color-danger)",
-              WebkitTapHighlightColor: "transparent",
-            }}
-          >
-            delete
-          </button>
+        <div class="flex flex-col" style={{ gap: 10 }}>
+          <div class="grid grid-cols-2" style={{ gap: 10 }}>
+            <button
+              ref={savePress.ref}
+              onPointerDown={savePress.onPointerDown}
+              onPointerUp={savePress.onPointerUp}
+              onPointerCancel={savePress.onPointerCancel}
+              onClick={handleSave}
+              disabled={saving || !catId || !subId}
+              class="flex items-center justify-center text-sm font-medium text-white cursor-pointer border-0"
+              style={{
+                height: 48,
+                borderRadius: 14,
+                backgroundColor: "var(--color-accent)",
+                opacity: saving || !catId || !subId ? 0.5 : 1,
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              {saving ? "saving..." : "save changes"}
+            </button>
+            <button
+              ref={deletePress.ref}
+              onPointerDown={deletePress.onPointerDown}
+              onPointerUp={deletePress.onPointerUp}
+              onPointerCancel={deletePress.onPointerCancel}
+              onClick={() => setConfirmDelete(true)}
+              class="flex items-center justify-center text-sm font-medium cursor-pointer border-0"
+              style={{
+                height: 48,
+                borderRadius: 14,
+                backgroundColor: "rgba(255,55,95,0.12)",
+                color: "var(--color-danger)",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              delete
+            </button>
+          </div>
+          {candidates.length > 0 && (
+            <button
+              ref={mergePress.ref}
+              onPointerDown={mergePress.onPointerDown}
+              onPointerUp={mergePress.onPointerUp}
+              onPointerCancel={mergePress.onPointerCancel}
+              onClick={() => setMergeMode(true)}
+              class="flex items-center justify-center text-sm font-medium cursor-pointer border-0"
+              style={{
+                height: 44,
+                borderRadius: 12,
+                backgroundColor: "rgba(255,255,255,0.06)",
+                color: "var(--color-text-primary)",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              merge into another merchant…
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -267,18 +448,35 @@ function MerchantSection({
 export default function SettingsMerchantsScreen() {
   const { route } = useLocation();
   const [rows, setRows] = useState<MerchantRow[] | null>(null);
+  const [aliases, setAliases] = useState<AliasRow[]>([]);
   const [selected, setSelected] = useState<MerchantRow | null>(null);
   const backPress = usePressScale<HTMLButtonElement>(0.95);
 
   async function load() {
     try {
-      const res = await api.api.merchants.$get();
-      if (!res.ok) return;
-      const data = (await res.json()) as MerchantRow[];
-      setRows(data);
+      const [rowsRes, aliasesRes] = await Promise.all([
+        api.api.merchants.$get(),
+        (api.api.merchants.aliases.$get as any)(),
+      ]);
+      if (rowsRes.ok) {
+        const data = (await rowsRes.json()) as MerchantRow[];
+        setRows(data);
+      }
+      if (aliasesRes.ok) {
+        const data = (await aliasesRes.json()) as AliasRow[];
+        setAliases(data);
+      }
     } catch {
       setRows([]);
+      setAliases([]);
     }
+  }
+
+  async function handleUnmerge(alias: string) {
+    const res = await (api.api.merchants.aliases[":alias"].$delete as any)({
+      param: { alias: encodeURIComponent(alias) },
+    });
+    if (res.ok) load();
   }
 
   useEffect(() => { load(); }, []);
@@ -346,6 +544,46 @@ export default function SettingsMerchantsScreen() {
                 variant="learning"
               />
             )}
+            {aliases.length > 0 && (
+              <div>
+                <div class="flex items-baseline justify-between px-1 pb-1.5">
+                  <span class="text-xs font-semibold lowercase" style={{ color: "var(--color-text-tertiary)" }}>
+                    merged · {aliases.length}
+                  </span>
+                </div>
+                <p class="text-xs px-1 pb-2" style={{ color: "var(--color-text-tertiary)" }}>
+                  alternate names that resolve to a canonical merchant. tap to un-merge.
+                </p>
+                <div class="flex flex-col">
+                  {aliases.map((a) => (
+                    <button
+                      key={a.alias_normalized}
+                      onClick={() => handleUnmerge(a.alias_normalized)}
+                      class="w-full text-left flex items-center gap-3 px-1 py-2.5 cursor-pointer bg-transparent border-0"
+                      style={{ WebkitTapHighlightColor: "transparent" }}
+                    >
+                      <div class="flex-1 min-w-0">
+                        <p class="text-sm truncate" style={{ color: "var(--color-text-primary)" }}>
+                          {a.alias_normalized}
+                        </p>
+                        <p class="text-xs truncate" style={{ color: "var(--color-text-tertiary)" }}>
+                          → {a.canonical_normalized}
+                        </p>
+                      </div>
+                      <span
+                        class="flex-shrink-0 text-xs px-2 py-0.5 rounded-full"
+                        style={{
+                          color: "var(--color-text-secondary)",
+                          backgroundColor: "rgba(255,255,255,0.06)",
+                        }}
+                      >
+                        un-merge
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         );
       })()}
@@ -354,6 +592,9 @@ export default function SettingsMerchantsScreen() {
         {selected && (
           <MerchantEditor
             merchant={selected}
+            candidates={(rows ?? []).filter(
+              (r) => r.merchant_normalized !== selected.merchant_normalized,
+            )}
             onClose={() => setSelected(null)}
             onChanged={load}
           />

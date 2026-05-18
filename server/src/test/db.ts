@@ -31,6 +31,7 @@ export function ensureMigrated(): void {
 export function resetDb(): void {
   ensureMigrated();
   db.exec(`
+    DELETE FROM merchant_aliases;
     DELETE FROM merchant_categories;
     DELETE FROM api_tokens;
     DELETE FROM push_subscriptions;

@@ -117,3 +117,16 @@ CREATE TABLE IF NOT EXISTS merchant_categories (
   confirmation_count INTEGER NOT NULL DEFAULT 1,
   last_confirmed_at TEXT NOT NULL
 );
+
+-- merchant_aliases: collapses multiple POS-name variants onto one canonical
+-- merchant. When the webhook receives a normalized name that has an alias
+-- entry, the row's category memory is looked up under the canonical name and
+-- the expense's `note` is stamped with the canonical name too. Household-wide
+-- like merchant_categories.
+CREATE TABLE IF NOT EXISTS merchant_aliases (
+  alias_normalized TEXT PRIMARY KEY,
+  canonical_normalized TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_merchant_aliases_canonical
+  ON merchant_aliases(canonical_normalized);
