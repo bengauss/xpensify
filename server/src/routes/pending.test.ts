@@ -5,28 +5,28 @@ import { mountRouter, jsonInit } from "../test/app.js";
 
 beforeAll(() => ensureMigrated());
 
-let benId: string;
-let yaraId: string;
-let benCookie: string;
-let yaraCookie: string;
+let userAId: string;
+let userBId: string;
+let userACookie: string;
+let userBCookie: string;
 const app = mountRouter("pending", pending);
 
 beforeEach(() => {
   resetDb();
   const users = seedTestUsers();
-  benId = users.alice.id;
-  yaraId = users.bob.id;
-  benCookie = sessionCookie(seedTestSession(benId));
-  yaraCookie = sessionCookie(seedTestSession(yaraId));
+  userAId = users.userA.id;
+  userBId = users.userB.id;
+  userACookie = sessionCookie(seedTestSession(userAId));
+  userBCookie = sessionCookie(seedTestSession(userBId));
 });
 
 describe("GET /api/pending — list", () => {
   it("returns only the current user's pending expenses", async () => {
-    insertExpense({ user_id: benId, amount: 1000, status: "pending", note: "billa", source: "apple-pay" });
-    insertExpense({ user_id: yaraId, amount: 2000, status: "pending", note: "spar", source: "apple-pay" });
-    insertExpense({ user_id: benId, amount: 3000, status: "confirmed", note: "billa", source: "apple-pay" });
+    insertExpense({ user_id: userAId, amount: 1000, status: "pending", note: "billa", source: "apple-pay" });
+    insertExpense({ user_id: userBId, amount: 2000, status: "pending", note: "spar", source: "apple-pay" });
+    insertExpense({ user_id: userAId, amount: 3000, status: "confirmed", note: "billa", source: "apple-pay" });
 
-    const res = await app.request("/api/pending", { headers: { cookie: benCookie } });
+    const res = await app.request("/api/pending", { headers: { cookie: userACookie } });
     const data = await res.json() as any[];
     expect(data).toHaveLength(1);
     expect(data[0].amount).toBe(1000);
@@ -38,8 +38,8 @@ describe("GET /api/pending — list", () => {
   });
 
   it("excludes soft-deleted pending expenses", async () => {
-    insertExpense({ user_id: benId, amount: 1000, status: "pending", deleted: 1, source: "apple-pay" });
-    const res = await app.request("/api/pending", { headers: { cookie: benCookie } });
+    insertExpense({ user_id: userAId, amount: 1000, status: "pending", deleted: 1, source: "apple-pay" });
+    const res = await app.request("/api/pending", { headers: { cookie: userACookie } });
     const data = await res.json() as any[];
     expect(data).toHaveLength(0);
   });
@@ -50,7 +50,7 @@ describe("GET /api/pending — list", () => {
        VALUES ('billa', 'cat-food', 'sub-groceries', 1, '2026-05-01T00:00:00.000Z')`,
     ).run();
     insertExpense({
-      user_id: benId,
+      user_id: userAId,
       amount: 1000,
       status: "pending",
       note: "billa",
@@ -58,7 +58,7 @@ describe("GET /api/pending — list", () => {
       category_id: "cat-food",
       subcategory_id: "sub-groceries",
     });
-    const res = await app.request("/api/pending", { headers: { cookie: benCookie } });
+    const res = await app.request("/api/pending", { headers: { cookie: userACookie } });
     const data = await res.json() as any[];
     expect(data[0].suggestion_source).toBe("memory");
   });
@@ -66,7 +66,7 @@ describe("GET /api/pending — list", () => {
   it("flags Flash-backed suggestions with suggestion_source='flash'", async () => {
     // No merchant_categories row — the pre-filled category came from Gemini.
     insertExpense({
-      user_id: benId,
+      user_id: userAId,
       amount: 1000,
       status: "pending",
       note: "nordsee",
@@ -74,14 +74,14 @@ describe("GET /api/pending — list", () => {
       category_id: "cat-food",
       subcategory_id: "sub-eating-out",
     });
-    const res = await app.request("/api/pending", { headers: { cookie: benCookie } });
+    const res = await app.request("/api/pending", { headers: { cookie: userACookie } });
     const data = await res.json() as any[];
     expect(data[0].suggestion_source).toBe("flash");
   });
 
   it("returns suggestion_source=null when no category is pre-filled", async () => {
     insertExpense({
-      user_id: benId,
+      user_id: userAId,
       amount: 1000,
       status: "pending",
       note: "unknown shop",
@@ -89,7 +89,7 @@ describe("GET /api/pending — list", () => {
       category_id: null,
       subcategory_id: null,
     });
-    const res = await app.request("/api/pending", { headers: { cookie: benCookie } });
+    const res = await app.request("/api/pending", { headers: { cookie: userACookie } });
     const data = await res.json() as any[];
     expect(data[0].suggestion_source).toBeNull();
   });
@@ -98,7 +98,7 @@ describe("GET /api/pending — list", () => {
 describe("PATCH /api/pending/:id/confirm — first confirmation", () => {
   it("flips status to confirmed and creates merchant_categories row with count=1", async () => {
     const id = insertExpense({
-      user_id: benId,
+      user_id: userAId,
       amount: 1000,
       status: "pending",
       note: "billa",
@@ -110,7 +110,7 @@ describe("PATCH /api/pending/:id/confirm — first confirmation", () => {
     const res = await app.request(
       `/api/pending/${id}/confirm`,
       jsonInit("PATCH", {
-        cookie: benCookie,
+        cookie: userACookie,
         body: { category_id: "cat-food", subcategory_id: "sub-groceries" },
       }),
     );
@@ -138,7 +138,7 @@ describe("PATCH /api/pending/:id/confirm — repeat confirmations", () => {
     ).run("2026-04-29T00:00:00.000Z");
 
     const id = insertExpense({
-      user_id: benId,
+      user_id: userAId,
       amount: 1000,
       status: "pending",
       note: "billa",
@@ -148,7 +148,7 @@ describe("PATCH /api/pending/:id/confirm — repeat confirmations", () => {
     const res = await app.request(
       `/api/pending/${id}/confirm`,
       jsonInit("PATCH", {
-        cookie: benCookie,
+        cookie: userACookie,
         body: { category_id: "cat-food", subcategory_id: "sub-groceries" },
       }),
     );
@@ -167,7 +167,7 @@ describe("PATCH /api/pending/:id/confirm — repeat confirmations", () => {
     ).run("2026-04-29T00:00:00.000Z");
 
     const id = insertExpense({
-      user_id: benId,
+      user_id: userAId,
       amount: 1000,
       status: "pending",
       note: "billa",
@@ -177,7 +177,7 @@ describe("PATCH /api/pending/:id/confirm — repeat confirmations", () => {
     await app.request(
       `/api/pending/${id}/confirm`,
       jsonInit("PATCH", {
-        cookie: benCookie,
+        cookie: userACookie,
         body: { category_id: "cat-household", subcategory_id: "sub-hh-other" },
       }),
     );
@@ -197,7 +197,7 @@ describe("PATCH /api/pending/:id/confirm — repeat confirmations", () => {
     ).run();
 
     const id = insertExpense({
-      user_id: benId,
+      user_id: userAId,
       amount: 1000,
       status: "pending",
       note: "billa",
@@ -207,7 +207,7 @@ describe("PATCH /api/pending/:id/confirm — repeat confirmations", () => {
     await app.request(
       `/api/pending/${id}/confirm`,
       jsonInit("PATCH", {
-        cookie: benCookie,
+        cookie: userACookie,
         body: { category_id: "cat-food", subcategory_id: "sub-groceries" },
       }),
     );
@@ -221,11 +221,11 @@ describe("PATCH /api/pending/:id/confirm — repeat confirmations", () => {
 
 describe("PATCH /api/pending/:id/confirm — validation", () => {
   it("returns 400 for mismatched category/subcategory", async () => {
-    const id = insertExpense({ user_id: benId, amount: 1000, status: "pending", note: "billa", source: "apple-pay" });
+    const id = insertExpense({ user_id: userAId, amount: 1000, status: "pending", note: "billa", source: "apple-pay" });
     const res = await app.request(
       `/api/pending/${id}/confirm`,
       jsonInit("PATCH", {
-        cookie: benCookie,
+        cookie: userACookie,
         body: { category_id: "cat-food", subcategory_id: "sub-rent" },
       }),
     );
@@ -233,11 +233,11 @@ describe("PATCH /api/pending/:id/confirm — validation", () => {
   });
 
   it("returns 400 for missing fields", async () => {
-    const id = insertExpense({ user_id: benId, amount: 1000, status: "pending", note: "billa", source: "apple-pay" });
+    const id = insertExpense({ user_id: userAId, amount: 1000, status: "pending", note: "billa", source: "apple-pay" });
     const res = await app.request(
       `/api/pending/${id}/confirm`,
       jsonInit("PATCH", {
-        cookie: benCookie,
+        cookie: userACookie,
         body: { category_id: "cat-food" },
       }),
     );
@@ -245,11 +245,11 @@ describe("PATCH /api/pending/:id/confirm — validation", () => {
   });
 
   it("returns 404 for someone else's pending expense", async () => {
-    const id = insertExpense({ user_id: yaraId, amount: 1000, status: "pending", note: "billa", source: "apple-pay" });
+    const id = insertExpense({ user_id: userBId, amount: 1000, status: "pending", note: "billa", source: "apple-pay" });
     const res = await app.request(
       `/api/pending/${id}/confirm`,
       jsonInit("PATCH", {
-        cookie: benCookie,
+        cookie: userACookie,
         body: { category_id: "cat-food", subcategory_id: "sub-groceries" },
       }),
     );
@@ -257,11 +257,11 @@ describe("PATCH /api/pending/:id/confirm — validation", () => {
   });
 
   it("returns 404 for already-confirmed expense", async () => {
-    const id = insertExpense({ user_id: benId, amount: 1000, status: "confirmed", note: "billa", source: "apple-pay", category_id: "cat-food", subcategory_id: "sub-groceries" });
+    const id = insertExpense({ user_id: userAId, amount: 1000, status: "confirmed", note: "billa", source: "apple-pay", category_id: "cat-food", subcategory_id: "sub-groceries" });
     const res = await app.request(
       `/api/pending/${id}/confirm`,
       jsonInit("PATCH", {
-        cookie: benCookie,
+        cookie: userACookie,
         body: { category_id: "cat-food", subcategory_id: "sub-groceries" },
       }),
     );
@@ -271,10 +271,10 @@ describe("PATCH /api/pending/:id/confirm — validation", () => {
 
 describe("DELETE /api/pending/:id — skip pending", () => {
   it("hard-deletes a pending expense", async () => {
-    const id = insertExpense({ user_id: benId, amount: 1000, status: "pending", source: "apple-pay" });
+    const id = insertExpense({ user_id: userAId, amount: 1000, status: "pending", source: "apple-pay" });
     const res = await app.request(`/api/pending/${id}`, {
       method: "DELETE",
-      headers: { cookie: benCookie },
+      headers: { cookie: userACookie },
     });
     expect(res.status).toBe(200);
     const exists = db.prepare(`SELECT 1 FROM expenses WHERE id = ?`).get(id);
@@ -282,19 +282,19 @@ describe("DELETE /api/pending/:id — skip pending", () => {
   });
 
   it("returns 404 for someone else's pending", async () => {
-    const id = insertExpense({ user_id: yaraId, amount: 1000, status: "pending", source: "apple-pay" });
+    const id = insertExpense({ user_id: userBId, amount: 1000, status: "pending", source: "apple-pay" });
     const res = await app.request(`/api/pending/${id}`, {
       method: "DELETE",
-      headers: { cookie: benCookie },
+      headers: { cookie: userACookie },
     });
     expect(res.status).toBe(404);
   });
 
   it("does NOT delete confirmed expenses", async () => {
-    const id = insertExpense({ user_id: benId, amount: 1000, status: "confirmed", category_id: "cat-food", subcategory_id: "sub-groceries" });
+    const id = insertExpense({ user_id: userAId, amount: 1000, status: "confirmed", category_id: "cat-food", subcategory_id: "sub-groceries" });
     const res = await app.request(`/api/pending/${id}`, {
       method: "DELETE",
-      headers: { cookie: benCookie },
+      headers: { cookie: userACookie },
     });
     expect(res.status).toBe(404);
     const exists = db.prepare(`SELECT 1 FROM expenses WHERE id = ?`).get(id);

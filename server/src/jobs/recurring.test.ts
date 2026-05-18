@@ -4,12 +4,12 @@ import { db, ensureMigrated, resetDb, seedTestUsers, insertRecurringTemplate } f
 
 beforeAll(() => ensureMigrated());
 
-let benId: string;
+let userAId: string;
 
 beforeEach(() => {
   resetDb();
   const users = seedTestUsers();
-  benId = users.alice.id;
+  userAId = users.userA.id;
 });
 
 function todayDateString(): string {
@@ -24,7 +24,7 @@ function dateOffset(days: number): string {
 describe("processRecurringTemplates — idempotency", () => {
   it("does not create duplicates when run twice on the same day", async () => {
     insertRecurringTemplate({
-      user_id: benId,
+      user_id: userAId,
       category_id: "cat-living",
       subcategory_id: "sub-rent",
       amount: 80000,
@@ -42,7 +42,7 @@ describe("processRecurringTemplates — idempotency", () => {
   it("idempotency check is per (template_id, timestamp)", async () => {
     // Two templates with same next_due — both should generate one expense each
     insertRecurringTemplate({
-      user_id: benId,
+      user_id: userAId,
       category_id: "cat-living",
       subcategory_id: "sub-rent",
       amount: 80000,
@@ -50,7 +50,7 @@ describe("processRecurringTemplates — idempotency", () => {
       next_due: todayDateString(),
     });
     insertRecurringTemplate({
-      user_id: benId,
+      user_id: userAId,
       category_id: "cat-subscriptions",
       subcategory_id: "sub-subscriptions",
       amount: 1000,
@@ -70,7 +70,7 @@ describe("processRecurringTemplates — catch-up logic", () => {
   it("generates missed days when cron didn't run for 3 days", async () => {
     // Weekly template with next_due 21 days ago — should fire 3 times to catch up
     insertRecurringTemplate({
-      user_id: benId,
+      user_id: userAId,
       category_id: "cat-subscriptions",
       subcategory_id: "sub-subscriptions",
       amount: 500,
@@ -88,7 +88,7 @@ describe("processRecurringTemplates — catch-up logic", () => {
 
   it("advances next_due past today after catch-up", async () => {
     const id = insertRecurringTemplate({
-      user_id: benId,
+      user_id: userAId,
       category_id: "cat-subscriptions",
       subcategory_id: "sub-subscriptions",
       amount: 500,
@@ -106,7 +106,7 @@ describe("processRecurringTemplates — catch-up logic", () => {
 describe("processRecurringTemplates — skip rules", () => {
   it("skips inactive (active=0) templates", async () => {
     insertRecurringTemplate({
-      user_id: benId,
+      user_id: userAId,
       category_id: "cat-living",
       subcategory_id: "sub-rent",
       amount: 80000,
@@ -123,7 +123,7 @@ describe("processRecurringTemplates — skip rules", () => {
 
   it("does NOT generate templates whose next_due is in the future", async () => {
     insertRecurringTemplate({
-      user_id: benId,
+      user_id: userAId,
       category_id: "cat-living",
       subcategory_id: "sub-rent",
       amount: 80000,
@@ -141,7 +141,7 @@ describe("processRecurringTemplates — skip rules", () => {
 describe("processRecurringTemplates — yearly leap-year clamp", () => {
   it("yearly template starting Feb 29 advances to Feb 28 next non-leap year", async () => {
     const id = insertRecurringTemplate({
-      user_id: benId,
+      user_id: userAId,
       category_id: "cat-subscriptions",
       subcategory_id: "sub-subscriptions",
       amount: 1000,
@@ -166,7 +166,7 @@ describe("processRecurringTemplates — yearly leap-year clamp", () => {
 describe("processRecurringTemplates — generated expense fields", () => {
   it("sets source='recurring' and recurring_template_id", async () => {
     const id = insertRecurringTemplate({
-      user_id: benId,
+      user_id: userAId,
       category_id: "cat-living",
       subcategory_id: "sub-rent",
       amount: 80000,
@@ -184,12 +184,12 @@ describe("processRecurringTemplates — generated expense fields", () => {
     expect(row.recurring_template_id).toBe(id);
     expect(row.amount).toBe(80000);
     expect(row.note).toBe("April rent");
-    expect(row.user_id).toBe(benId);
+    expect(row.user_id).toBe(userAId);
   });
 
   it("uses noon timestamp T12:00:00.000Z for generated expenses", async () => {
     insertRecurringTemplate({
-      user_id: benId,
+      user_id: userAId,
       category_id: "cat-living",
       subcategory_id: "sub-rent",
       amount: 80000,

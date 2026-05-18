@@ -1,0 +1,14 @@
+# Users to seed on first `npm run seed`. Existing users are skipped (idempotent).
+# Each user's password comes from an env var named <USERNAME_UPPERCASE>_PASSWORD.
+# If the env var is unset on first seed, a UUID is generated and printed once.
+# After seeding, edit users via SQL or a future admin UI — this file is only read by the seeder.
+
+users:
+  - id: 00000000-0000-0000-0000-000000000001
+    username: alice
+    display_name: Alice
+    avatar_color: "#6c9cff"
+  - id: 00000000-0000-0000-0000-000000000002
+    username: bob
+    display_name: Bob
+    avatar_color: "#9775fa"

@@ -5,11 +5,11 @@ import { db, ensureMigrated, resetDb, seedTestUsers, seedTestSession, sessionCoo
 
 beforeAll(() => ensureMigrated());
 
-let benId: string;
+let userAId: string;
 
 beforeEach(() => {
   resetDb();
-  benId = seedTestUsers().alice.id;
+  userAId = seedTestUsers().userA.id;
 });
 
 const app = new Hono<{ Variables: Variables }>().get("/protected", authMiddleware, (c) => {
@@ -38,7 +38,7 @@ describe("authMiddleware", () => {
 
   it("returns 401 and deletes the row when session has expired", async () => {
     const expired = new Date(Date.now() - 1000).toISOString();
-    const sessionId = seedTestSession(benId, expired);
+    const sessionId = seedTestSession(userAId, expired);
     const res = await app.request("/protected", {
       headers: { cookie: sessionCookie(sessionId) },
     });
@@ -49,13 +49,13 @@ describe("authMiddleware", () => {
   });
 
   it("populates userId + user on a valid session", async () => {
-    const sessionId = seedTestSession(benId);
+    const sessionId = seedTestSession(userAId);
     const res = await app.request("/protected", {
       headers: { cookie: sessionCookie(sessionId) },
     });
     expect(res.status).toBe(200);
     const data = await res.json() as any;
-    expect(data.userId).toBe(benId);
+    expect(data.userId).toBe(userAId);
     expect(data.user.username).toBe("alice");
   });
 });

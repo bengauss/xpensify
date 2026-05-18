@@ -2,6 +2,7 @@ import { readFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import bcrypt from "bcryptjs";
+import yaml from "js-yaml";
 import { createHash, randomBytes } from "crypto";
 import db from "../db/connection.js";
 import { runMigrations } from "../db/migrate.js";
@@ -9,6 +10,62 @@ import { runMigrations } from "../db/migrate.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 let migrated = false;
+
+interface SubcategoryConfigEntry {
+  id: string;
+  name: string;
+  sort_order: number;
+}
+
+interface CategoryConfigEntry {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  sort_order: number;
+  subcategories?: SubcategoryConfigEntry[];
+}
+
+interface CategoriesConfig {
+  categories: CategoryConfigEntry[];
+}
+
+/**
+ * Load the committed example categories config. Tests use the .example file
+ * so they don't depend on the deployer's local config/categories.yaml (which
+ * is gitignored and may carry deployer-specific categories).
+ */
+function loadTestCategories(): CategoriesConfig {
+  // Walk up from server/src/test → server/src → server → repo root → config/
+  const path = resolve(__dirname, "../../../config/categories.example.yaml");
+  const raw = readFileSync(path, "utf-8");
+  const parsed = yaml.load(raw) as CategoriesConfig;
+  if (!parsed || !Array.isArray(parsed.categories)) {
+    throw new Error(`[test] ${path} is missing a top-level 'categories:' list`);
+  }
+  return parsed;
+}
+
+function seedCategoriesFromYaml(): void {
+  const cfg = loadTestCategories();
+  const insertCategory = db.prepare(
+    `INSERT OR REPLACE INTO categories (id, name, icon, color, sort_order)
+     VALUES (?, ?, ?, ?, ?)`,
+  );
+  const insertSubcategory = db.prepare(
+    `INSERT OR REPLACE INTO subcategories (id, category_id, name, sort_order)
+     VALUES (?, ?, ?, ?)`,
+  );
+  const tx = db.transaction(() => {
+    for (const cat of cfg.categories) {
+      insertCategory.run(cat.id, cat.name, cat.icon, cat.color, cat.sort_order);
+      for (const sub of cat.subcategories ?? []) {
+        insertSubcategory.run(sub.id, cat.id, sub.name, sub.sort_order);
+      }
+    }
+  });
+  tx();
+}
 
 /**
  * Initialize schema + categories on first call. Subsequent calls are no-ops
@@ -18,8 +75,7 @@ let migrated = false;
 export function ensureMigrated(): void {
   if (migrated) return;
   runMigrations();
-  const seedSql = readFileSync(resolve(__dirname, "../db/seed.sql"), "utf-8");
-  db.exec(seedSql);
+  seedCategoriesFromYaml();
   migrated = true;
 }
 
@@ -43,8 +99,7 @@ export function resetDb(): void {
     DELETE FROM subcategories;
     DELETE FROM categories;
   `);
-  const seedSql = readFileSync(resolve(__dirname, "../db/seed.sql"), "utf-8");
-  db.exec(seedSql);
+  seedCategoriesFromYaml();
 }
 
 export interface TestUser {
@@ -58,27 +113,28 @@ const USER_A_ID = "00000000-0000-0000-0000-000000000001";
 const USER_B_ID = "00000000-0000-0000-0000-000000000002";
 
 /**
- * Insert Alice + Bob with known plaintext passwords. Returns both records so
- * tests can log in or look up IDs.
+ * Insert two generic test users with known plaintext passwords. Returns both
+ * records so tests can log in or look up IDs. UUIDs match the production seed
+ * so foreign-keyed fixtures stay valid.
  */
-export function seedTestUsers(): { alice: TestUser; bob: TestUser } {
-  const benPassword = "alice-test-password-1";
-  const yaraPassword = "bob-test-password-1";
+export function seedTestUsers(): { userA: TestUser; userB: TestUser } {
+  const userAPassword = "alice-test-password-1";
+  const userBPassword = "bob-test-password-1";
   // Cost 4 keeps test runs fast (real prod uses 12). Bcrypt at 12 adds ~250ms
   // per hash which adds up fast across dozens of tests.
-  const benHash = bcrypt.hashSync(benPassword, 4);
-  const yaraHash = bcrypt.hashSync(yaraPassword, 4);
+  const userAHash = bcrypt.hashSync(userAPassword, 4);
+  const userBHash = bcrypt.hashSync(userBPassword, 4);
 
   const stmt = db.prepare(
     `INSERT INTO users (id, username, display_name, password_hash, avatar_color)
      VALUES (?, ?, ?, ?, ?)`,
   );
-  stmt.run(USER_A_ID, "alice", "Alice", benHash, "#6c9cff");
-  stmt.run(USER_B_ID, "bob", "Bob", yaraHash, "#9775fa");
+  stmt.run(USER_A_ID, "alice", "Alice", userAHash, "#6c9cff");
+  stmt.run(USER_B_ID, "bob", "Bob", userBHash, "#9775fa");
 
   return {
-    alice: { id: USER_A_ID, username: "alice", password: benPassword, hash: benHash },
-    bob: { id: USER_B_ID, username: "bob", password: yaraPassword, hash: yaraHash },
+    userA: { id: USER_A_ID, username: "alice", password: userAPassword, hash: userAHash },
+    userB: { id: USER_B_ID, username: "bob", password: userBPassword, hash: userBHash },
   };
 }
 

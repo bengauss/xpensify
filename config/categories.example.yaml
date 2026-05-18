@@ -1,0 +1,138 @@
+# Categories and subcategories seeded on `npm run seed`.
+# Each `id` is foreign-keyed by expenses — do NOT rename ids after first seed
+# unless you also rewrite the data. Renaming `name`, changing `color`, or
+# adding new entries is safe.
+# After seeding, edits propagate through the sync protocol — clients fetch
+# the full list on every sync.
+
+categories:
+  - id: cat-food
+    name: food
+    icon: food
+    color: "#ff6b6b"
+    sort_order: 1
+    subcategories:
+      - { id: sub-groceries,  name: groceries,   sort_order: 1 }
+      - { id: sub-delivery,   name: delivery,    sort_order: 2 }
+      - { id: sub-eating-out, name: eating out,  sort_order: 3 }
+      - { id: sub-drinks,     name: drinks,      sort_order: 4 }
+
+  - id: cat-household
+    name: household
+    icon: household
+    color: "#ffd43b"
+    sort_order: 2
+    subcategories:
+      - { id: sub-cleaning,     name: cleaning,   sort_order: 1 }
+      - { id: sub-hh-utilities, name: utilities,  sort_order: 2 }
+      - { id: sub-hh-furniture, name: furniture,  sort_order: 3 }
+      - { id: sub-kitchen,      name: kitchen,    sort_order: 4 }
+      - { id: sub-toiletries,   name: toiletries, sort_order: 5 }
+      - { id: sub-appliances,   name: appliances, sort_order: 6 }
+      - { id: sub-hh-other,     name: other,      sort_order: 7 }
+
+  - id: cat-health
+    name: health
+    icon: health
+    color: "#69db7c"
+    sort_order: 3
+    subcategories:
+      - { id: sub-medical,     name: medical,     sort_order: 1 }
+      - { id: sub-working-out, name: working out, sort_order: 2 }
+      - { id: sub-sports-gear, name: sports gear, sort_order: 3 }
+
+  - id: cat-apparel
+    name: apparel
+    icon: apparel
+    color: "#f783ac"
+    sort_order: 4
+    subcategories:
+      - { id: sub-clothes, name: clothes, sort_order: 1 }
+      - { id: sub-shoes,   name: shoes,   sort_order: 2 }
+
+  - id: cat-transportation
+    name: transportation
+    icon: transportation
+    color: "#74c0fc"
+    sort_order: 5
+    subcategories:
+      - { id: sub-public, name: public, sort_order: 1 }
+      - { id: sub-taxi,   name: taxi,   sort_order: 2 }
+      - { id: sub-car,    name: car,    sort_order: 3 }
+
+  - id: cat-entertainment
+    name: entertainment
+    icon: entertainment
+    color: "#e599f7"
+    sort_order: 7
+    subcategories:
+      - { id: sub-books,       name: books,       sort_order: 1 }
+      - { id: sub-movie-show,  name: movie/show,  sort_order: 2 }
+      - { id: sub-video-games, name: video games, sort_order: 3 }
+
+  - id: cat-education
+    name: education
+    icon: education
+    color: "#63e6be"
+    sort_order: 8
+    subcategories:
+      - { id: sub-education, name: education, sort_order: 1 }
+
+  - id: cat-electronics
+    name: electronics
+    icon: electronics
+    color: "#66d9e8"
+    sort_order: 9
+    subcategories:
+      - { id: sub-electronics-general, name: electronics, sort_order: 1 }
+
+  - id: cat-travel
+    name: travel
+    icon: travel
+    color: "#38d9a9"
+    sort_order: 10
+    subcategories:
+      - { id: sub-travel, name: travel, sort_order: 1 }
+
+  - id: cat-gift
+    name: gift
+    icon: gift
+    color: "#ff8787"
+    sort_order: 11
+    subcategories:
+      - { id: sub-gift,     name: gift,     sort_order: 1 }
+      - { id: sub-donation, name: donation, sort_order: 2 }
+
+  - id: cat-insurance
+    name: insurance
+    icon: insurance
+    color: "#fcc419"
+    sort_order: 12
+    subcategories:
+      - { id: sub-insurance, name: insurance, sort_order: 1 }
+
+  - id: cat-living
+    name: living
+    icon: living
+    color: "#ffa94d"
+    sort_order: 13
+    subcategories:
+      - { id: sub-rent,     name: rent,     sort_order: 1 }
+      - { id: sub-mortgage, name: mortgage, sort_order: 2 }
+      - { id: sub-fees,     name: fees,     sort_order: 3 }
+
+  - id: cat-subscriptions
+    name: subscriptions
+    icon: subscriptions
+    color: "#66d9e8"
+    sort_order: 14
+    subcategories:
+      - { id: sub-subscriptions, name: subscriptions, sort_order: 1 }
+
+  - id: cat-other
+    name: other
+    icon: other
+    color: "#868e96"
+    sort_order: 15
+    subcategories:
+      - { id: sub-other-general, name: other, sort_order: 1 }
