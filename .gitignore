@@ -10,3 +10,7 @@ coverage/
 repomix-output*
 .repomixignore
 docs/
+CLAUDE.local.md
+config/users.yaml
+config/categories.yaml
+HANDOVER.md

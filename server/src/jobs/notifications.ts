@@ -4,7 +4,7 @@ import db from "../db/connection.js";
 // Set VAPID details once when this module loads (only if keys are present)
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(
-    "mailto:noreply@your-domain.com",
+    `mailto:noreply@${process.env.DOMAIN || "xpensify.local"}`,
     process.env.VAPID_PUBLIC_KEY,
     process.env.VAPID_PRIVATE_KEY
   );

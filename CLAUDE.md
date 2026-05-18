@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-xpensify is an offline-first PWA for household expense tracking. Two users (Alice and Bob) share a dataset across devices. The primary design goal is **speed of expense entry** (<5 seconds). Local-first via IndexedDB with sync-on-use to a server.
+xpensify is an offline-first PWA for household expense tracking. Two-to-four users share a dataset across devices. The primary design goal is **speed of expense entry** (<5 seconds). Local-first via IndexedDB with sync-on-use to a server.
 
 ## Target Devices
 
@@ -72,7 +72,10 @@ docker compose up -d --build  # Build and start
 ```bash
 npx tsx scripts/import-csv.ts --dry-run /path/to/expenses.csv  # Preview
 npx tsx scripts/import-csv.ts /path/to/expenses.csv             # Import
-# Aliases: baby→charlie, health→medical. Defaults user to "alice".
+# Default user (when CSV row has no `user` column): DEFAULT_IMPORT_USER env var,
+# else the alphabetically first user in the DB.
+# Pass --legacy-aliases for the deployer-specific baby→charlie / health→medical
+# normalization + post-import category renames (off by default).
 ```
 
 ### PWA Icons
@@ -92,11 +95,12 @@ Defined in `.env` (gitignored) and `.env.example`. Loaded by `docker compose` vi
 - `SESSION_SECRET` — declared but currently unused (sessions are opaque UUIDs in SQLite, not signed tokens).
 - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` — **runtime**, used by `web-push` on the server. Push is silently skipped if unset.
 - `VITE_VAPID_PUBLIC_KEY` — **build-time**, baked into the client bundle for `pushManager.subscribe()`. Must match `VAPID_PUBLIC_KEY`. Passed as `ARG` in Dockerfile.
+- `VITE_APPLE_SHORTCUT_URL` — **build-time**, optional. Public iCloud Shortcut URL surfaced as the one-tap install button on Settings → API tokens. Unset → that step shows a placeholder explaining the deployer needs to publish their own shortcut. Passed as `ARG` in Dockerfile.
 - `DB_PATH` — SQLite file path (default `./data/xpensify.db`, `/app/data/xpensify.db` in container).
 - `PORT` — server port (default 3000).
 - `DOMAIN` — e.g. `your-domain.com`. Used by the CSRF middleware to validate the `Origin` header on mutations. **Unset in dev** — CSRF check is skipped so the Vite proxy works.
 - `NODE_ENV=production` — gates static-file serving + the `Secure` flag on session cookies.
-- `ALICE_PASSWORD` / `BOB_PASSWORD` — initial seed passwords. If unset, `seed-runner.ts` generates a random UUID and prints it to stdout **once**, only on first seed (existing users are skipped).
+- `<USERNAME>_PASSWORD` — initial seed password for each user defined in `config/users.yaml`. The env var name is the uppercased username (e.g. `ALICE_PASSWORD`). If unset, `seed-runner.ts` generates a random UUID and prints it to stdout **once**, only on first seed (existing users are skipped).
 - `GEMINI_API_KEY` — optional. When set, the Apple Pay webhook calls Gemini Flash to suggest categories for never-seen merchants. Unset → the suggestion path is a silent no-op; pending rows are created without a category and the user picks one in Confirm.
 - `BACKUP_DIR` — when set, the daily 03:30 cron snapshots SQLite via the online backup API into this directory (`xpensify-YYYY-MM-DD-HHMM.db`, 30-day retention by mtime). Unset → backups disabled, silent no-op. In Docker, point inside `/app/data` so it lands on the mounted volume.
 
@@ -277,10 +281,9 @@ Three stages in `Dockerfile`:
 ### Build performance
 
 - Dockerfile header is `# syntax=docker/dockerfile:1.7` so BuildKit cache-mount syntax works. Every `npm ci` uses `--mount=type=cache,target=/root/.npm,sharing=locked` plus `--prefer-offline --no-audit --no-fund`. A `package-lock.json` bump still busts the layer, but npm's on-disk cache survives, so the re-install copies from disk instead of re-downloading from the registry.
-- Cold build on the VPS is ~40s; fully cached rebuild is ~1s. The single largest step is client `tsc && vite build` (~16s).
+- The single largest step is client `tsc && vite build` (~16s).
 - `rollup-plugin-visualizer` emits `client/dist/bundle-stats.html` (treemap, gzip sizes) on every production build. Manual chunks split `motion` and `dexie` out of the main bundle (see `vite.config.ts`).
-- The VPS runs a **weekly Docker prune** via alice's user crontab: `0 4 * * 0 docker buildx prune -f --keep-storage 5GB && docker image prune -af --filter "until=168h"`, logged to `~/docker-prune.log`. The original trigger was disk pressure (85% full) from 84 GB of accumulated buildx cache silently slowing overlay2 writes. Don't remove this cron without replacing it — the cache grows unbounded otherwise.
-- The VPS also runs a **daily off-site backup sync** via alice's crontab at 05:00: `rclone sync /srv/xpensify/data/backups/ r2:xpensify/`, logged to `~/xpensify-rclone.log`. Mirrors the in-app SQLite snapshots (see `BACKUP_DIR` above) into a Cloudflare R2 bucket (EU jurisdiction, Standard storage class). rclone config lives at `~/.config/rclone/rclone.conf` (mode 0600). The R2 token is scoped to the `xpensify` bucket with Object Read & Write. Note: `data/backups/` is root-owned (container writes it), but world-readable, so alice's cron can read without sudo.
+- Backup strategy and host-cron details are documented in CLAUDE.local.md (gitignored).
 
 ## Test Infrastructure
 
@@ -299,7 +302,7 @@ Vitest in both packages, `*.test.ts` files live next to the file they test.
 - **`useLiveQuery` returns `undefined` initially**, not `[]`. Guard accordingly — don't `return null` from components, show a loading skeleton instead.
 - **`useLiveQuery` swallows errors** (logs to console). If a Dexie query fails (e.g. `orderBy` on non-indexed field), the result stays `undefined` forever with no visible error.
 - **Timestamps**: new expenses use full ISO with real H:M:S for within-day ordering. Backdated expenses use `T12:00:00.000Z`. Imported expenses also use noon.
-- **User IDs are UUIDs**: Alice = `00000000-0000-0000-0000-000000000001`, Bob = `...0002`. User display in History maps by UUID, not by name substring.
+- **User IDs are UUIDs** defined per-user in `config/users.yaml` (idempotent on seed — existing user rows are skipped, so UUIDs are stable across reseeds). The shipped example uses `00000000-0000-0000-0000-000000000001` / `...0002`. History maps user → label/color by UUID, not by name substring.
 - **`CREATE TABLE IF NOT EXISTS` doesn't add columns to existing tables.** Schema changes require `ALTER TABLE` on the live DB — add them to `server/src/db/migrate.ts` under `addColumnIfMissing`.
 - **Viewport meta** disables zoom (`maximum-scale=1, user-scalable=no`) to prevent iOS Safari zoom on input focus. `viewport-fit=cover` was removed — it caused an iOS PWA cold-start tab-bar-above-home-indicator regression.
 - **No shell transform** — `AuthenticatedShell` deliberately does not wrap content in a `transform`-ed ancestor. iOS Safari PWAs mis-measure fixed descendants inside transform'ed ancestors on cold start, leaving the bottom nav floating until the first touch reflow. Apply `max-w-[480px] mx-auto` on fixed children instead.
