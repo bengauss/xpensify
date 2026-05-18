@@ -70,6 +70,7 @@ beforeEach(async () => {
   await db.categories.clear();
   await db.subcategories.clear();
   await db.recurring_templates.clear();
+  await db.users.clear();
   localStorage.clear();
   syncStatus.value = { state: "idle", pendingCount: 0 };
   mockSyncPost.mockReset();
@@ -154,6 +155,45 @@ describe("sync engine — successful sync", () => {
     const arg = mockSyncPost.mock.calls[0][0];
     expect(arg.json.last_sync).toBe("2026-04-29 00:00:00");
     expect(arg.json.changes.map((e: any) => e.id)).toEqual(["p1"]);
+  });
+
+  it("reconciles users — upserts the server's users list into Dexie", async () => {
+    mockSyncPost.mockResolvedValue(jsonResponse({
+      server_changes: [],
+      sync_timestamp: "2026-04-30 12:00:00",
+      categories: [],
+      subcategories: [],
+      users: [
+        { id: "u1", username: "alice", display_name: "Alice", avatar_color: "#6c9cff" },
+        { id: "u2", username: "bob", display_name: "Bob", avatar_color: "#9775fa" },
+      ],
+    }));
+
+    await sync();
+
+    const stored = await db.users.toArray();
+    expect(stored).toHaveLength(2);
+    expect(await db.users.get("u1")).toMatchObject({ username: "alice", avatar_color: "#6c9cff" });
+    expect(await db.users.get("u2")).toMatchObject({ username: "bob", avatar_color: "#9775fa" });
+  });
+
+  it("reconciles users — removes stale local entries not in server response", async () => {
+    await db.users.put({ id: "stale", username: "old", display_name: "Old", avatar_color: "#000" });
+
+    mockSyncPost.mockResolvedValue(jsonResponse({
+      server_changes: [],
+      sync_timestamp: "2026-04-30 12:00:00",
+      categories: [],
+      subcategories: [],
+      users: [
+        { id: "u1", username: "alice", display_name: "Alice", avatar_color: "#6c9cff" },
+      ],
+    }));
+
+    await sync();
+
+    expect(await db.users.get("stale")).toBeUndefined();
+    expect(await db.users.get("u1")).toBeDefined();
   });
 
   it("reconciles categories — removes stale local entries not in server response", async () => {

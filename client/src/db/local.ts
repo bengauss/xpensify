@@ -72,6 +72,13 @@ export interface Subcategory {
   updated_at: string;
 }
 
+export interface User {
+  id: string;
+  username: string;
+  display_name: string;
+  avatar_color: string;
+}
+
 export interface RecurringTemplate {
   id: string;
   user_id: string;
@@ -103,6 +110,7 @@ class XpensifyDB extends Dexie {
   categories!: Table<Category, string>;
   subcategories!: Table<Subcategory, string>;
   recurring_templates!: Table<RecurringTemplate, string>;
+  users!: Table<User, string>;
 
   constructor() {
     super('xpensify');
@@ -141,6 +149,23 @@ class XpensifyDB extends Dexie {
         'id, category_id',
       recurring_templates:
         'id, user_id, category_id, frequency, active, next_due',
+    });
+
+    // v4: persist the household users list pushed down by /api/sync so the
+    // History tab can render each row's user badge from data rather than
+    // hardcoded UUIDs. No data migration needed — the table starts empty and
+    // gets populated on the next sync.
+    this.version(4).stores({
+      expenses:
+        'id, timestamp, category_id, sync_status, updated_at, [deleted+timestamp]',
+      categories:
+        'id',
+      subcategories:
+        'id, category_id',
+      recurring_templates:
+        'id, user_id, category_id, frequency, active, next_due',
+      users:
+        'id, username',
     });
   }
 }

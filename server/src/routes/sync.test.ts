@@ -5,19 +5,19 @@ import { mountRouter, jsonInit } from "../test/app.js";
 
 beforeAll(() => ensureMigrated());
 
-let benId: string;
-let yaraId: string;
-let benCookie: string;
-let yaraCookie: string;
+let userAId: string;
+let userBId: string;
+let userACookie: string;
+let userBCookie: string;
 const app = mountRouter("sync", sync);
 
 beforeEach(() => {
   resetDb();
   const users = seedTestUsers();
-  benId = users.alice.id;
-  yaraId = users.bob.id;
-  benCookie = sessionCookie(seedTestSession(benId));
-  yaraCookie = sessionCookie(seedTestSession(yaraId));
+  userAId = users.userA.id;
+  userBId = users.userB.id;
+  userACookie = sessionCookie(seedTestSession(userAId));
+  userBCookie = sessionCookie(seedTestSession(userBId));
 });
 
 async function postSync(cookie: string, body: unknown) {
@@ -33,11 +33,11 @@ describe("POST /api/sync — auth", () => {
 
 describe("POST /api/sync — initial sync (last_sync = null)", () => {
   it("returns all confirmed expenses including soft-deleted tombstones", async () => {
-    insertExpense({ user_id: benId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 1000 });
-    insertExpense({ user_id: benId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 2000, deleted: 1 });
-    insertExpense({ user_id: yaraId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 3000 });
+    insertExpense({ user_id: userAId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 1000 });
+    insertExpense({ user_id: userAId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 2000, deleted: 1 });
+    insertExpense({ user_id: userBId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 3000 });
 
-    const res = await postSync(benCookie, { changes: [], last_sync: null });
+    const res = await postSync(userACookie, { changes: [], last_sync: null });
     expect(res.status).toBe(200);
     const data = await res.json() as any;
     expect(data.server_changes).toHaveLength(3);
@@ -46,30 +46,57 @@ describe("POST /api/sync — initial sync (last_sync = null)", () => {
   });
 
   it("excludes pending expenses from initial sync", async () => {
-    insertExpense({ user_id: benId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 1000, status: "pending" });
-    insertExpense({ user_id: benId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 2000, status: "confirmed" });
+    insertExpense({ user_id: userAId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 1000, status: "pending" });
+    insertExpense({ user_id: userAId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 2000, status: "confirmed" });
 
-    const res = await postSync(benCookie, { changes: [], last_sync: null });
+    const res = await postSync(userACookie, { changes: [], last_sync: null });
     const data = await res.json() as any;
     expect(data.server_changes).toHaveLength(1);
     expect(data.server_changes[0].amount).toBe(2000);
   });
 
   it("returns full categories and subcategories", async () => {
-    const res = await postSync(benCookie, { changes: [], last_sync: null });
+    const res = await postSync(userACookie, { changes: [], last_sync: null });
     const data = await res.json() as any;
     expect(data.categories.length).toBeGreaterThan(10);
     expect(data.subcategories.length).toBeGreaterThan(10);
   });
 });
 
+describe("POST /api/sync — users payload", () => {
+  it("returns the household users with id/username/display_name/avatar_color", async () => {
+    const res = await postSync(userACookie, { changes: [], last_sync: null });
+    const data = await res.json() as any;
+    expect(Array.isArray(data.users)).toBe(true);
+    // Two seeded test users (alice + bob)
+    expect(data.users).toHaveLength(2);
+    for (const u of data.users) {
+      expect(Object.keys(u).sort()).toEqual(
+        ["avatar_color", "display_name", "id", "username"].sort(),
+      );
+      // EXPLICITLY ensure no password_hash or other server-only fields leak
+      expect("password_hash" in u).toBe(false);
+      expect("created_at" in u).toBe(false);
+    }
+    const usernames = data.users.map((u: any) => u.username).sort();
+    expect(usernames).toEqual(["alice", "bob"]);
+  });
+
+  it("returns users on delta sync too (not just initial)", async () => {
+    const res = await postSync(userACookie, { changes: [], last_sync: "2026-04-29 00:00:00" });
+    const data = await res.json() as any;
+    expect(Array.isArray(data.users)).toBe(true);
+    expect(data.users).toHaveLength(2);
+  });
+});
+
 describe("POST /api/sync — delta sync", () => {
   it("returns only records updated after last_sync", async () => {
-    const id1 = insertExpense({ user_id: benId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 1000, updated_at: "2026-04-29 10:00:00" });
+    const id1 = insertExpense({ user_id: userAId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 1000, updated_at: "2026-04-29 10:00:00" });
     const lastSync = "2026-04-29 12:00:00";
-    insertExpense({ user_id: benId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 2000, updated_at: "2026-04-30 10:00:00" });
+    insertExpense({ user_id: userAId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 2000, updated_at: "2026-04-30 10:00:00" });
 
-    const res = await postSync(benCookie, { changes: [], last_sync: lastSync });
+    const res = await postSync(userACookie, { changes: [], last_sync: lastSync });
     const data = await res.json() as any;
     expect(data.server_changes).toHaveLength(1);
     expect(data.server_changes[0].amount).toBe(2000);
@@ -78,7 +105,7 @@ describe("POST /api/sync — delta sync", () => {
   });
 
   it("returns server's now() as sync_timestamp", async () => {
-    const res = await postSync(benCookie, { changes: [], last_sync: null });
+    const res = await postSync(userACookie, { changes: [], last_sync: null });
     const data = await res.json() as any;
     expect(data.sync_timestamp).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
   });
@@ -89,7 +116,7 @@ describe("POST /api/sync — last-write-wins by server time", () => {
     const id = crypto.randomUUID();
     const futureTimestamp = "2099-01-01 00:00:00";
 
-    const res = await postSync(benCookie, {
+    const res = await postSync(userACookie, {
       changes: [
         {
           id,
@@ -114,11 +141,11 @@ describe("POST /api/sync — last-write-wins by server time", () => {
   it("rejects client write when server has newer version, returns server row in delta", async () => {
     const id = crypto.randomUUID();
     // Insert a row, then force its updated_at to be far in the future
-    insertExpense({ id, user_id: benId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 5000 });
+    insertExpense({ id, user_id: userAId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 5000 });
     db.prepare(`UPDATE expenses SET updated_at = '2099-01-01 00:00:00', amount = 5000 WHERE id = ?`).run(id);
 
     // Client sends a stale write
-    const res = await postSync(benCookie, {
+    const res = await postSync(userACookie, {
       changes: [
         {
           id,
@@ -145,7 +172,7 @@ describe("POST /api/sync — last-write-wins by server time", () => {
 describe("POST /api/sync — appliedIds excludes echoed changes", () => {
   it("does NOT include accepted insert in the delta response", async () => {
     const id = crypto.randomUUID();
-    const res = await postSync(benCookie, {
+    const res = await postSync(userACookie, {
       changes: [
         {
           id,
@@ -166,9 +193,9 @@ describe("POST /api/sync — appliedIds excludes echoed changes", () => {
 describe("POST /api/sync — cross-user writes", () => {
   it("Alice can edit Bob's expense (shared household ledger)", async () => {
     const id = crypto.randomUUID();
-    insertExpense({ id, user_id: yaraId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 1000, updated_at: "2026-04-29 00:00:00" });
+    insertExpense({ id, user_id: userBId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 1000, updated_at: "2026-04-29 00:00:00" });
 
-    const res = await postSync(benCookie, {
+    const res = await postSync(userACookie, {
       changes: [
         {
           id,
@@ -186,14 +213,14 @@ describe("POST /api/sync — cross-user writes", () => {
     const row = db.prepare("SELECT amount, user_id FROM expenses WHERE id = ?").get(id) as { amount: number; user_id: string };
     expect(row.amount).toBe(9999);
     // user_id is unchanged — original owner remains
-    expect(row.user_id).toBe(yaraId);
+    expect(row.user_id).toBe(userBId);
   });
 });
 
 describe("POST /api/sync — validation", () => {
   it("rejects expense where subcategory does not belong to category", async () => {
     const id = crypto.randomUUID();
-    const res = await postSync(benCookie, {
+    const res = await postSync(userACookie, {
       changes: [
         {
           id,
@@ -213,7 +240,7 @@ describe("POST /api/sync — validation", () => {
 
   it("rejects oversized notes (> 1000 chars)", async () => {
     const id = crypto.randomUUID();
-    const res = await postSync(benCookie, {
+    const res = await postSync(userACookie, {
       changes: [
         {
           id,
@@ -235,14 +262,14 @@ describe("POST /api/sync — validation", () => {
   it("returns 400 for invalid JSON body", async () => {
     const res = await app.request("/api/sync", {
       method: "POST",
-      headers: { "content-type": "application/json", cookie: benCookie },
+      headers: { "content-type": "application/json", cookie: userACookie },
       body: "{not json",
     });
     expect(res.status).toBe(400);
   });
 
   it("ignores changes with empty/missing id", async () => {
-    const res = await postSync(benCookie, {
+    const res = await postSync(userACookie, {
       changes: [
         {
           id: "",
@@ -264,9 +291,9 @@ describe("POST /api/sync — validation", () => {
 describe("POST /api/sync — soft delete propagation", () => {
   it("soft-deleted expense flows through sync as deleted=1, not hard delete", async () => {
     const id = crypto.randomUUID();
-    insertExpense({ id, user_id: benId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 1000, updated_at: "2026-04-29 00:00:00" });
+    insertExpense({ id, user_id: userAId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 1000, updated_at: "2026-04-29 00:00:00" });
 
-    const res = await postSync(benCookie, {
+    const res = await postSync(userACookie, {
       changes: [
         {
           id,
@@ -291,7 +318,7 @@ describe("POST /api/sync — recategorization signal", () => {
     const id = crypto.randomUUID();
     insertExpense({
       id,
-      user_id: benId,
+      user_id: userAId,
       category_id: "cat-food",
       subcategory_id: "sub-groceries",
       amount: 1000,
@@ -306,7 +333,7 @@ describe("POST /api/sync — recategorization signal", () => {
     ).run();
 
     // User edits the expense, changing category to household/other
-    const res = await postSync(benCookie, {
+    const res = await postSync(userACookie, {
       changes: [
         {
           id,
@@ -335,7 +362,7 @@ describe("POST /api/sync — recategorization signal", () => {
     const id = crypto.randomUUID();
     insertExpense({
       id,
-      user_id: benId,
+      user_id: userAId,
       category_id: "cat-food",
       subcategory_id: "sub-groceries",
       amount: 1000,
@@ -348,7 +375,7 @@ describe("POST /api/sync — recategorization signal", () => {
        VALUES ('billa', 'cat-food', 'sub-groceries', 3, '2026-04-29T00:00:00.000Z')`,
     ).run();
 
-    await postSync(benCookie, {
+    await postSync(userACookie, {
       changes: [
         {
           id,
@@ -374,7 +401,7 @@ describe("POST /api/sync — recategorization signal", () => {
     const id = crypto.randomUUID();
     insertExpense({
       id,
-      user_id: benId,
+      user_id: userAId,
       category_id: "cat-food",
       subcategory_id: "sub-groceries",
       amount: 1000,
@@ -387,7 +414,7 @@ describe("POST /api/sync — recategorization signal", () => {
        VALUES ('billa', 'cat-food', 'sub-groceries', 3, '2026-04-29T00:00:00.000Z')`,
     ).run();
 
-    await postSync(benCookie, {
+    await postSync(userACookie, {
       changes: [
         {
           id,
@@ -414,7 +441,7 @@ describe("POST /api/sync — recategorization signal", () => {
     const id = crypto.randomUUID();
     insertExpense({
       id,
-      user_id: benId,
+      user_id: userAId,
       category_id: "cat-food",
       subcategory_id: "sub-groceries",
       amount: 1000,
@@ -428,7 +455,7 @@ describe("POST /api/sync — recategorization signal", () => {
     ).run();
 
     // User soft-deletes the expense — deletion isn't a recategorization
-    await postSync(benCookie, {
+    await postSync(userACookie, {
       changes: [
         {
           id,

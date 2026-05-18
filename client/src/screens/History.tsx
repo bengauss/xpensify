@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "preact/hooks";
 import { useLocation } from "preact-iso";
 import Dexie from "dexie";
 import { db } from "@/db/local";
-import type { Expense, Category, Subcategory } from "@/db/local";
+import type { Expense, Category, Subcategory, User } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { categoryIcons } from "@/icons";
 import { DetailSheet } from "@/components/DetailSheet";
@@ -23,12 +23,39 @@ import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
 const INITIAL_DAYS = 60;
 const INCREMENT_DAYS = 60;
 
-const USER_STYLES: Array<{ id: string; bg: string; text: string; label: string; name: string }> = [
-  { id: "00000000-0000-0000-0000-000000000001", bg: "#1a3066", text: "#6c9cff", label: "B", name: "Alice" },
-  { id: "00000000-0000-0000-0000-000000000002", bg: "#2d1a52", text: "#9775fa", label: "Y", name: "Bob" },
-];
+// Avatar background is a dim variant of avatar_color (each channel * 0.3),
+// approximating the original hand-picked #1a3066 / #2d1a52 dark backgrounds.
+// Restores per-user color differentiation without hardcoding a UUID table.
+function darkenHex(hex: string, factor: number): string {
+  const h = (hex || "").replace("#", "");
+  if (h.length !== 6) return "#1f2937";
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  if ([r, g, b].some((n) => Number.isNaN(n))) return "#1f2937";
+  const toHex = (n: number) => Math.max(0, Math.min(255, Math.round(n * factor))).toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
 
-const DEFAULT_USER_COLOR = { bg: "#1a3066", text: "#6c9cff", label: "?", name: "?" };
+const DEFAULT_USER_STYLE = { bg: "#1f2937", text: "#9ca3af", label: "?", name: "?" };
+
+interface UserStyle {
+  bg: string;
+  text: string;
+  label: string;
+  name: string;
+}
+
+function styleForUser(user: User | undefined): UserStyle {
+  if (!user) return DEFAULT_USER_STYLE;
+  const label = (user.display_name || user.username || "?")[0]?.toUpperCase() ?? "?";
+  return {
+    bg: darkenHex(user.avatar_color, 0.3),
+    text: user.avatar_color,
+    label,
+    name: user.display_name || user.username,
+  };
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -52,14 +79,6 @@ function formatDateLabel(key: string): string {
 function formatFullDate(key: string): string {
   const d = new Date(key + "T12:00:00");
   return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
-}
-
-function getUserStyle(userId: string): { bg: string; text: string; label: string; name: string } {
-  for (const style of USER_STYLES) {
-    if (style.id === userId) return style;
-  }
-  const initial = (userId ?? "?")[0]?.toUpperCase() ?? "?";
-  return { ...DEFAULT_USER_COLOR, label: initial, name: userId };
 }
 
 interface DayGroup {
@@ -185,16 +204,19 @@ interface ExpenseRowProps {
   expense: Expense;
   category?: Category;
   subcategory?: Subcategory;
+  userStyle: UserStyle;
   onTap: () => void;
 }
 
-function ExpenseRow({ expense, category, subcategory, onTap }: ExpenseRowProps) {
+function ExpenseRow({ expense, category, subcategory, userStyle, onTap }: ExpenseRowProps) {
   const iconKey = (category?.icon ?? "other").toLowerCase();
   const IconComponent = categoryIcons[iconKey] ?? categoryIcons["other"];
   const color = category?.color ?? "#868e96";
 
-  // Determine user style — Alice and Bob hardcoded by user_id heuristic
-  const style = getUserStyle(expense.user_id);
+  // User badge style is supplied by the parent from the live-queried users
+  // table. On cold start (before sync), the parent falls back to a generic
+  // "?" style so the row still renders.
+  const style = userStyle;
   const userLabel = style.label;
 
   const isRecurring = expense.source === "recurring";
@@ -347,10 +369,11 @@ interface ExpenseDetailProps {
   expense: Expense;
   category?: Category;
   subcategory?: Subcategory;
+  userStyle: UserStyle;
   onClose: () => void;
 }
 
-function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetailProps) {
+function ExpenseDetail({ expense, category, subcategory, userStyle, onClose }: ExpenseDetailProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const { route } = useLocation();
 
@@ -438,7 +461,6 @@ function ExpenseDetail({ expense, category, subcategory, onClose }: ExpenseDetai
     route("/");
   }
 
-  const userStyle = getUserStyle(expense.user_id);
   const editPress = usePressScale<HTMLButtonElement>(0.97);
   const deletePress = usePressScale<HTMLButtonElement>(0.97);
 
@@ -640,6 +662,13 @@ export default function HistoryScreen() {
   const categories = CATEGORIES;
   const subcategories = SUBCATEGORIES;
 
+  // Live-queried household users so the per-row badge labels/colors are
+  // data-driven, not hardcoded by UUID. Returns `undefined` on first render
+  // (Dexie liveQuery) and `[]` cold-start before the first sync completes —
+  // the lookup falls back to a generic "?" style in those cases.
+  const users = useLiveQuery(() => db.users.toArray(), []);
+  const userMap = new Map<string, User>((users ?? []).map((u) => [u.id, u]));
+
   // Entrance animation: text slides in, then amounts fade in.
   // Depend on the expenses reference (not just length) so date-edits that
   // reorder rows across day groups — which remount the row into a new parent
@@ -762,6 +791,7 @@ export default function HistoryScreen() {
                   expense={expense}
                   category={categoryMap.get(expense.category_id)}
                   subcategory={subcategoryMap.get(expense.subcategory_id)}
+                  userStyle={styleForUser(userMap.get(expense.user_id))}
                   onTap={() => setSelectedExpense(expense)}
                 />
               ))}
@@ -783,6 +813,7 @@ export default function HistoryScreen() {
             expense={selectedExpense}
             category={selectedCategory}
             subcategory={selectedSubcategory}
+            userStyle={styleForUser(userMap.get(selectedExpense.user_id))}
             onClose={() => setSelectedExpense(null)}
           />
         )}

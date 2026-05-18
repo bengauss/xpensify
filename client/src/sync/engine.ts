@@ -43,12 +43,13 @@ export async function sync(): Promise<void> {
     sync_timestamp: string;
     categories?: import("@/db/local").Category[];
     subcategories?: import("@/db/local").Subcategory[];
+    users?: import("@/db/local").User[];
   };
 
   // Apply all sync changes in a single transaction so liveQuery fires once
   await db.transaction(
     "rw",
-    [db.expenses, db.categories, db.subcategories],
+    [db.expenses, db.categories, db.subcategories, db.users],
     async () => {
       // Mark the records we sent as synced
       if (pending.length > 0) {
@@ -76,6 +77,18 @@ export async function sync(): Promise<void> {
         const staleIds = localSubs.filter((s) => !serverSubIds.has(s.id)).map((s) => s.id);
         if (staleIds.length > 0) await db.subcategories.bulkDelete(staleIds);
         await db.subcategories.bulkPut(data.subcategories);
+      }
+
+      // Reconcile users list the same way categories does: compute stale ids
+      // (local - server), bulkDelete, bulkPut. Empty `users` array is treated
+      // as "server didn't send" and skipped rather than wiping the local
+      // table — defensive against old servers / unexpected payloads.
+      if (data.users && data.users.length > 0) {
+        const serverUserIds = new Set(data.users.map((u) => u.id));
+        const localUsers = await db.users.toArray();
+        const staleIds = localUsers.filter((u) => !serverUserIds.has(u.id)).map((u) => u.id);
+        if (staleIds.length > 0) await db.users.bulkDelete(staleIds);
+        await db.users.bulkPut(data.users);
       }
     }
   );

@@ -215,6 +215,15 @@ const sync = new Hono<{ Variables: Variables }>()
       .prepare(`SELECT * FROM subcategories ORDER BY sort_order`)
       .all();
 
+    // Always return full users list — small, infrequently-changing, and
+    // EXPLICITLY excluding password_hash and other sensitive/internal columns.
+    // History.tsx reads this to render the per-user initial badge.
+    const users = db
+      .prepare(
+        `SELECT id, username, display_name, avatar_color FROM users ORDER BY username`,
+      )
+      .all();
+
     // sync_timestamp: server's current time
     const syncTimestamp = (
       db.prepare("SELECT datetime('now') as now").get() as { now: string }
@@ -225,6 +234,7 @@ const sync = new Hono<{ Variables: Variables }>()
       sync_timestamp: syncTimestamp,
       categories,
       subcategories,
+      users,
     });
   });
 
