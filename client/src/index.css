@@ -36,20 +36,24 @@ html, body {
   --color-text-ghost: #3a3a44;
 
   /* Category colors */
+  /* If you add a custom category in config/categories.yaml with a new id,
+     add a matching --color-cat-<id-suffix> variable here for the UI to pick
+     up its color. The synced category.color from the server is for the
+     category list / drilldown UI; the @theme variables drive Tailwind
+     utilities like bg-cat-food. */
   --color-cat-food: #ff6b6b;
-  --color-cat-living: #74c0fc;
-  --color-cat-household: #ffa94d;
-  --color-cat-transportation: #69db7c;
-  --color-cat-health: #9775fa;
-  --color-cat-subscriptions: #66d9e8;
-  --color-cat-entertainment: #e599f7;
-  --color-cat-insurance: #ff8787;
+  --color-cat-household: #ffd43b;
+  --color-cat-health: #69db7c;
   --color-cat-apparel: #f783ac;
-  --color-cat-electronics: #ffd43b;
-  --color-cat-charlie: #fcc419;
+  --color-cat-transportation: #74c0fc;
+  --color-cat-entertainment: #e599f7;
   --color-cat-education: #63e6be;
+  --color-cat-electronics: #66d9e8;
   --color-cat-travel: #38d9a9;
-  --color-cat-gift: #e599f7;
+  --color-cat-gift: #ff8787;
+  --color-cat-insurance: #fcc419;
+  --color-cat-living: #ffa94d;
+  --color-cat-subscriptions: #66d9e8;
   --color-cat-other: #868e96;
 
   /* Spacing */

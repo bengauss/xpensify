@@ -1,3 +1,10 @@
+// Offline-bootstrap copy of the category list. The server is the source of
+// truth — on every sync the client receives the full categories +
+// subcategories list from `/api/sync` and bulk-replaces this seed in Dexie.
+// This file only matters before the first sync completes on a fresh device
+// (≤1s on a normal connection). If the deployer added custom categories in
+// `config/categories.yaml`, those won't appear here, but they'll arrive in
+// the first sync — so it's a brief mismatch, not a correctness problem.
 import type { Category, Subcategory } from "@/db/local";
 
 const NOW = new Date().toISOString();
@@ -8,7 +15,6 @@ export const CATEGORIES: Category[] = [
   { id: "cat-health",         name: "health",         icon: "health",         color: "#69db7c", sort_order: 3,  created_at: NOW, updated_at: NOW },
   { id: "cat-apparel",        name: "apparel",        icon: "apparel",        color: "#f783ac", sort_order: 4,  created_at: NOW, updated_at: NOW },
   { id: "cat-transportation", name: "transportation", icon: "transportation", color: "#74c0fc", sort_order: 5,  created_at: NOW, updated_at: NOW },
-  { id: "cat-charlie",           name: "charlie",           icon: "charlie",           color: "#9775fa", sort_order: 6,  created_at: NOW, updated_at: NOW },
   { id: "cat-entertainment",  name: "entertainment",  icon: "entertainment",  color: "#e599f7", sort_order: 7,  created_at: NOW, updated_at: NOW },
   { id: "cat-education",      name: "education",      icon: "education",      color: "#63e6be", sort_order: 8,  created_at: NOW, updated_at: NOW },
   { id: "cat-electronics",    name: "electronics",    icon: "electronics",    color: "#66d9e8", sort_order: 9,  created_at: NOW, updated_at: NOW },
@@ -49,7 +55,6 @@ export const SUBCATEGORIES: Subcategory[] = [
   { id: "sub-clothes",             category_id: "cat-apparel",        name: "clothes",       sort_order: 1, created_at: NOW, updated_at: NOW },
   { id: "sub-shoes",               category_id: "cat-apparel",        name: "shoes",         sort_order: 2, created_at: NOW, updated_at: NOW },
   { id: "sub-electronics-general", category_id: "cat-electronics",    name: "electronics",   sort_order: 1, created_at: NOW, updated_at: NOW },
-  { id: "sub-charlie-general",        category_id: "cat-charlie",           name: "charlie",          sort_order: 1, created_at: NOW, updated_at: NOW },
   { id: "sub-education",           category_id: "cat-education",      name: "education",     sort_order: 1, created_at: NOW, updated_at: NOW },
   { id: "sub-travel",              category_id: "cat-travel",         name: "travel",        sort_order: 1, created_at: NOW, updated_at: NOW },
   { id: "sub-gift",                category_id: "cat-gift",           name: "gift",          sort_order: 1, created_at: NOW, updated_at: NOW },
