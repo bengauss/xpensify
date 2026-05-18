@@ -19,6 +19,8 @@ COPY client/ ./
 # VITE_* env vars must be present at build time for import.meta.env
 ARG VITE_VAPID_PUBLIC_KEY
 ENV VITE_VAPID_PUBLIC_KEY=$VITE_VAPID_PUBLIC_KEY
+ARG VITE_APPLE_SHORTCUT_URL
+ENV VITE_APPLE_SHORTCUT_URL=$VITE_APPLE_SHORTCUT_URL
 RUN npm run build
 
 # Stage 2: Build server
@@ -42,8 +44,13 @@ COPY --from=server-build /app/server/node_modules ./server/node_modules
 RUN cd server && npm prune --omit=dev
 
 COPY --from=server-build /app/server/dist ./server/dist
-COPY --from=server-build /app/server/src/db/*.sql ./server/dist/db/
+COPY --from=server-build /app/server/src/db/schema.sql ./server/dist/db/
 COPY --from=client-build /app/client/dist ./client/dist
+
+# Categories + users YAML configs. The seeder resolves them from
+# process.cwd() (`/app`) → `config/...`, so this path matches what
+# loadCategoriesConfig / loadUsersConfig search for.
+COPY config/ /app/config/
 
 ENV NODE_ENV=production
 ENV PORT=3000

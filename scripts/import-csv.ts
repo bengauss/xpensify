@@ -19,21 +19,28 @@ const Database = require("better-sqlite3") as typeof import("better-sqlite3").de
 
 const args = process.argv.slice(2);
 let dryRun = false;
+let legacyAliases = false;
 let csvFile: string | undefined;
 
 for (const arg of args) {
   if (arg === "--dry-run") {
     dryRun = true;
+  } else if (arg === "--legacy-aliases") {
+    legacyAliases = true;
   } else {
     csvFile = arg;
   }
 }
 
 if (!csvFile) {
-  console.error("Usage: npx tsx scripts/import-csv.ts [--dry-run] <csv-file>");
+  console.error("Usage: npx tsx scripts/import-csv.ts [--dry-run] [--legacy-aliases] <csv-file>");
   console.error("");
   console.error("  Set DB_PATH env var or create a .env file in the project root.");
   console.error("  The script reads .env automatically to match the server's DB path.");
+  console.error("");
+  console.error("  --legacy-aliases  Apply deployer-specific CSV migration aliases");
+  console.error("                    (baby→charlie, health→medical, plus post-import");
+  console.error("                    category renames). Off by default.");
   process.exit(1);
 }
 
@@ -168,6 +175,13 @@ for (const user of userRows) {
   userMap.set(user.username.toLowerCase(), user.id);
 }
 
+// Default user for CSV rows missing a `user` column. Honors DEFAULT_IMPORT_USER
+// env var; otherwise falls back to the first user by username (deterministic).
+const defaultUsernameFromDb = db
+  .prepare(`SELECT username FROM users ORDER BY username LIMIT 1`)
+  .get() as { username: string } | undefined;
+const defaultUsername = (process.env.DEFAULT_IMPORT_USER || defaultUsernameFromDb?.username || "").toLowerCase();
+
 // Counters
 let skippedEmpty = 0;
 let skippedUnknownCategory = 0;
@@ -197,10 +211,11 @@ const doImport = db.transaction(() => {
     const subcategoryName = (row["subcategory"] ?? "").toLowerCase();
     const amountRaw = row["amount in EUR"] ?? "0";
     const note = row["note"] ?? null;
-    const username = (row["user"] ?? "alice").toLowerCase();
+    const username = (row["user"] || defaultUsername).toLowerCase();
 
-    // Normalize category aliases
-    const normalizedCategory = categoryName === "baby" ? "charlie" : categoryName;
+    // Normalize category aliases (legacy-only).
+    const normalizedCategory =
+      legacyAliases && categoryName === "baby" ? "charlie" : categoryName;
 
     // Lookup category
     const categoryId = categoryMap.get(normalizedCategory);
@@ -212,13 +227,15 @@ const doImport = db.transaction(() => {
       continue;
     }
 
-    // Normalize subcategory aliases
+    // Normalize subcategory aliases (legacy-only).
     let resolvedSubcategoryName = subcategoryName;
-    if (normalizedCategory === "health" && subcategoryName === "health") {
-      resolvedSubcategoryName = "medical";
-    }
-    if (normalizedCategory === "charlie" && subcategoryName === "charlie") {
-      resolvedSubcategoryName = "charlie";
+    if (legacyAliases) {
+      if (normalizedCategory === "health" && subcategoryName === "health") {
+        resolvedSubcategoryName = "medical";
+      }
+      if (normalizedCategory === "charlie" && subcategoryName === "charlie") {
+        resolvedSubcategoryName = "charlie";
+      }
     }
 
     // Lookup subcategory
@@ -287,8 +304,8 @@ if (dryRun) {
 // Post-import backfill (non-dry-run only)
 // ---------------------------------------------------------------------------
 
-if (!dryRun) {
-  console.log("\n--- Post-import Backfill ---");
+if (!dryRun && legacyAliases) {
+  console.log("\n--- Post-import Backfill (legacy aliases) ---");
 
   // Rename health -> medical
   const healthCat = db

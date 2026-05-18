@@ -544,7 +544,7 @@ function GenerateTokenSheet({
         </h2>
         <input
           type="text"
-          placeholder="alice's iphone"
+          placeholder="my iphone"
           value={name}
           onInput={(e) => setName((e.target as HTMLInputElement).value)}
           class="rounded-lg bg-bg-primary px-3 py-2.5 text-sm text-text-primary outline-none border border-text-ghost/20"
@@ -691,22 +691,33 @@ function SetupInstructions() {
           <div class="font-medium mb-1" style={{ color: "var(--color-text-primary)" }}>
             install the prebuilt shortcut on your iphone
           </div>
-          <p class="text-xs mb-2" style={{ color: "var(--color-text-secondary)" }}>
-            open this link on the iphone you pay with — tap "add shortcut" when the shortcuts app prompts.
-          </p>
-          <a
-            href="https://www.icloud.com/shortcuts/c8e046508fe8429fabe7ca92c2596b8d"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-md"
-            style={{
-              background: "var(--color-bg-elevated)",
-              color: "var(--color-accent)",
-              border: "1px solid var(--color-border)",
-            }}
-          >
-            get the xpensify shortcut →
-          </a>
+          {import.meta.env.VITE_APPLE_SHORTCUT_URL ? (
+            <>
+              <p class="text-xs mb-2" style={{ color: "var(--color-text-secondary)" }}>
+                open this link on the iphone you pay with — tap "add shortcut" when the shortcuts app prompts.
+              </p>
+              <a
+                href={import.meta.env.VITE_APPLE_SHORTCUT_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-md"
+                style={{
+                  background: "var(--color-bg-elevated)",
+                  color: "var(--color-accent)",
+                  border: "1px solid var(--color-border)",
+                }}
+              >
+                get the xpensify shortcut →
+              </a>
+            </>
+          ) : (
+            <p class="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+              build your own iOS shortcut that POSTs to <code>/api/shortcuts/expense</code>
+              {" "}with a Bearer token. publish it to iCloud and set
+              {" "}<code>VITE_APPLE_SHORTCUT_URL</code> in your build env to surface a
+              {" "}one-tap install link here.
+            </p>
+          )}
         </li>
         <li>
           <div class="font-medium mb-1" style={{ color: "var(--color-text-primary)" }}>
