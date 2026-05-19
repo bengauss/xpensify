@@ -33,6 +33,7 @@ function setUser(user: User | null): void {
 }
 
 export const currentUser = signal<User | null>(loadCachedUser());
+export const isSessionExpired = signal<boolean>(false);
 
 export async function login(username: string, password: string): Promise<void> {
   const res = await api.api.auth.login.$post({ json: { username, password } });
@@ -44,6 +45,7 @@ export async function login(username: string, password: string): Promise<void> {
 
   const user = await res.json() as User;
   setUser(user);
+  isSessionExpired.value = false;
 }
 
 export async function logout(): Promise<void> {
@@ -53,6 +55,7 @@ export async function logout(): Promise<void> {
     // Network failure — still wipe local state so another user can't reuse the device
   }
   setUser(null);
+  isSessionExpired.value = false;
   localStorage.removeItem("xpensify_last_sync");
   try {
     await db.delete();
@@ -76,6 +79,10 @@ export async function checkAuth(): Promise<void> {
   }
 
   if (res.status === 401) {
+    if (currentUser.value) {
+      isSessionExpired.value = true;
+      return;
+    }
     setUser(null);
     return;
   }
@@ -83,6 +90,7 @@ export async function checkAuth(): Promise<void> {
   if (res.ok) {
     const user = await res.json() as User;
     setUser(user);
+    isSessionExpired.value = false;
   }
   // Other statuses (5xx, etc.) — leave cached user alone; transient server
   // problems must not log the user out.

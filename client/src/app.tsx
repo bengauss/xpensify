@@ -106,12 +106,15 @@ function AppRoutes() {
   return <AuthenticatedShell />;
 }
 
+import { ReauthOverlay } from "@/components/ReauthOverlay";
+
 export function App() {
   return (
     <ErrorBoundary>
       <LocationProvider>
         <AuthGate />
         <AppRoutes />
+        <ReauthOverlay />
       </LocationProvider>
     </ErrorBoundary>
   );

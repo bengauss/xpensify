@@ -279,7 +279,8 @@ const recurring = new Hono<{ Variables: Variables }>()
       return c.json({ error: "No fields to update" }, 400);
     }
 
-    fields.push("updated_at = datetime('now')");
+    fields.push("updated_at = ?");
+    values.push(new Date().toISOString());
     values.push(id, userId);
 
     db.prepare(

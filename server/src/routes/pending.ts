@@ -150,9 +150,9 @@ const pending = new Hono<{ Variables: Variables }>()
            amount = ?,
            note = ?,
            status = 'confirmed',
-           updated_at = datetime('now')
+           updated_at = ?
          WHERE id = ?`
-      ).run(categoryId, subcategoryId, amountCents, note, id);
+      ).run(categoryId, subcategoryId, amountCents, note, nowIso, id);
 
       if (existing.source === "apple-pay" && merchantNormalized) {
         upsertMerchantMemory(

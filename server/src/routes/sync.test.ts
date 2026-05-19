@@ -83,7 +83,7 @@ describe("POST /api/sync — users payload", () => {
   });
 
   it("returns users on delta sync too (not just initial)", async () => {
-    const res = await postSync(userACookie, { changes: [], last_sync: "2026-04-29 00:00:00" });
+    const res = await postSync(userACookie, { changes: [], last_sync: "2026-04-29T00:00:00.000Z" });
     const data = await res.json() as any;
     expect(Array.isArray(data.users)).toBe(true);
     expect(data.users).toHaveLength(2);
@@ -92,9 +92,9 @@ describe("POST /api/sync — users payload", () => {
 
 describe("POST /api/sync — delta sync", () => {
   it("returns only records updated after last_sync", async () => {
-    const id1 = insertExpense({ user_id: userAId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 1000, updated_at: "2026-04-29 10:00:00" });
-    const lastSync = "2026-04-29 12:00:00";
-    insertExpense({ user_id: userAId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 2000, updated_at: "2026-04-30 10:00:00" });
+    const id1 = insertExpense({ user_id: userAId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 1000, updated_at: "2026-04-29T10:00:00.000Z" });
+    const lastSync = "2026-04-29T12:00:00.000Z";
+    insertExpense({ user_id: userAId, category_id: "cat-food", subcategory_id: "sub-groceries", amount: 2000, updated_at: "2026-04-30T10:00:00.000Z" });
 
     const res = await postSync(userACookie, { changes: [], last_sync: lastSync });
     const data = await res.json() as any;
@@ -107,14 +107,14 @@ describe("POST /api/sync — delta sync", () => {
   it("returns server's now() as sync_timestamp", async () => {
     const res = await postSync(userACookie, { changes: [], last_sync: null });
     const data = await res.json() as any;
-    expect(data.sync_timestamp).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    expect(data.sync_timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   });
 });
 
 describe("POST /api/sync — last-write-wins by server time", () => {
   it("server stamps its own updated_at, ignoring client value", async () => {
     const id = crypto.randomUUID();
-    const futureTimestamp = "2099-01-01 00:00:00";
+    const futureTimestamp = "2099-01-01T00:00:00.000Z";
 
     const res = await postSync(userACookie, {
       changes: [
@@ -134,7 +134,7 @@ describe("POST /api/sync — last-write-wins by server time", () => {
     const row = db.prepare("SELECT updated_at FROM expenses WHERE id = ?").get(id) as { updated_at: string };
     expect(row.updated_at).not.toBe(futureTimestamp);
     // Server-stamped time should be roughly now
-    const serverTime = new Date(row.updated_at + "Z").getTime();
+    const serverTime = new Date(row.updated_at).getTime();
     expect(Math.abs(Date.now() - serverTime)).toBeLessThan(60_000);
   });
 

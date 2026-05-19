@@ -56,14 +56,14 @@ export function processRecurringTemplates(): void {
     `SELECT 1 FROM expenses WHERE recurring_template_id = ? AND timestamp = ?`
   );
 
-  const insertExpense = db.prepare<[string, string, string, string, number, string | null, string, string]>(
+  const insertExpense = db.prepare<[string, string, string, string, number, string | null, string, string, string, string]>(
     `INSERT INTO expenses
-       (id, user_id, category_id, subcategory_id, amount, note, timestamp, source, recurring_template_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'recurring', ?)`
+       (id, user_id, category_id, subcategory_id, amount, note, timestamp, source, recurring_template_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'recurring', ?, ?, ?)`
   );
 
-  const updateNextDue = db.prepare<[string, string]>(
-    `UPDATE recurring_templates SET next_due = ?, updated_at = datetime('now') WHERE id = ?`
+  const updateNextDue = db.prepare<[string, string, string]>(
+    `UPDATE recurring_templates SET next_due = ?, updated_at = ? WHERE id = ?`
   );
 
   const process = db.transaction(() => {
@@ -77,6 +77,7 @@ export function processRecurringTemplates(): void {
         // Idempotency check
         const exists = checkDuplicate.get(template.id, timestamp);
         if (!exists) {
+          const now = new Date().toISOString();
           insertExpense.run(
             crypto.randomUUID(),
             template.user_id,
@@ -85,7 +86,9 @@ export function processRecurringTemplates(): void {
             template.amount,
             template.note ?? null,
             timestamp,
-            template.id
+            template.id,
+            now,
+            now
           );
         }
 
@@ -93,7 +96,7 @@ export function processRecurringTemplates(): void {
       }
 
       // Persist the advanced next_due
-      updateNextDue.run(nextDue, template.id);
+      updateNextDue.run(nextDue, new Date().toISOString(), template.id);
     }
   });
 

@@ -105,23 +105,27 @@ cron.schedule("0 3 * * *", () => {
   }
 });
 
-// Daily reminder push at 9 PM
-cron.schedule("0 21 * * *", () => {
-  try {
-    sendDailyReminders();
-  } catch (err) {
-    console.error("[notifications] Daily reminder cron failed:", err);
-  }
-});
-
-// Weekly summary push at 9 PM Vienna time, every day (the job filters by each user's configured day)
+// Hourly reminder push (Europe/Vienna timezone)
 cron.schedule(
-  "0 21 * * *",
+  "0 * * * *",
+  () => {
+    try {
+      sendDailyReminders();
+    } catch (err) {
+      console.error("[notifications] Hourly reminder cron failed:", err);
+    }
+  },
+  { timezone: "Europe/Vienna" }
+);
+
+// Hourly weekly summary push (Europe/Vienna timezone)
+cron.schedule(
+  "0 * * * *",
   () => {
     try {
       sendWeeklySummaries();
     } catch (err) {
-      console.error("[notifications] Weekly summary cron failed:", err);
+      console.error("[notifications] Hourly weekly summary cron failed:", err);
     }
   },
   { timezone: "Europe/Vienna" }

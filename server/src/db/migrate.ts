@@ -110,6 +110,46 @@ function migrateMerchantCategoriesToShared(): void {
   }
 }
 
+export function normalizeAllTimestamps(): void {
+  const targets = [
+    { table: "users", cols: ["created_at", "updated_at"] },
+    { table: "sessions", cols: ["created_at"] },
+    { table: "categories", cols: ["created_at", "updated_at"] },
+    { table: "subcategories", cols: ["created_at", "updated_at"] },
+    { table: "expenses", cols: ["timestamp", "created_at", "updated_at"] },
+    { table: "recurring_templates", cols: ["created_at", "updated_at"] },
+    { table: "push_subscriptions", cols: ["created_at"] },
+    { table: "notification_preferences", cols: ["updated_at"] },
+    { table: "merchant_aliases", cols: ["created_at"] },
+    { table: "api_tokens", cols: ["created_at", "last_used_at"] },
+    { table: "merchant_categories", cols: ["last_confirmed_at"] },
+  ];
+
+  db.transaction(() => {
+    for (const { table, cols } of targets) {
+      const exists = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(table);
+      if (!exists) continue;
+
+      for (const col of cols) {
+        const colsInfo = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+        if (!colsInfo.some((c) => c.name === col)) continue;
+
+        db.prepare(`
+          UPDATE ${table}
+          SET ${col} = replace(${col}, ' ', 'T') || '.000Z'
+          WHERE ${col} LIKE '____-__-__ __:__:__'
+        `).run();
+
+        db.prepare(`
+          UPDATE ${table}
+          SET ${col} = ${col} || '.000Z'
+          WHERE ${col} LIKE '____-__-__T__:__:__'
+        `).run();
+      }
+    }
+  })();
+}
+
 export function runMigrations(): void {
   // schema.sql lives next to this file at compile time (server/src/db) and at
   // runtime (server/dist/db, copied by the Dockerfile).
@@ -132,6 +172,7 @@ export function runMigrations(): void {
 
   relaxExpensesNullability();
   migrateMerchantCategoriesToShared();
+  normalizeAllTimestamps();
 }
 
 // When invoked directly via `npm run migrate`, run and log.

@@ -63,13 +63,13 @@ const sync = new Hono<{ Variables: Variables }>()
       `SELECT updated_at, source, category_id, subcategory_id, note FROM expenses WHERE id = ?`
     );
 
-    const insertStmt = db.prepare<[string, string, string, string, number, string | null, string | null, string | null, string, string, string | null, number]>(
+    const insertStmt = db.prepare<[string, string, string, string, number, string | null, string | null, string | null, string, string, string | null, number, string]>(
       `INSERT INTO expenses
          (id, user_id, category_id, subcategory_id, amount, note, tags, image_url, timestamp, source, recurring_template_id, deleted, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
 
-    const updateStmt = db.prepare<[string, string, number, string | null, string | null, string | null, string, string, string | null, number, string]>(
+    const updateStmt = db.prepare<[string, string, number, string | null, string | null, string | null, string, string, string | null, number, string, string]>(
       `UPDATE expenses SET
          category_id = ?,
          subcategory_id = ?,
@@ -81,7 +81,7 @@ const sync = new Hono<{ Variables: Variables }>()
          source = ?,
          recurring_template_id = ?,
          deleted = ?,
-         updated_at = datetime('now')
+         updated_at = ?
        WHERE id = ?`
     );
 
@@ -113,6 +113,7 @@ const sync = new Hono<{ Variables: Variables }>()
 
         const existing = selectExistingStmt.get(change.id);
         const clientUpdatedAt = typeof change.updated_at === "string" ? change.updated_at : "";
+        const now = new Date().toISOString();
 
         if (!existing) {
           insertStmt.run(
@@ -127,7 +128,8 @@ const sync = new Hono<{ Variables: Variables }>()
             change.timestamp,
             change.source ?? "manual",
             change.recurring_template_id ?? null,
-            change.deleted ?? 0
+            change.deleted ?? 0,
+            now
           );
           acceptedIds.push(change.id);
         } else if (clientUpdatedAt > existing.updated_at) {
@@ -142,6 +144,7 @@ const sync = new Hono<{ Variables: Variables }>()
             change.source ?? "manual",
             change.recurring_template_id ?? null,
             change.deleted ?? 0,
+            now,
             change.id
           );
           acceptedIds.push(change.id);
@@ -225,9 +228,7 @@ const sync = new Hono<{ Variables: Variables }>()
       .all();
 
     // sync_timestamp: server's current time
-    const syncTimestamp = (
-      db.prepare("SELECT datetime('now') as now").get() as { now: string }
-    ).now;
+    const syncTimestamp = new Date().toISOString();
 
     return c.json({
       server_changes: serverChanges,

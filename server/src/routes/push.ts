@@ -146,24 +146,27 @@ const push = new Hono<{ Variables: Variables }>()
       weekly_summary_time,
     } = body;
 
+    const now = new Date().toISOString();
     db.prepare(
       `INSERT INTO notification_preferences
          (user_id, daily_reminder, daily_reminder_time, weekly_summary, weekly_summary_day, weekly_summary_time, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(user_id) DO UPDATE SET
          daily_reminder       = COALESCE(excluded.daily_reminder, daily_reminder),
          daily_reminder_time  = COALESCE(excluded.daily_reminder_time, daily_reminder_time),
          weekly_summary       = COALESCE(excluded.weekly_summary, weekly_summary),
          weekly_summary_day   = COALESCE(excluded.weekly_summary_day, weekly_summary_day),
          weekly_summary_time  = COALESCE(excluded.weekly_summary_time, weekly_summary_time),
-         updated_at           = datetime('now')`
+         updated_at           = ?`
     ).run(
       userId,
       daily_reminder ?? 0,
       daily_reminder_time ?? "21:00",
       weekly_summary ?? 0,
       weekly_summary_day ?? 0,
-      weekly_summary_time ?? "09:00"
+      weekly_summary_time ?? "09:00",
+      now,
+      now
     );
 
     const updated = db

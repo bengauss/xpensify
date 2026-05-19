@@ -14,6 +14,19 @@ const RATE_LIMIT = 60;
 const RATE_WINDOW_MS = 60 * 1000;
 const tokenAttempts = new Map<string, { count: number; resetAt: number }>();
 
+// Periodically prune expired rate-limit entries to prevent memory leaks
+const tokenAttemptsPruneTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [tokenHash, entry] of tokenAttempts.entries()) {
+    if (entry.resetAt < now) {
+      tokenAttempts.delete(tokenHash);
+    }
+  }
+}, 60 * 1000);
+if (tokenAttemptsPruneTimer.unref) {
+  tokenAttemptsPruneTimer.unref();
+}
+
 function isRateLimited(tokenHash: string): boolean {
   const now = Date.now();
   const current = tokenAttempts.get(tokenHash);
@@ -442,6 +455,7 @@ async function runPostInsertWork(
       const setNote = aliasCreated ? `, note = ?` : "";
       const params: unknown[] = [usedCategoryId, usedSubcategoryId];
       if (aliasCreated) params.push(resolvedMerchant);
+      params.push(new Date().toISOString());
       params.push(expenseId);
 
       const result = db
@@ -451,7 +465,7 @@ async function runPostInsertWork(
                   subcategory_id = ?
                   ${setNote}
                   ${setStatus},
-                  updated_at = datetime('now')
+                  updated_at = ?
             WHERE id = ?
               AND status = 'pending'
               AND deleted = 0

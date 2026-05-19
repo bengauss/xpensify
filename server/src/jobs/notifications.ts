@@ -72,18 +72,40 @@ async function sendToUser(
   );
 }
 
+function getViennaToday(): string {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Vienna",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+  const parts = formatter.formatToParts(new Date());
+  const year = parts.find(p => p.type === "year")!.value;
+  const month = parts.find(p => p.type === "month")!.value;
+  const day = parts.find(p => p.type === "day")!.value;
+  return `${year}-${month}-${day}`;
+}
+
 /**
  * Send daily reminders to users who have opted in and have 0 expenses today.
- * Scheduled at 9 PM daily.
+ * Scheduled to run hourly.
  */
 export function sendDailyReminders(): void {
+  const hourStr = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Vienna",
+    hour: "numeric",
+    hour12: false
+  }).format(new Date());
+  const currentHour = String(hourStr).padStart(2, "0");
+
   const users = db
     .prepare(
-      `SELECT user_id FROM notification_preferences WHERE daily_reminder = 1`
+      `SELECT user_id FROM notification_preferences
+       WHERE daily_reminder = 1 AND daily_reminder_time LIKE ?`
     )
-    .all() as Array<{ user_id: string }>;
+    .all(`${currentHour}:%`) as Array<{ user_id: string }>;
 
-  const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+  const today = getViennaToday();
 
   for (const { user_id } of users) {
     const row = db
@@ -107,18 +129,30 @@ export function sendDailyReminders(): void {
 
 /**
  * Send weekly summaries to users who have opted in and today matches their
- * configured summary day (0 = Sunday … 6 = Saturday).
- * Scheduled at Sunday 9 AM (but respects per-user day preference).
+ * configured summary day (0 = Sunday … 6 = Saturday) and configured time.
+ * Scheduled to run hourly.
  */
 export function sendWeeklySummaries(): void {
-  const todayDay = new Date().getDay(); // 0=Sun … 6=Sat
+  const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const viennaDateStr = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Vienna",
+    weekday: "long"
+  }).format(new Date());
+  const todayDay = weekdays.indexOf(viennaDateStr);
+
+  const hourStr = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Vienna",
+    hour: "numeric",
+    hour12: false
+  }).format(new Date());
+  const currentHour = String(hourStr).padStart(2, "0");
 
   const users = db
     .prepare(
       `SELECT user_id, weekly_summary_day FROM notification_preferences
-       WHERE weekly_summary = 1 AND weekly_summary_day = ?`
+       WHERE weekly_summary = 1 AND weekly_summary_day = ? AND weekly_summary_time LIKE ?`
     )
-    .all(todayDay) as Array<{ user_id: string; weekly_summary_day: number }>;
+    .all(todayDay, `${currentHour}:%`) as Array<{ user_id: string; weekly_summary_day: number }>;
 
   // Sum from this week's Monday 00:00 (UTC) through now.
   const now = new Date();
@@ -127,18 +161,16 @@ export function sendWeeklySummaries(): void {
   start.setUTCDate(now.getUTCDate() - daysSinceMonday);
   const weekStart = start.toISOString().split("T")[0];
 
-  const row = db
-    .prepare(
-      `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses
-       WHERE deleted = 0
-         AND source != 'recurring'
-         AND date(timestamp) >= ?`
-    )
-    .get(weekStart) as { total: number };
-
-  const totalFormatted = (row.total / 100).toFixed(2);
+  const totalStmt = db.prepare(
+    `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses
+     WHERE user_id = ? AND deleted = 0
+       AND source != 'recurring'
+       AND date(timestamp) >= ?`
+  );
 
   for (const { user_id } of users) {
+    const row = totalStmt.get(user_id, weekStart) as { total: number };
+    const totalFormatted = (row.total / 100).toFixed(2);
     sendToUser(user_id, {
       title: "Weekly summary",
       body: `€${totalFormatted} spent on discretionary expenses this week.`,

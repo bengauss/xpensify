@@ -24,8 +24,15 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
+const { mockCurrentUser, mockIsSessionExpired } = vi.hoisted(() => ({
+  mockCurrentUser: { value: null as any },
+  mockIsSessionExpired: { value: false },
+}));
+
 vi.mock("@/lib/auth", () => ({
   logout: vi.fn(),
+  currentUser: mockCurrentUser,
+  isSessionExpired: mockIsSessionExpired,
 }));
 
 import { sync } from "./engine.js";
@@ -249,12 +256,24 @@ describe("sync engine — failure modes", () => {
     expect(after?.sync_status).toBe("pending");
   });
 
-  it("calls logout() on 401, clearing local state", async () => {
+  it("calls logout() on 401 if currentUser is null", async () => {
+    mockCurrentUser.value = null;
     mockSyncPost.mockResolvedValue(jsonResponse({ error: "Unauthorized" }, 401));
 
     await sync();
 
     expect(logout).toHaveBeenCalledOnce();
+  });
+
+  it("sets isSessionExpired to true on 401 if currentUser is set, preserving local database", async () => {
+    mockCurrentUser.value = { id: "u1", username: "alice", display_name: "Alice", avatar_color: "#6c9cff" };
+    mockIsSessionExpired.value = false;
+    mockSyncPost.mockResolvedValue(jsonResponse({ error: "Unauthorized" }, 401));
+
+    await sync();
+
+    expect(logout).not.toHaveBeenCalled();
+    expect(mockIsSessionExpired.value).toBe(true);
   });
 
   it("does not stack concurrent syncs (state guard)", async () => {

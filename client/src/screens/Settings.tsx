@@ -283,7 +283,20 @@ function NotificationsSection() {
   useEffect(() => {
     api.api.push.preferences.$get()
       .then((r) => r.ok ? r.json() : null)
-      .then((data: unknown) => { if (data) setPrefs(data as PushPrefs); })
+      .then((data: any) => {
+        if (data) {
+          // Normalize legacy times to exact hourly slots (XX:00)
+          if (data.daily_reminder_time) {
+            const h = data.daily_reminder_time.split(":")[0];
+            data.daily_reminder_time = `${h.padStart(2, "0")}:00`;
+          }
+          if (data.weekly_summary_time) {
+            const h = data.weekly_summary_time.split(":")[0];
+            data.weekly_summary_time = `${h.padStart(2, "0")}:00`;
+          }
+          setPrefs(data as PushPrefs);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -329,6 +342,22 @@ function NotificationsSection() {
           onToggle={() => savePrefs({ daily_reminder: prefs.daily_reminder ? 0 : 1 })}
         />
       </Row>
+      {!!prefs.daily_reminder && (
+        <div class="px-4 pb-3 flex items-center justify-between gap-3 text-sm">
+          <span style={{ color: "var(--color-text-secondary)" }}>reminder time</span>
+          <select
+            value={prefs.daily_reminder_time}
+            onChange={(e) => savePrefs({ daily_reminder_time: (e.target as HTMLSelectElement).value })}
+            class="rounded-lg px-2 py-1 text-sm text-text-primary bg-bg-primary border border-text-ghost/20 outline-none [color-scheme:dark]"
+            style={{ cursor: "pointer" }}
+          >
+            {Array.from({ length: 24 }).map((_, h) => {
+              const val = `${String(h).padStart(2, "0")}:00`;
+              return <option key={val} value={val}>{val}</option>;
+            })}
+          </select>
+        </div>
+      )}
       <Row>
         <div class="flex-1 flex flex-col gap-0.5">
           <span class="text-sm">weekly summary</span>
@@ -341,6 +370,37 @@ function NotificationsSection() {
           onToggle={() => savePrefs({ weekly_summary: prefs.weekly_summary ? 0 : 1 })}
         />
       </Row>
+      {!!prefs.weekly_summary && (
+        <>
+          <div class="px-4 pb-3 flex items-center justify-between gap-3 text-sm">
+            <span style={{ color: "var(--color-text-secondary)" }}>summary day</span>
+            <select
+              value={prefs.weekly_summary_day}
+              onChange={(e) => savePrefs({ weekly_summary_day: parseInt((e.target as HTMLSelectElement).value, 10) })}
+              class="rounded-lg px-2 py-1 text-sm text-text-primary bg-bg-primary border border-text-ghost/20 outline-none [color-scheme:dark]"
+              style={{ cursor: "pointer" }}
+            >
+              {DAYS_SHORT.map((dayName, idx) => (
+                <option key={idx} value={idx}>{dayName}</option>
+              ))}
+            </select>
+          </div>
+          <div class="px-4 pb-3 flex items-center justify-between gap-3 text-sm">
+            <span style={{ color: "var(--color-text-secondary)" }}>summary time</span>
+            <select
+              value={prefs.weekly_summary_time}
+              onChange={(e) => savePrefs({ weekly_summary_time: (e.target as HTMLSelectElement).value })}
+              class="rounded-lg px-2 py-1 text-sm text-text-primary bg-bg-primary border border-text-ghost/20 outline-none [color-scheme:dark]"
+              style={{ cursor: "pointer" }}
+            >
+              {Array.from({ length: 24 }).map((_, h) => {
+                const val = `${String(h).padStart(2, "0")}:00`;
+                return <option key={val} value={val}>{val}</option>;
+              })}
+            </select>
+          </div>
+        </>
+      )}
       <Row onClick={permission !== "granted" ? requestPermission : undefined}>
         <span class="flex-1 text-sm">push permission</span>
         <span

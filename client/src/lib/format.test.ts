@@ -48,8 +48,13 @@ describe("formatEur", () => {
 });
 
 describe("dateKey", () => {
-  it("extracts YYYY-MM-DD from ISO timestamp", () => {
-    expect(dateKey("2026-04-30T12:00:00.000Z")).toBe("2026-04-30");
+  it("converts ISO UTC timestamp to local YYYY-MM-DD string", () => {
+    const d = new Date("2026-04-30T23:59:00.000Z");
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const expected = `${yyyy}-${mm}-${dd}`;
+    expect(dateKey("2026-04-30T23:59:00.000Z")).toBe(expected);
   });
 
   it("works on date-only strings", () => {
@@ -58,8 +63,12 @@ describe("dateKey", () => {
 });
 
 describe("todayKey", () => {
-  it("returns YYYY-MM-DD for today (UTC)", () => {
-    const expected = new Date().toISOString().split("T")[0];
+  it("returns YYYY-MM-DD for today in local timezone", () => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const expected = `${yyyy}-${mm}-${dd}`;
     expect(todayKey()).toBe(expected);
   });
 });

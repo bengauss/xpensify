@@ -19,14 +19,28 @@ export function formatEur(cents: number): string {
   return `EUR ${formatMoney(cents)}`;
 }
 
-/** YYYY-MM-DD from an ISO-8601 timestamp without parsing it. */
+/** YYYY-MM-DD from an ISO-8601 timestamp converted to local time. */
 export function dateKey(timestamp: string): string {
-  return timestamp.split("T")[0];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(timestamp)) {
+    return timestamp;
+  }
+  const d = new Date(timestamp);
+  if (isNaN(d.getTime())) {
+    return timestamp.split("T")[0];
+  }
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
-/** YYYY-MM-DD for today (UTC). Used wherever we compare against expense timestamps. */
+/** YYYY-MM-DD for today in local time. Used wherever we compare against expense timestamps. */
 export function todayKey(): string {
-  return new Date().toISOString().split("T")[0];
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 /** YYYY-MM for an explicit year/month pair. */

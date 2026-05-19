@@ -37,9 +37,10 @@ const historyMarker = new Hono<{ Variables: Variables }>()
   // tab mounts so the BottomNav dot clears.
   .post("/visit", (c) => {
     const userId = c.get("userId");
+    const now = new Date().toISOString();
     db.prepare(
-      `UPDATE users SET last_history_visit_at = ?, updated_at = datetime('now') WHERE id = ?`,
-    ).run(new Date().toISOString(), userId);
+      `UPDATE users SET last_history_visit_at = ?, updated_at = ? WHERE id = ?`,
+    ).run(now, now, userId);
     return c.json({ ok: true });
   });
 

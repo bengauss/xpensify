@@ -26,8 +26,15 @@ export async function sync(): Promise<void> {
   }
 
   if (res.status === 401) {
-    // Session expired. Wipe local state so a different user signing in
-    // on this device doesn't send pending expenses under the new identity.
+    // Session expired. Instead of calling logout() and deleting the database,
+    // we set the session expired signal so the user is prompted to re-authenticate.
+    const { isSessionExpired, currentUser } = await import("@/lib/auth");
+    if (currentUser.value) {
+      isSessionExpired.value = true;
+      const stillPending = await db.expenses.where("sync_status").equals("pending").count();
+      syncStatus.value = { state: "offline", pendingCount: stillPending };
+      return;
+    }
     await logout();
     return;
   }

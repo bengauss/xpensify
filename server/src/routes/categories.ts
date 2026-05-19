@@ -88,8 +88,8 @@ const categories = new Hono<{ Variables: Variables }>()
     const sort_order = typeof body.sort_order === "number" ? body.sort_order : existing.sort_order;
 
     db.prepare(
-      `UPDATE categories SET name = ?, icon = ?, color = ?, sort_order = ?, updated_at = datetime('now') WHERE id = ?`
-    ).run(name, icon, color, sort_order, id);
+      `UPDATE categories SET name = ?, icon = ?, color = ?, sort_order = ?, updated_at = ? WHERE id = ?`
+    ).run(name, icon, color, sort_order, new Date().toISOString(), id);
 
     const updated = db.prepare(`SELECT * FROM categories WHERE id = ?`).get(id);
     return c.json(updated);
@@ -172,8 +172,8 @@ const categories = new Hono<{ Variables: Variables }>()
     const sort_order = typeof body.sort_order === "number" ? body.sort_order : existing.sort_order;
 
     db.prepare(
-      `UPDATE subcategories SET name = ?, sort_order = ?, updated_at = datetime('now') WHERE id = ?`
-    ).run(name, sort_order, id);
+      `UPDATE subcategories SET name = ?, sort_order = ?, updated_at = ? WHERE id = ?`
+    ).run(name, sort_order, new Date().toISOString(), id);
 
     const updated = db.prepare(`SELECT * FROM subcategories WHERE id = ?`).get(id);
     return c.json(updated);

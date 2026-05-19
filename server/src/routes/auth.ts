@@ -11,6 +11,19 @@ const LOGIN_MAX_ATTEMPTS = 10;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 
+// Periodically prune expired rate-limit entries to prevent memory leaks
+const loginAttemptsPruneTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of loginAttempts.entries()) {
+    if (entry.resetAt < now) {
+      loginAttempts.delete(ip);
+    }
+  }
+}, 15 * 60 * 1000);
+if (loginAttemptsPruneTimer.unref) {
+  loginAttemptsPruneTimer.unref();
+}
+
 function clientIp(header: string | undefined): string {
   if (!header) return "unknown";
   // x-forwarded-for may contain a comma-separated list — first entry is the client
@@ -170,8 +183,8 @@ const auth = new Hono<{ Variables: Variables }>()
 
     const rotate = db.transaction(() => {
       db.prepare(
-        `UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`
-      ).run(newHash, userId);
+        `UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?`
+      ).run(newHash, new Date().toISOString(), userId);
       db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(userId);
       db.prepare(
         `INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)`

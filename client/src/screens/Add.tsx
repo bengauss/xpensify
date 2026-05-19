@@ -10,7 +10,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { currentUser } from "@/lib/auth";
 import { sync } from "@/sync/engine";
 import { useLocation } from "preact-iso";
-import { formatMoney, formatMoneyWhole, MONTHS_SHORT } from "@/lib/format";
+import { formatMoney, formatMoneyWhole, MONTHS_SHORT, dateKey, todayKey } from "@/lib/format";
 import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
 import { editingExpense } from "@/lib/editing";
 import { useEntrance } from "@/lib/entrance";
@@ -44,10 +44,10 @@ export function AddScreen() {
   );
   const [dateStr, setDateStr] = useState(
     confirming
-      ? confirming.timestamp.split("T")[0]
+      ? dateKey(confirming.timestamp)
       : editing
-        ? editing.timestamp.split("T")[0]
-        : new Date().toISOString().split("T")[0]
+        ? dateKey(editing.timestamp)
+        : todayKey()
   );
   // Pending category/subcategory selection — only used in edit/confirm modes, so the user
   // can change multiple fields before committing via the save button.
@@ -77,7 +77,7 @@ export function AddScreen() {
     if (!confirming) return;
     setAmount(formatCents(confirming.amount));
     setNote(confirming.note ?? "");
-    setDateStr(confirming.timestamp.split("T")[0]);
+    setDateStr(dateKey(confirming.timestamp));
     setPendingCategoryId(confirming.category_id ?? "");
     setPendingSubcategoryId(confirming.subcategory_id ?? "");
     setFormKey((k) => k + 1);
@@ -202,7 +202,7 @@ export function AddScreen() {
     const now = new Date().toISOString();
 
     // Use real time for today, noon for backdated entries
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = todayKey();
     const timestamp = dateStr === todayStr ? now : `${dateStr}T12:00:00.000Z`;
 
     await db.expenses.add({
@@ -246,7 +246,7 @@ export function AddScreen() {
     const fromCents = amountCents;
     setAmount("");
     setNote("");
-    setDateStr(new Date().toISOString().split("T")[0]);
+    setDateStr(todayKey());
     setPendingCategoryId("");
     setPendingSubcategoryId("");
 
@@ -268,7 +268,7 @@ export function AddScreen() {
     if (!pendingCategoryId || !pendingSubcategoryId) return;
 
     const now = new Date().toISOString();
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = todayKey();
     const timestamp = dateStr === todayStr ? now : `${dateStr}T12:00:00.000Z`;
 
     await db.expenses.update(editing.id, {
@@ -624,7 +624,7 @@ export function AddScreen() {
 
 function formatDateLabel(dateStr: string, today: Date): string {
   const date = new Date(dateStr + "T12:00:00");
-  const todayStr = today.toISOString().split("T")[0];
+  const todayStr = todayKey();
   const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
   if (dateStr === todayStr) {
@@ -633,7 +633,8 @@ function formatDateLabel(dateStr: string, today: Date): string {
 
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
-  if (dateStr === yesterday.toISOString().split("T")[0]) {
+  const yesterdayStr = dateKey(yesterday.toISOString());
+  if (dateStr === yesterdayStr) {
     return `yesterday, ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
   }
 
@@ -644,15 +645,15 @@ function formatDateLabel(dateStr: string, today: Date): string {
 function pendingTimeLabel(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
-  const today = new Date();
-  const todayKey = today.toISOString().split("T")[0];
-  const yesterday = new Date(today);
+  const tKey = todayKey();
+  const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  const dayKey = d.toISOString().split("T")[0];
+  const yesterdayKey = dateKey(yesterday.toISOString());
+  const dayKey = dateKey(iso);
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
-  if (dayKey === todayKey) return `today ${hh}:${mm}`;
-  if (dayKey === yesterday.toISOString().split("T")[0]) return `yesterday ${hh}:${mm}`;
+  if (dayKey === tKey) return `today ${hh}:${mm}`;
+  if (dayKey === yesterdayKey) return `yesterday ${hh}:${mm}`;
   return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${hh}:${mm}`;
 }
 
@@ -660,14 +661,13 @@ function pendingTimeLabel(iso: string): string {
 function confirmDateTimeLabel(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
-  const today = new Date();
-  const todayKey = today.toISOString().split("T")[0];
-  const dayKey = d.toISOString().split("T")[0];
+  const tKey = todayKey();
+  const dayKey = dateKey(iso);
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
   const month = MONTHS_SHORT[d.getMonth()];
   const year = d.getFullYear();
-  if (dayKey === todayKey) {
+  if (dayKey === tKey) {
     return `today, ${hh}:${mm} ${month} ${year}`;
   }
   return `${d.getDate()} ${month} ${year}, ${hh}:${mm}`;
