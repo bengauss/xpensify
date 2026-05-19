@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # Stage 1: Build client
-FROM node:22-alpine AS client-build
+FROM node:26-alpine AS client-build
 WORKDIR /app/client
 COPY client/package.json client/package-lock.json* ./
 RUN --mount=type=cache,target=/root/.npm,sharing=locked \
@@ -24,7 +24,7 @@ ENV VITE_APPLE_SHORTCUT_URL=$VITE_APPLE_SHORTCUT_URL
 RUN npm run build
 
 # Stage 2: Build server
-FROM node:22-alpine AS server-build
+FROM node:26-alpine AS server-build
 WORKDIR /app/server
 RUN apk add --no-cache python3 make g++
 COPY server/package.json server/package-lock.json* ./
@@ -34,7 +34,7 @@ COPY server/ ./
 RUN npm run build
 
 # Stage 3: Runtime — reuse server-build's node_modules, prune dev deps
-FROM node:22-alpine
+FROM node:26-alpine
 WORKDIR /app
 
 # Copy full server node_modules from build stage, then prune dev deps.
