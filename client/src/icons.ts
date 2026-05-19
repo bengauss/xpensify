@@ -116,7 +116,7 @@ export function ElectronicsIcon({ color = defaults.color, size = defaults.size }
   ]);
 }
 
-// 11. Charlie — child figure
+// 11. Lily — child figure
 export function LilyIcon({ color = defaults.color, size = defaults.size }: IconProps = {}) {
   return svgWrap(color, size, [
     h("circle", { cx: "12", cy: "5.5", r: "3.5" }),
@@ -174,7 +174,7 @@ export const categoryIcons: Record<string, (props: IconProps) => any> = {
   insurance: InsuranceIcon,
   apparel: ApparelIcon,
   electronics: ElectronicsIcon,
-  charlie: LilyIcon,
+  lily: LilyIcon,
   education: EducationIcon,
   travel: TravelIcon,
   gift: GiftIcon,
