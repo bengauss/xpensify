@@ -21,6 +21,7 @@ import { sweepExpiredSessions } from "./jobs/sessions.js";
 import { runBackup } from "./jobs/backup.js";
 import { csrfMiddleware, noStoreMiddleware } from "./middleware/csrf.js";
 import { runMigrations } from "./db/migrate.js";
+import { seedCategories } from "./db/seed-categories.js";
 import db from "./db/connection.js";
 import type { Variables } from "./middleware/auth.js";
 
@@ -30,6 +31,14 @@ try {
 } catch (err) {
   console.error("[migrate] Startup migrations failed:", err);
   process.exit(1);
+}
+
+// Sync categories from YAML on every boot so color/name/order changes in
+// config/categories.yaml take effect without a manual `npm run seed`.
+try {
+  seedCategories();
+} catch (err) {
+  console.error("[seed] Category sync failed:", err);
 }
 
 // /api/shortcuts/expense is called by iOS Shortcuts which won't send a matching
