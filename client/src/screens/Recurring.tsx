@@ -11,7 +11,7 @@ import { useEntrance, animateRowEntrance } from "@/lib/entrance";
 import { useCountUp } from "@/lib/useCountUp";
 import { usePressScale } from "@/lib/usePressScale";
 import { formatMoney, formatEur, MONTHS_SHORT } from "@/lib/format";
-import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
+import { categoriesSignal, subcategoriesSignal } from "@/lib/categories";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -149,9 +149,9 @@ function useForecast(): ForecastData | null {
   if (!templates || !expenses) return null;
 
   const catById = new Map<string, string>();
-  for (const c of CATEGORIES) catById.set(c.id, c.name);
+  for (const c of categoriesSignal.value) catById.set(c.id, c.name);
   const subById = new Map<string, string>();
-  for (const s of SUBCATEGORIES) subById.set(s.id, s.name);
+  for (const s of subcategoriesSignal.value) subById.set(s.id, s.name);
 
   function labelFor(params: {
     note: string | null;

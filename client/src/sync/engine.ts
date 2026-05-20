@@ -4,6 +4,7 @@ import { syncStatus } from "@/sync/status";
 import { api } from "@/lib/api";
 import { logout } from "@/lib/auth";
 import { refreshPendingExpenses, refreshUnreviewedAutoSaves } from "@/lib/pending";
+import { refreshCategories } from "@/lib/categories";
 
 export async function sync(): Promise<void> {
   // Don't stack syncs
@@ -99,6 +100,10 @@ export async function sync(): Promise<void> {
       }
     }
   );
+
+  if (data.categories || data.subcategories) {
+    await refreshCategories();
+  }
 
   // Persist the new watermark
   if (data.sync_timestamp) {

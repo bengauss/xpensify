@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { useLocation } from "preact-iso";
 import { api } from "@/lib/api";
-import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
+import { categoriesSignal, subcategoriesSignal } from "@/lib/categories";
 import { CategorySelector } from "@/components/CategorySelector";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DetailSheet } from "@/components/DetailSheet";
@@ -265,8 +265,8 @@ function MerchantEditor({
 
       <CategorySelector
         compact
-        categories={CATEGORIES}
-        subcategories={SUBCATEGORIES}
+        categories={categoriesSignal.value}
+        subcategories={subcategoriesSignal.value}
         initialCategoryId={catId}
         confirmedSubcategoryId={subId}
         onSelect={(c, s) => {

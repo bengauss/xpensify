@@ -11,7 +11,7 @@ import { currentUser } from "@/lib/auth";
 import { sync } from "@/sync/engine";
 import { useLocation } from "preact-iso";
 import { formatMoney, formatMoneyWhole, MONTHS_SHORT, dateKey, todayKey } from "@/lib/format";
-import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
+import { categoriesSignal, subcategoriesSignal } from "@/lib/categories";
 import { editingExpense } from "@/lib/editing";
 import { useEntrance } from "@/lib/entrance";
 import { usePressScale } from "@/lib/usePressScale";
@@ -148,8 +148,8 @@ export function AddScreen() {
     reveal(noteWrapRef.current, 0.35);
   });
 
-  const categories = CATEGORIES;
-  const subcategories = SUBCATEGORIES;
+  const categories = categoriesSignal.value;
+  const subcategories = subcategoriesSignal.value;
 
   // Discretionary spend counter — only queries the last 4 months via the
   // timestamp index. Full-table scans aren't needed for this widget.

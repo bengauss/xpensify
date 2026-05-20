@@ -8,7 +8,7 @@ import { AmountInput, parseCents, formatCents } from "@/components/AmountInput";
 import { CategorySelector } from "@/components/CategorySelector";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { api } from "@/lib/api";
-import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
+import { categoriesSignal, subcategoriesSignal } from "@/lib/categories";
 import { usePressScale } from "@/lib/usePressScale";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -41,8 +41,8 @@ export default function RecurringForm({ id: idProp }: { id?: string } = {}) {
   const [loaded, setLoaded] = useState(!isEdit);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  const categories = CATEGORIES;
-  const subcategories = SUBCATEGORIES;
+  const categories = categoriesSignal.value;
+  const subcategories = subcategoriesSignal.value;
 
   // Load template data for edit mode
   useEffect(() => {

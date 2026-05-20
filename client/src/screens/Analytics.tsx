@@ -15,7 +15,7 @@ import { CategoryBars } from "@/components/CategoryBars";
 import { TrendChart } from "@/components/TrendChart";
 import { SegmentedPill } from "@/components/SegmentedPill";
 import { formatMoney } from "@/lib/format";
-import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
+import { categoriesSignal, subcategoriesSignal } from "@/lib/categories";
 
 type Period = "month" | "year";
 type Scope = "all" | "discretionary";
@@ -170,8 +170,8 @@ export default function AnalyticsScreen() {
     () => db.expenses.filter((e) => e.deleted === 0).toArray(),
     []
   );
-  const allCategories = CATEGORIES;
-  const allSubcategories = SUBCATEGORIES;
+  const allCategories = categoriesSignal.value;
+  const allSubcategories = subcategoriesSignal.value;
 
   const analytics = useMemo(() => {
     if (!allExpenses) return null;

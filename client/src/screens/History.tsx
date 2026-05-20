@@ -16,7 +16,7 @@ import { useEntrance, animateRowEntrance } from "@/lib/entrance";
 import { fadeRemoveRow } from "@/lib/dissolve";
 import { usePressScale } from "@/lib/usePressScale";
 import { formatMoney, formatEur, dateKey as toDateKey, todayKey, MONTHS_SHORT } from "@/lib/format";
-import { CATEGORIES, SUBCATEGORIES } from "@/lib/categories";
+import { categoriesSignal, subcategoriesSignal } from "@/lib/categories";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -659,8 +659,8 @@ export default function HistoryScreen() {
     []
   );
 
-  const categories = CATEGORIES;
-  const subcategories = SUBCATEGORIES;
+  const categories = categoriesSignal.value;
+  const subcategories = subcategoriesSignal.value;
 
   // Live-queried household users so the per-row badge labels/colors are
   // data-driven, not hardcoded by UUID. Returns `undefined` on first render

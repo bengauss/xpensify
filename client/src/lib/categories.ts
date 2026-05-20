@@ -61,3 +61,30 @@ export const SUBCATEGORIES: Subcategory[] = [
   { id: "sub-donation",            category_id: "cat-gift",           name: "donation",      sort_order: 2, created_at: NOW, updated_at: NOW },
   { id: "sub-other-general",       category_id: "cat-other",          name: "other",         sort_order: 1, created_at: NOW, updated_at: NOW },
 ];
+
+import { signal } from "@preact/signals";
+import { db } from "@/db/local";
+
+export const categoriesSignal = signal<Category[]>(CATEGORIES);
+export const subcategoriesSignal = signal<Subcategory[]>(SUBCATEGORIES);
+
+export async function refreshCategories(): Promise<void> {
+  try {
+    const cats = await db.categories.toArray();
+    const subs = await db.subcategories.toArray();
+
+    if (cats.length > 0) {
+      cats.sort((a, b) => a.sort_order - b.sort_order);
+      categoriesSignal.value = cats;
+    }
+    if (subs.length > 0) {
+      subs.sort((a, b) => a.sort_order - b.sort_order);
+      subcategoriesSignal.value = subs;
+    }
+  } catch (err) {
+    console.error("Failed to refresh categories from IndexedDB:", err);
+  }
+}
+
+// Initial async load from Dexie database on module import
+refreshCategories().catch(console.error);
