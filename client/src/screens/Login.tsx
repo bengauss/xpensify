@@ -73,9 +73,13 @@ export default function LoginScreen() {
       >
         {/* Logo + wordmark */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="1" y="1" width="22" height="22" rx="6" fill="none" stroke="#6c9cff" stroke-width="1.5" />
-            <path d="M8 8L16 16M16 8L8 16" stroke="#6c9cff" stroke-width="1.75" stroke-linecap="round" />
+          <svg width="22" height="22" viewBox="0 0 1024 1024" fill="none" aria-hidden="true">
+            <g transform="translate(512 512)">
+              <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(45)" fill="#8aafff" />
+              <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(135)" fill="#6c9cff" />
+              <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(225)" fill="#4a7ee8" />
+              <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(315)" fill="#5a8def" />
+            </g>
           </svg>
           <span style={{ color: "#6c9cff", fontSize: 24, fontWeight: 600, letterSpacing: 0.2 }}>
             xpensify

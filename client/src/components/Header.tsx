@@ -14,30 +14,17 @@ export function Header({ onSettingsClick }: HeaderProps) {
         <svg
           width="22"
           height="22"
-          viewBox="0 0 100 100"
+          viewBox="0 0 1024 1024"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
           aria-hidden="true"
         >
-          <path
-            d="M50 12 L85 30 L85 70 L50 88 L15 70 L15 30 Z"
-            stroke="#6c9cff"
-            stroke-width="3.5"
-            fill="rgba(108,156,255,0.08)"
-          />
-          <path
-            d="M50 50 L85 30 M50 50 L50 88 M50 50 L15 30"
-            stroke="#6c9cff"
-            stroke-width="2"
-            opacity="0.25"
-          />
-          <path
-            d="M36 48 L46 58 L65 36"
-            stroke="#6c9cff"
-            stroke-width="5.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
+          <g transform="translate(512 512)">
+            <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(45)" fill="#8aafff" />
+            <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(135)" fill="#6c9cff" />
+            <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(225)" fill="#4a7ee8" />
+            <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(315)" fill="#5a8def" />
+          </g>
         </svg>
         <span class="text-lg font-light text-accent">xpensify</span>
       </div>
