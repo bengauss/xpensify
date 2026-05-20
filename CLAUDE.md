@@ -14,7 +14,7 @@ End users run this as an installed PWA in **iOS Safari** on **iPhone 15 Pro Max*
 
 - **client/** — Preact 10.x + TypeScript SPA. Vite dev server on port 5173, proxies `/api` to server.
 - **server/** — Hono 4.x on Node.js, better-sqlite3 for storage, node-cron for scheduled jobs. Runs on port 3000.
-- Independent packages — each has its own `package.json`, `tsconfig.json`, and scripts.
+- Independent packages — each has its own `package.json`, `tsconfig.json`, and scripts. A root `tsconfig.json` covers `scripts/` for IDE type-checking (resolves types from `server/node_modules`).
 - In production, the server also serves the built client (`client/dist`) from the same process. In dev, Vite proxies `/api`.
 
 ### Key Patterns
@@ -24,7 +24,8 @@ End users run this as an installed PWA in **iOS Safari** on **iPhone 15 Pro Max*
 - **Hono RPC** for type-safe API calls. Server exports `AppType`, client imports it via `@server/*` path alias (type-only, stripped at compile time). Calls with path params + JSON body (PATCH/DELETE on `/:id`) trip TS overload resolution — cast with `as any` (see `SettingsCategories.tsx`, `RecurringForm.tsx`, `Recurring.tsx`). Annoying but tolerated.
 - **Dexie liveQuery** for reactive IndexedDB reads in UI components.
 - **Preact Signals** for state management, **preact-iso** for routing. Cross-component signals live in `src/lib/` or `src/sync/`, not a central store — each next to the helper module that owns its semantics:
-  - `currentUser` → `lib/auth.ts`; `syncStatus` → `sync/status.ts`
+  - `currentUser`, `isSessionExpired` → `lib/auth.ts`; `syncStatus` → `sync/status.ts`
+  - `categoriesSignal`, `subcategoriesSignal` → `lib/categories.ts`
   - `editingExpense` → `lib/editing.ts`; `historyFilter` → `lib/filters.ts`; `analyticsDrilldown` → `lib/analyticsDrilldown.ts`
   - `pendingDirection`, `transitionDone`, `isTransitioning` → `lib/transitions.ts`
   - `pendingExpenses`, `confirmingPending`, `hasUnreviewedAutoSaves` → `lib/pending.ts` (Apple Pay)
@@ -57,8 +58,8 @@ cd server && npm run seed     # Seed categories, subcategories, users (skips exi
 
 ### Tests (Vitest)
 ```bash
-cd server && npm test          # 133 tests, ~3s
-cd client && npm test          # 61 tests, ~2s
+cd server && npm test          # 180 tests, ~4s
+cd client && npm test          # 65 tests, ~5s
 cd <pkg>  && npm run test:watch        # watch mode
 cd <pkg>  && npm run test:coverage     # v8 coverage HTML in coverage/
 ```
@@ -110,12 +111,12 @@ All colors, spacing, and typography tokens live in `client/src/index.css` under 
 
 ## Database
 
-- Server: SQLite via better-sqlite3, WAL mode, foreign keys on. Schema in `server/src/db/schema.sql`, static seed in `seed.sql`.
+- Server: SQLite via better-sqlite3, WAL mode, foreign keys on. Schema in `server/src/db/schema.sql`, seed data in `config/categories.yaml` + `config/users.yaml` (loaded by `seed-runner.ts`; overridable via `CATEGORIES_CONFIG` / `USERS_CONFIG` env vars).
 - Client: IndexedDB via Dexie. Schema in `client/src/db/local.ts`. `sync_status` field is client-only.
 - Amounts are INTEGER (cents) in both databases.
 - **Dexie `orderBy()` requires indexed fields.** Categories only index `id`. Sort by `sort_order` in JS after `.toArray()`, not via `orderBy("sort_order")`.
 - Expense `tags` and `image_url` columns are part of the schema on both ends but not yet surfaced in the UI. The sync route round-trips them; don't remove them.
-- **Tables**: `users`, `sessions`, `categories`, `subcategories`, `expenses`, `recurring_templates`, `push_subscriptions`, `notification_preferences`, `api_tokens` (iOS Shortcuts auth), `merchant_categories` (per-user merchant→category memory).
+- **Tables**: `users`, `sessions`, `categories`, `subcategories`, `expenses`, `recurring_templates`, `push_subscriptions`, `notification_preferences`, `api_tokens` (iOS Shortcuts auth), `merchant_categories` (household-wide merchant→category memory), `merchant_aliases` (maps POS name variants to a canonical merchant).
 - **Expense `status` column**: `'confirmed'` (default, in sync stream) or `'pending'` (Apple Pay awaiting user confirmation, server-only). `category_id` / `subcategory_id` are NULLABLE on purpose so pending rows can have no category yet — see `relaxExpensesNullability()` in `migrate.ts`.
 - **Expense `auto_saved` column**: 1 when the row was inserted by the Apple Pay webhook directly as `'confirmed'` via merchant memory ≥ 2 (no user touch). Drives the apple marker in History and the unreviewed-dot logic. Survives edits — the historical fact that "this entered without your involvement" doesn't change because you later corrected it.
 - **`users.last_history_visit_at`**: timestamp gating the History tab's unreviewed-autosaves dot.
@@ -134,7 +135,7 @@ All mounted under `/api/*`, guarded by `csrfMiddleware` (Origin check) + `noStor
 - `GET|POST|DELETE /api/tokens[/:id]` — API token CRUD for iOS Shortcuts. POST returns the plain token **once**; only the SHA-256 hash is stored.
 - `POST|GET /api/shortcuts/expense` — Apple Pay webhook. Bearer token (Authorization header **or** `?token=` query). Rate-limited to 60 req/min per token. Tolerant amount/timestamp/merchant parsers handle iOS locale variants (€1,23 vs 1.23, currency dicts, naturally-formatted dates). GET variant exists because Cloudflare drops Shortcuts' POST+JSON body with a generic 400.
 - `GET /api/pending`, `PATCH /api/pending/:id/confirm`, `DELETE /api/pending/:id` — Apple Pay pending expenses lifecycle.
-- `GET|PATCH|DELETE /api/merchants[/:merchant]`, `POST /api/merchants/import` — merchant memory CRUD; import backfills from existing confirmed Apple Pay expenses.
+- `GET|PATCH|DELETE /api/merchants[/:merchant]`, `POST /api/merchants/:merchant/merge`, `GET /api/merchants/aliases`, `DELETE /api/merchants/aliases/:alias`, `POST /api/merchants/import` — merchant memory CRUD, alias management, and import backfill from confirmed Apple Pay history.
 - `GET /api/history-marker`, `POST /api/history-marker/visit` — read/clear the History-tab "unreviewed Apple Pay autosaves" dot.
 - Unknown `/api/*` paths return JSON 404, not the SPA shell. Non-`/api` paths in production fall through to `serveStatic` then to the cached `index.html`.
 
@@ -154,8 +155,8 @@ Schedules wired up in `server/src/index.ts` via `node-cron` (server local time).
 
 - `5 0 * * *` — `processRecurringTemplates()` (`jobs/recurring.ts`) generates any due expenses for active recurring templates (catch-up loop handles missed days). Also runs once on server startup.
 - `0 3 * * *` — `sweepExpiredSessions(db)` (`jobs/sessions.ts`) deletes expired session rows. Runs on startup too.
-- `0 21 * * *` — `sendDailyReminders()` (`jobs/notifications.ts`) pushes a reminder to users who opted in and have 0 expenses logged today. **Note:** fires at a fixed 21:00; the per-user `daily_reminder_time` pref in the DB is currently not applied.
-- `0 21 * * *` (Europe/Vienna) — `sendWeeklySummaries()` (`jobs/notifications.ts`) pushes weekly totals to users whose `weekly_summary_day` matches today. `weekly_summary_time` pref is similarly unused. Sums all users' non-recurring expenses from this week's Monday 00:00 UTC through now — household total. With the default Sunday day, that's the full Mon–Sun window through 21:00 Vienna.
+- `0 * * * *` (Europe/Vienna) — `sendDailyReminders()` (`jobs/notifications.ts`) runs hourly and checks each user's `daily_reminder_time` preference to push at their chosen hour. Reminds users who opted in and have 0 expenses logged today.
+- `0 * * * *` (Europe/Vienna) — `sendWeeklySummaries()` (`jobs/notifications.ts`) runs hourly and checks each user's `weekly_summary_day` + `weekly_summary_time` preferences. Sums all users' non-recurring expenses from this week's Monday 00:00 UTC through now — household total.
 
 Expired/dead push subscriptions (404 or 410 from the push service) are auto-pruned inside `sendToUser`.
 
@@ -232,9 +233,9 @@ Confirmation flow (`PATCH /api/pending/:id/confirm`) wraps the status flip + mer
 
 When the user **edits** an already-confirmed Apple Pay expense and changes its category (sync flow), `sync.ts` calls `resetMerchantMemory()` to flip the count back to 1 — next webhook hit at that merchant goes pending again so the user can re-confirm. This is gated to `source === 'apple-pay'` and `deleted === 0` (soft deletes don't reset memory).
 
-Memory is per-user (composite PK `user_id + merchant_normalized`) — household members can categorize the same merchant differently.
+Memory is household-wide (PK is `merchant_normalized` alone) — both users contribute confirmations to the same row. `merchant_aliases` collapses POS name variants onto one canonical merchant so memory lookups and expense notes use consistent naming.
 
-`Settings → Merchants` (`/settings/merchants`) renders the user's full memory; PATCH overrides a mapping (resets count to 1), DELETE removes it. `POST /api/merchants/import` backfills from existing confirmed Apple Pay history — picks the most-frequent (cat, sub) pair per merchant and never overwrites an existing memory row.
+`Settings → Merchants` (`/settings/merchants`) renders the household's full memory; PATCH overrides a mapping (resets count to 1), DELETE removes it. Merchants can be merged via `POST /api/merchants/:merchant/merge`, which creates an alias and consolidates memory. `POST /api/merchants/import` backfills from existing confirmed Apple Pay history — picks the most-frequent (cat, sub) pair per merchant and never overwrites an existing memory row.
 
 ### Push notifications
 
@@ -276,7 +277,7 @@ Three stages in `Dockerfile`:
 
 `docker-compose.yml` mounts `./data:/app/data` for the SQLite file, attaches to the external `web` network (Caddy lives in a sibling stack named `flowdx`, not in this repo).
 
-**Bump the app version on every deploy.** The version label in [Settings.tsx](client/src/screens/Settings.tsx) (search `v2.`) is the only build-stamp users see — increment it before every `docker compose up -d --build`. Acts as a "did the new bundle actually load?" check from the user side, and a sanity check during incident triage.
+**Bump the app version on every deploy.** The version label in [Settings.tsx](client/src/screens/Settings.tsx) (search `v3.`) is the only build-stamp users see — increment it before every `docker compose up -d --build`. Acts as a "did the new bundle actually load?" check from the user side, and a sanity check during incident triage.
 
 ### Build performance
 
