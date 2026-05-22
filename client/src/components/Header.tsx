@@ -20,10 +20,10 @@ export function Header({ onSettingsClick }: HeaderProps) {
           aria-hidden="true"
         >
           <g transform="translate(512 512)">
-            <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(45)" fill="#8aafff" />
-            <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(135)" fill="#6c9cff" />
-            <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(225)" fill="#4a7ee8" />
-            <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(315)" fill="#5a8def" />
+            <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(45)" fill="#6c9cff" />
+            <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(135)" fill="#69db7c" />
+            <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(225)" fill="#ff6b6b" />
+            <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(315)" fill="#9775fa" />
           </g>
         </svg>
         <span class="text-lg font-light text-accent">xpensify</span>

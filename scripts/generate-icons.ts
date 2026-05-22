@@ -26,10 +26,10 @@ async function main() {
   <g transform="translate(${padding}, ${padding})">
     <svg width="${logoSize}" height="${logoSize}" viewBox="0 0 1024 1024" fill="none">
       <g transform="translate(512 512)">
-        <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(45)" fill="#8aafff"></rect>
-        <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(135)" fill="#6c9cff"></rect>
-        <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(225)" fill="#4a7ee8"></rect>
-        <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(315)" fill="#5a8def"></rect>
+        <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(45)" fill="#6c9cff"></rect>
+        <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(135)" fill="#69db7c"></rect>
+        <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(225)" fill="#ff6b6b"></rect>
+        <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(315)" fill="#9775fa"></rect>
       </g>
     </svg>
   </g>
