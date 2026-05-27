@@ -88,6 +88,8 @@ export function AmountInput({ value, onChange, inputRef, celebrateRef }: AmountI
 
   /** When non-null, overrides the displayed input value during a celebrate roll. */
   const [rollingText, setRollingText] = useState<string | null>(null);
+  /** Drives the celebrate halo + check chip, and fades the underline seam out. */
+  const [celebrating, setCelebrating] = useState(false);
   /** Screen-reader status region — "saved" is announced once per celebration. */
   const [statusMsg, setStatusMsg] = useState("");
 
@@ -115,13 +117,17 @@ export function AmountInput({ value, onChange, inputRef, celebrateRef }: AmountI
           return Promise.resolve();
         }
 
-        // Hold a soft green tint on the pill for the duration of the roll.
+        // Hold a soft green halo on the pill for the duration of the roll.
         // Fade-in, hold, fade-out all run on a single CSS transition so the
         // background doesn't pulse — it simply turns green and stays green
-        // until the number lands at 0.00.
+        // until the number lands at 0.00. The check chip + underline fade are
+        // driven by the `celebrating` flag.
+        setCelebrating(true);
         if (pillRef.current) {
-          pillRef.current.style.transition = "background-color 200ms ease-out";
-          pillRef.current.style.backgroundColor = "rgba(52, 199, 89, 0.18)";
+          pillRef.current.style.transition = "background-color 240ms ease, box-shadow 240ms ease";
+          pillRef.current.style.backgroundColor = "rgba(52, 199, 89, 0.10)";
+          pillRef.current.style.boxShadow =
+            "inset 0 0 0 1px rgba(52, 199, 89, 0.35), 0 0 24px rgba(52, 199, 89, 0.18)";
         }
 
         setStatusMsg("saved");
@@ -138,11 +144,14 @@ export function AmountInput({ value, onChange, inputRef, celebrateRef }: AmountI
             },
             onComplete: () => {
               setRollingText(null);
-              // Release the inline bg override — the `bg-bg-surface` class
-              // resumes. Same transition duration so fade-out matches fade-in.
+              // Release the inline overrides — the transparent surface + the
+              // hairline `shadow-[…]` class resume. Same transition duration so
+              // fade-out matches fade-in.
               if (pillRef.current) {
                 pillRef.current.style.backgroundColor = "";
+                pillRef.current.style.boxShadow = "";
               }
+              setCelebrating(false);
               resolve();
             },
           });
@@ -184,7 +193,7 @@ export function AmountInput({ value, onChange, inputRef, celebrateRef }: AmountI
     <div class="flex flex-col items-center gap-2">
       <div
         ref={pillRef}
-        class="relative inline-flex items-baseline gap-2 rounded-xl bg-bg-surface px-6 py-4"
+        class="relative inline-flex items-baseline gap-2 rounded-xl px-6 py-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)]"
       >
         <span class="text-3xl sm:text-[40px] font-light leading-none text-text-secondary select-none">
           EUR
@@ -216,6 +225,39 @@ export function AmountInput({ value, onChange, inputRef, celebrateRef }: AmountI
         >
           {displayText}
         </span>
+
+        {/* Celebrate check chip — fades in over the pill's top-right corner. */}
+        {celebrating && (
+          <span
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              right: 10,
+              top: 12,
+              width: 16,
+              height: 16,
+              borderRadius: 9999,
+              backgroundColor: "rgba(52, 199, 89, 0.9)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#0c0d12",
+            }}
+          >
+            <svg
+              width="9"
+              height="9"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M5 12l5 5L20 7" />
+            </svg>
+          </span>
+        )}
       </div>
 
       {/* Screen-reader-only status — announces "saved" without stealing focus. */}
@@ -237,7 +279,17 @@ export function AmountInput({ value, onChange, inputRef, celebrateRef }: AmountI
         {statusMsg}
       </span>
 
-      <div class="h-px w-full bg-accent opacity-30" />
+      {/* Gradient seam — accent fading to nothing on both sides. Fades to 0
+          during the celebrate flash. */}
+      <div
+        class="h-px"
+        style={{
+          width: 220,
+          background: "linear-gradient(90deg, transparent, rgba(108,156,255,0.5) 50%, transparent)",
+          opacity: celebrating ? 0 : 1,
+          transition: "opacity 260ms ease",
+        }}
+      />
     </div>
   );
 }
