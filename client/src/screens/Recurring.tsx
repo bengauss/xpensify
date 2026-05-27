@@ -304,13 +304,18 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
       });
     }
 
-    // 4. Toggle button tails the rows.
+    // 4. Toggle button tails the rows — blooms in on a spring so it doesn't
+    //    just blink on. springs.data carries a slight overshoot (the same
+    //    preset the trend bars use), so the pill grows a touch past full size
+    //    and settles back. Pin the start scale so the spring's first frame
+    //    isn't read off a computed scale(1).
     if (toggleBtnRef.current) {
       const delay = ROW_START + rowCount * stagger.pill + 0.05;
+      toggleBtnRef.current.style.transform = "scale(0.8)";
       ANIM(
         toggleBtnRef.current,
-        { opacity: [0, 1] },
-        { duration: 0.3, delay, ease: [0.22, 1, 0.36, 1], ...getReducedMotionOverride() },
+        { opacity: [0, 1], scale: [0.8, 1] },
+        { ...springs.data, delay, ...getReducedMotionOverride() },
       );
     }
   });
@@ -510,11 +515,8 @@ function TemplateRow({
       onPointerCancel={press.onPointerCancel}
       data-row
       onClick={onTap}
-      class="flex items-center gap-3 w-full text-left px-1 py-3 cursor-pointer bg-transparent border-0"
-      style={{
-        WebkitTapHighlightColor: "transparent",
-        borderBottom: isLast ? "none" : "0.5px solid rgba(255,255,255,0.04)",
-      }}
+      class="relative flex items-center gap-3 w-full text-left px-1 py-3 cursor-pointer bg-transparent border-0"
+      style={{ WebkitTapHighlightColor: "transparent" }}
     >
       {/* Icon + text — animated together */}
       <div data-row-text class="flex items-center gap-3 flex-1 min-w-0">
@@ -538,7 +540,8 @@ function TemplateRow({
         </div>
       </div>
 
-      {/* Amount */}
+      {/* Amount — fades in on its own beat after the text settles, the same
+          two-phase reveal as History (see animateRowEntrance). */}
       <span
         data-row-amount
         class="flex-shrink-0 text-base font-medium tabular-nums"
@@ -546,6 +549,15 @@ function TemplateRow({
       >
         {formatMoney(template.amount)}
       </span>
+
+      {/* Hairline divider — fades in with the row (see animateRowEntrance). */}
+      {!isLast && (
+        <div
+          data-row-line
+          class="absolute left-0 right-0 bottom-0"
+          style={{ height: "0.5px", backgroundColor: "rgba(255,255,255,0.04)" }}
+        />
+      )}
     </button>
   );
 }
@@ -630,34 +642,39 @@ export default function RecurringScreen() {
             const total = byFrequency[freq].reduce((s, t) => s + t.amount, 0);
             return (
               <div key={freq} class="flex flex-col gap-1">
-                <div class="flex flex-col pb-1">
-                  <div class="flex items-center justify-between px-1">
-                    <span
+                {/* Section header is a data-row so its eyebrow, total, and
+                    hairline slide in on the same cascade as the rows below,
+                    rather than sitting fully drawn on tab load. */}
+                <div data-row class="flex flex-col pb-1">
+                  <div data-row-text>
+                    <div class="flex items-center justify-between px-1">
+                      <span
+                        style={{
+                          fontSize: 12.5,
+                          fontWeight: 600,
+                          letterSpacing: "0.05em",
+                          color: "#909096",
+                        }}
+                      >
+                        {freq}
+                      </span>
+                      <span
+                        class="tabular-nums"
+                        style={{ fontSize: 13, color: "#909096", letterSpacing: "-0.005em" }}
+                      >
+                        {formatEur(total)}
+                      </span>
+                    </div>
+                    {/* Gradient hairline — accent on the left, dissolving to nothing. */}
+                    <div
+                      class="h-px w-full"
                       style={{
-                        fontSize: 12.5,
-                        fontWeight: 600,
-                        letterSpacing: "0.05em",
-                        color: "#909096",
+                        marginTop: 10,
+                        background:
+                          "linear-gradient(90deg, rgba(108,156,255,0.28) 0%, rgba(108,156,255,0.08) 38%, rgba(255,255,255,0.02) 100%)",
                       }}
-                    >
-                      {freq}
-                    </span>
-                    <span
-                      class="tabular-nums"
-                      style={{ fontSize: 13, color: "#909096", letterSpacing: "-0.005em" }}
-                    >
-                      {formatEur(total)}
-                    </span>
+                    />
                   </div>
-                  {/* Gradient hairline — accent on the left, dissolving to nothing. */}
-                  <div
-                    class="h-px w-full"
-                    style={{
-                      marginTop: 10,
-                      background:
-                        "linear-gradient(90deg, rgba(108,156,255,0.28) 0%, rgba(108,156,255,0.08) 38%, rgba(255,255,255,0.02) 100%)",
-                    }}
-                  />
                 </div>
                 {byFrequency[freq].map((t, i, arr) => (
                   <TemplateRow

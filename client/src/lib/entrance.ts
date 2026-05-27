@@ -69,6 +69,7 @@ export function animateRowEntrance(container: HTMLElement): () => void {
     for (const row of unrevealed) {
       row.querySelector<HTMLElement>("[data-row-text]")?.setAttribute("data-revealed", "1");
       row.querySelector<HTMLElement>("[data-row-amount]")?.setAttribute("data-revealed", "1");
+      row.querySelector<HTMLElement>("[data-row-line]")?.setAttribute("data-revealed", "1");
     }
     return () => {};
   }
@@ -78,6 +79,7 @@ export function animateRowEntrance(container: HTMLElement): () => void {
     for (const row of unrevealed) {
       row.querySelector<HTMLElement>("[data-row-text]")?.setAttribute("data-revealed", "1");
       row.querySelector<HTMLElement>("[data-row-amount]")?.setAttribute("data-revealed", "1");
+      row.querySelector<HTMLElement>("[data-row-line]")?.setAttribute("data-revealed", "1");
     }
     return () => {};
   }
@@ -85,6 +87,7 @@ export function animateRowEntrance(container: HTMLElement): () => void {
   const timers: number[] = [];
   const animatedTextEls: HTMLElement[] = [];
   const animatedAmountEls: HTMLElement[] = [];
+  const animatedLineEls: HTMLElement[] = [];
   const count = Math.min(unrevealed.length, MAX_ANIMATED_ROWS);
   const textStaggerMs = stagger.text * 1000;
   const amountStaggerMs = stagger.amount * 1000;
@@ -96,27 +99,46 @@ export function animateRowEntrance(container: HTMLElement): () => void {
   // while amounts revealed normally. CSS transitions are honoured even when
   // the page is mid cold-start work.
   for (let i = 0; i < count; i++) {
-    const textEl = unrevealed[i].querySelector<HTMLElement>("[data-row-text]");
-    if (!textEl) continue;
-    // Pin inline style BEFORE flipping data-revealed so the CSS handoff
-    // doesn't flash opacity:1 before the transition starts.
-    textEl.style.opacity = "0";
-    textEl.style.transform = "translateX(-20px)";
-    textEl.setAttribute("data-revealed", "1");
-    animatedTextEls.push(textEl);
+    const row = unrevealed[i];
     const delay = i * textStaggerMs;
-    const t = window.setTimeout(() => {
-      textEl.style.transition =
-        "opacity 280ms ease, transform 320ms cubic-bezier(0.22, 1, 0.36, 1)";
-      textEl.style.opacity = "1";
-      textEl.style.transform = "";
-    }, delay);
-    timers.push(t);
+
+    const textEl = row.querySelector<HTMLElement>("[data-row-text]");
+    if (textEl) {
+      // Pin inline style BEFORE flipping data-revealed so the CSS handoff
+      // doesn't flash opacity:1 before the transition starts.
+      textEl.style.opacity = "0";
+      textEl.style.transform = "translateX(-20px)";
+      textEl.setAttribute("data-revealed", "1");
+      animatedTextEls.push(textEl);
+      const t = window.setTimeout(() => {
+        textEl.style.transition =
+          "opacity 280ms ease, transform 320ms cubic-bezier(0.22, 1, 0.36, 1)";
+        textEl.style.opacity = "1";
+        textEl.style.transform = "";
+      }, delay);
+      timers.push(t);
+    }
+
+    // Optional hairline divider fades in on the same beat as its row's text,
+    // so the rule between rows reveals with the row rather than sitting there
+    // fully drawn while the content slides in.
+    const lineEl = row.querySelector<HTMLElement>("[data-row-line]");
+    if (lineEl) {
+      lineEl.style.opacity = "0";
+      lineEl.setAttribute("data-revealed", "1");
+      animatedLineEls.push(lineEl);
+      const lt = window.setTimeout(() => {
+        lineEl.style.transition = "opacity 320ms ease";
+        lineEl.style.opacity = "1";
+      }, delay);
+      timers.push(lt);
+    }
   }
 
   // Rows beyond the animation window: reveal instantly.
   for (let i = count; i < unrevealed.length; i++) {
     unrevealed[i].querySelector<HTMLElement>("[data-row-text]")?.setAttribute("data-revealed", "1");
+    unrevealed[i].querySelector<HTMLElement>("[data-row-line]")?.setAttribute("data-revealed", "1");
   }
 
   // Phase 2: amounts fade in after text settles.
@@ -148,6 +170,9 @@ export function animateRowEntrance(container: HTMLElement): () => void {
       el.style.transform = "";
     }
     for (const el of animatedAmountEls) {
+      el.style.opacity = "1";
+    }
+    for (const el of animatedLineEls) {
       el.style.opacity = "1";
     }
   };

@@ -234,12 +234,11 @@ function ExpenseRow({ expense, category, subcategory, userStyle, onTap }: Expens
       onPointerDown={press.onPointerDown}
       onPointerUp={press.onPointerUp}
       onPointerCancel={press.onPointerCancel}
-      class="w-full text-left flex items-center gap-[13px] px-1 rounded-xl"
+      class="relative w-full text-left flex items-center gap-[13px] px-1 rounded-xl"
       style={{
         WebkitTapHighlightColor: "transparent",
         paddingTop: 12,
         paddingBottom: 12,
-        borderBottom: "0.5px solid rgba(255,255,255,0.04)",
       }}
     >
       {/* Icon + text — animated together */}
@@ -343,6 +342,13 @@ function ExpenseRow({ expense, category, subcategory, userStyle, onTap }: Expens
       <span data-row-amount class="flex-shrink-0 text-[15.5px] font-medium tabular-nums" style={{ color: "var(--color-text-primary)", letterSpacing: "-0.01em" }}>
         {formatMoney(expense.amount)}
       </span>
+
+      {/* Hairline divider — fades in with the row (see animateRowEntrance). */}
+      <div
+        data-row-line
+        class="absolute left-0 right-0 bottom-0"
+        style={{ height: "0.5px", backgroundColor: "rgba(255,255,255,0.04)" }}
+      />
     </button>
   );
 }
@@ -364,7 +370,6 @@ function DayHeader({ dateKey, total }: DayHeaderProps) {
             fontWeight: 600,
             letterSpacing: "0.08em",
             color: "#909096",
-            textTransform: "uppercase",
           }}
         >
           {formatDateLabel(dateKey)}

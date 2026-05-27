@@ -189,8 +189,8 @@ Bottom-nav tabs (`/`, `/history`, `/recurring`, `/analytics`) use directional sl
 `client/src/lib/entrance.ts` — the `useEntrance` hook + `animateRowEntrance(container)` helper power staggered row reveals (History, Recurring, CategorySelector).
 
 Contract:
-- JSX marks animatable rows with `data-row`, containing `[data-row-text]` (icon + labels) and optional `[data-row-amount]` (trailing value).
-- **Default hidden state is a CSS rule in `index.css`** gated on `[data-row-text]:not([data-revealed])` — NOT an inline JSX style. This is critical (see gotcha below).
+- JSX marks animatable rows with `data-row`, containing `[data-row-text]` (icon + labels) and optional `[data-row-amount]` (trailing value, fades in on its own beat after the text settles) and optional `[data-row-line]` (a hairline divider that fades in on the same beat as the row's text — used so per-row rules reveal *with* the row instead of sitting fully drawn on load). Recurring rows skip `[data-row-amount]` and wrap the amount inside `[data-row-text]` so the whole row slides as one unit (no separate amount pop); History keeps the two split. The Recurring section header is itself a `data-row` so its eyebrow/total/hairline join the cascade.
+- **Default hidden state is a CSS rule in `index.css`** gated on `[data-row-text]:not([data-revealed])` (likewise `[data-row-amount]` / `[data-row-line]`) — NOT an inline JSX style. This is critical (see gotcha below).
 - `animateRowEntrance` is idempotent and re-entrant: it skips rows already marked `[data-revealed]`. Call it on data growth (infinite scroll, filter change, late data arrival) to reveal new rows without re-animating old ones.
 - Incremental calls (rows appended after the initial entrance) reveal instantly — the full staggered cascade plays only on first fill.
 - Dep-change cleanup snaps mid-animation rows to their final visible state so rapid re-renders can't strand rows at partial opacity.

@@ -70,6 +70,14 @@ export function TrendChart({
     prevKeyRef.current = dataKey;
 
     const scrollEl = scrollRef.current;
+    // On first render the list auto-scrolls to its right edge (newest months)
+    // — but that scroll lives in a useEffect that runs *after* this layout
+    // effect. Do the jump here, synchronously, BEFORE measuring visibility:
+    // otherwise we measure at scrollLeft=0 and animate the oldest (left-most)
+    // bars while the newest bars the user actually lands on snap in instantly.
+    if (isFirstRender && scrollEl) {
+      scrollEl.scrollLeft = scrollEl.scrollWidth;
+    }
     const scrollLeft = scrollEl?.scrollLeft ?? 0;
     const clientWidth = scrollEl?.clientWidth ?? Number.MAX_SAFE_INTEGER;
     // Give a small buffer so bars peeking at the edge also stagger.
