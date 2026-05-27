@@ -72,8 +72,8 @@ export default function LoginScreen() {
         style={{ width: "100%", maxWidth: 320, display: "flex", flexDirection: "column", alignItems: "center" }}
       >
         {/* Logo + wordmark */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <svg width="22" height="22" viewBox="0 0 1024 1024" fill="none" aria-hidden="true">
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <svg width="26" height="26" viewBox="0 0 1024 1024" fill="none" aria-hidden="true">
             <g transform="translate(512 512)">
               <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(45)" fill="#6c9cff" />
               <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(135)" fill="#69db7c" />
@@ -81,7 +81,7 @@ export default function LoginScreen() {
               <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(315)" fill="#9775fa" />
             </g>
           </svg>
-          <span style={{ color: "#6c9cff", fontSize: 24, fontWeight: 600, letterSpacing: 0.2 }}>
+          <span style={{ color: "#e8e8ed", fontSize: 24, fontWeight: 500, letterSpacing: "-0.015em" }}>
             xpensify
           </span>
         </div>

@@ -7,7 +7,7 @@ interface HeaderProps {
 export function Header({ onSettingsClick }: HeaderProps) {
   return (
     <header
-      class="flex items-center justify-between px-4 py-3 flex-shrink-0"
+      class="relative flex items-center justify-between px-4 py-3 flex-shrink-0"
       style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
     >
       <div class="flex items-center gap-2">
@@ -26,7 +26,16 @@ export function Header({ onSettingsClick }: HeaderProps) {
             <rect x="72" y="-78" width="400" height="156" rx="78" transform="rotate(315)" fill="#9775fa" />
           </g>
         </svg>
-        <span class="text-lg font-light text-accent">xpensify</span>
+        <span
+          style={{
+            color: "var(--color-text-primary)",
+            fontSize: 17,
+            fontWeight: 400,
+            letterSpacing: "-0.01em",
+          }}
+        >
+          xpensify
+        </span>
       </div>
       <div class="flex items-center gap-3">
         <SyncIndicator />
@@ -51,6 +60,19 @@ export function Header({ onSettingsClick }: HeaderProps) {
           </button>
         )}
       </div>
+      {/* Soft gradient hairline so the header separates from scrolling content. */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          left: 16,
+          right: 16,
+          bottom: 0,
+          height: 1,
+          background:
+            "linear-gradient(90deg, transparent, rgba(255,255,255,0.05) 22%, rgba(255,255,255,0.05) 78%, transparent)",
+        }}
+      />
     </header>
   );
 }
