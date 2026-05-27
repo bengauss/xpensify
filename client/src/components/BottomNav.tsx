@@ -34,11 +34,16 @@ function TabLink({
       style={{ WebkitTapHighlightColor: "transparent" }}
     >
       <div
-        class={`flex h-11 w-11 items-center justify-center rounded-full transition-colors relative ${active ? "bg-accent/15" : ""}`}
+        class="flex h-11 w-11 items-center justify-center rounded-full relative"
+        style={{
+          backgroundColor: active ? "rgba(108,156,255,0.11)" : "transparent",
+          boxShadow: active ? "inset 0 0 0 0.5px rgba(108,156,255,0.35)" : "none",
+          transition: "background-color 240ms cubic-bezier(0.22,1,0.36,1), box-shadow 240ms ease",
+        }}
       >
         <svg
-          width="28"
-          height="28"
+          width="26"
+          height="26"
           viewBox="0 0 24 24"
           fill="none"
           stroke={active ? "var(--color-accent)" : "var(--color-text-body)"}
@@ -59,7 +64,7 @@ function TabLink({
               height: 6,
               borderRadius: "50%",
               backgroundColor: "var(--color-accent)",
-              boxShadow: "0 0 0 1.5px var(--color-bg-primary)",
+              boxShadow: "0 0 0 1.5px var(--color-bg-primary), 0 0 8px rgba(108,156,255,0.5)",
             }}
           />
         )}
@@ -73,9 +78,24 @@ export function BottomNav() {
 
   return (
     <nav
-      class="flex-shrink-0 z-40 flex items-center justify-around border-t border-text-ghost/10 bg-bg-primary px-2 pt-2"
+      class="relative flex-shrink-0 z-40 flex items-center justify-around bg-bg-primary px-2 pt-2.5"
       style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}
     >
+      {/* Fade above the nav so scrolling content dissolves into it rather than
+          hitting a hard border. */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          top: -28,
+          height: 28,
+          pointerEvents: "none",
+          background:
+            "linear-gradient(180deg, rgba(12,13,18,0) 0%, rgba(12,13,18,0.85) 70%, #0c0d12 100%)",
+        }}
+      />
       {tabs.map((tab) => (
         <TabLink
           key={tab.path}
