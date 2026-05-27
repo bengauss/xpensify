@@ -50,11 +50,23 @@ export function formatAmount(raw: string): string {
     decimalPart = noCommas.slice(dotIdx + 1).replace(/\./g, "");
     hasDecimal = true;
   } else if (cleaned.includes(",")) {
-    // No period but comma(s) → last comma is decimal, earlier commas are stray/thousands
+    // No period but comma(s). A comma is the decimal separator only when it
+    // trails ≤2 digits (cents) — the German-keypad case ("1,23"). When it
+    // trails 3+ digits it's a thousands separator this function inserted on a
+    // previous keystroke: typing "5" into the displayed "1,234" yields the raw
+    // "1,2345", which must re-parse to 12,345 — not collapse to 1.23. So strip
+    // all commas and treat the value as a plain integer in that case.
     const lastComma = cleaned.lastIndexOf(",");
-    integerPart = cleaned.slice(0, lastComma).replace(/,/g, "");
-    decimalPart = cleaned.slice(lastComma + 1);
-    hasDecimal = true;
+    const afterLast = cleaned.slice(lastComma + 1);
+    if (afterLast.length <= 2) {
+      integerPart = cleaned.slice(0, lastComma).replace(/,/g, "");
+      decimalPart = afterLast;
+      hasDecimal = true;
+    } else {
+      integerPart = cleaned.replace(/,/g, "");
+      decimalPart = "";
+      hasDecimal = false;
+    }
   } else {
     integerPart = cleaned;
     decimalPart = "";
