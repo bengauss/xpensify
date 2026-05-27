@@ -46,6 +46,27 @@ function formatPct(a: number, b: number): string {
   return `${Math.abs(diff).toFixed(0)}%`;
 }
 
+// Stat-card delta indicator — a softly-tinted chip with a half-pixel ring.
+// Green when spend is down (isLess), red when up.
+function deltaChipStyle(isLess: boolean): Record<string, string | number> {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    alignSelf: "flex-start",
+    marginTop: 6,
+    padding: "3px 9px 3px 7px",
+    borderRadius: 9999,
+    fontSize: 12,
+    fontWeight: 500,
+    color: isLess ? "var(--color-success)" : "var(--color-danger)",
+    backgroundColor: isLess ? "rgba(105,219,124,0.10)" : "rgba(255,107,107,0.10)",
+    boxShadow: isLess
+      ? "inset 0 0 0 0.5px rgba(105,219,124,0.22)"
+      : "inset 0 0 0 0.5px rgba(255,107,107,0.22)",
+  };
+}
+
 function prevYearMonth(year: number, month: number): { year: number; month: number } {
   if (month === 1) return { year: year - 1, month: 12 };
   return { year, month: month - 1 };
@@ -643,10 +664,16 @@ export default function AnalyticsScreen() {
           {/* Summary cards */}
           <div class="flex gap-3">
             <div
-              class="flex-1 rounded-xl p-4 flex flex-col gap-1"
-              style={{ backgroundColor: "var(--color-bg-surface)" }}
+              class="flex-1 flex flex-col gap-1"
+              style={{
+                backgroundColor: "#13141a",
+                borderRadius: 14,
+                padding: "14px 14px 12px",
+                boxShadow:
+                  "inset 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.03)",
+              }}
             >
-              <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+              <span style={{ fontSize: 13, fontWeight: 500, letterSpacing: "0.03em", color: "#909096" }}>
                 {totalCardLabel}
               </span>
               <AnimatedTotal
@@ -654,12 +681,10 @@ export default function AnalyticsScreen() {
                 target={currentTotal}
                 enabled={entranceReady}
                 class="tabular-nums"
-                style={{ fontSize: 28, fontWeight: 300, color: "var(--color-text-primary)" }}
+                style={{ fontSize: 28, fontWeight: 200, letterSpacing: "-0.03em", color: "#f4f4f8" }}
               />
               {prevTotal > 0 && (
-                <span
-                  style={{ fontSize: 13, color: isLess ? "var(--color-success)" : "var(--color-danger)" }}
-                >
+                <span style={deltaChipStyle(isLess)}>
                   {isLess ? "↓" : "↑"} {pct}
                   {period === "year"
                     ? " vs last year"
@@ -676,10 +701,16 @@ export default function AnalyticsScreen() {
             </div>
 
             <div
-              class="flex-1 rounded-xl p-4 flex flex-col gap-1"
-              style={{ backgroundColor: "var(--color-bg-surface)" }}
+              class="flex-1 flex flex-col gap-1"
+              style={{
+                backgroundColor: "#13141a",
+                borderRadius: 14,
+                padding: "14px 14px 12px",
+                boxShadow:
+                  "inset 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.03)",
+              }}
             >
-              <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+              <span style={{ fontSize: 13, fontWeight: 500, letterSpacing: "0.03em", color: "#909096" }}>
                 {ytdCardLabel}
               </span>
               {period === "year" ? (
@@ -690,12 +721,10 @@ export default function AnalyticsScreen() {
                     enabled={entranceReady}
                     delay={0.1}
                     class="tabular-nums"
-                    style={{ fontSize: 28, fontWeight: 300, color: "var(--color-text-primary)" }}
+                    style={{ fontSize: 28, fontWeight: 200, letterSpacing: "-0.03em", color: "#f4f4f8" }}
                   />
                   {prevMonthlyAvg > 0 && (
-                    <span
-                      style={{ fontSize: 13, color: monthlyAvgIsLess ? "var(--color-success)" : "var(--color-danger)" }}
-                    >
+                    <span style={deltaChipStyle(monthlyAvgIsLess)}>
                       {monthlyAvgIsLess ? "↓" : "↑"} {monthlyAvgPct} vs last year
                     </span>
                   )}
@@ -713,12 +742,10 @@ export default function AnalyticsScreen() {
                     enabled={entranceReady}
                     delay={0.1}
                     class="tabular-nums"
-                    style={{ fontSize: 28, fontWeight: 300, color: "var(--color-text-primary)" }}
+                    style={{ fontSize: 28, fontWeight: 200, letterSpacing: "-0.03em", color: "#f4f4f8" }}
                   />
                   {prevYtd > 0 && (
-                    <span
-                      style={{ fontSize: 13, color: ytdIsLess ? "var(--color-success)" : "var(--color-danger)" }}
-                    >
+                    <span style={deltaChipStyle(ytdIsLess)}>
                       {ytdIsLess ? "↓" : "↑"} {ytdPct} vs last year
                     </span>
                   )}
@@ -735,7 +762,11 @@ export default function AnalyticsScreen() {
           {/* Breakdown / top notes */}
           <div
             class="rounded-xl p-4"
-            style={{ backgroundColor: "var(--color-bg-surface)" }}
+            style={{
+              backgroundColor: "#13141a",
+              boxShadow:
+                "inset 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.03)",
+            }}
           >
             <span
               class="tracking-wider block mb-3"
@@ -759,8 +790,10 @@ export default function AnalyticsScreen() {
           <div
             class="rounded-xl"
             style={{
-              backgroundColor: "var(--color-bg-surface)",
+              backgroundColor: "#13141a",
               padding: "16px 16px 12px 16px",
+              boxShadow:
+                "inset 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.03)",
             }}
           >
             <span
