@@ -547,13 +547,14 @@ export default function AnalyticsScreen() {
             onPointerUp={prevArrowPress.onPointerUp}
             onPointerCancel={prevArrowPress.onPointerCancel}
             onClick={handlePrev}
-            class="flex items-center justify-center rounded-full border text-sm"
+            class="flex items-center justify-center rounded-full text-sm"
             style={{
-              width: 32,
-              height: 32,
-              backgroundColor: "var(--color-bg-surface)",
-              borderColor: "rgba(42,42,50,0.8)",
-              color: "var(--color-text-primary)",
+              width: 34,
+              height: 34,
+              backgroundColor: "transparent",
+              color: "var(--color-text-secondary)",
+              boxShadow:
+                "inset 0 0 0 1px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.025)",
               WebkitTapHighlightColor: "transparent",
               flex: "none",
             }}
@@ -578,13 +579,14 @@ export default function AnalyticsScreen() {
             onPointerUp={nextArrowPress.onPointerUp}
             onPointerCancel={nextArrowPress.onPointerCancel}
             onClick={handleNext}
-            class="flex items-center justify-center rounded-full border text-sm"
+            class="flex items-center justify-center rounded-full text-sm"
             style={{
-              width: 32,
-              height: 32,
-              backgroundColor: "var(--color-bg-surface)",
-              borderColor: "rgba(42,42,50,0.8)",
-              color: "var(--color-text-primary)",
+              width: 34,
+              height: 34,
+              backgroundColor: "transparent",
+              color: "var(--color-text-secondary)",
+              boxShadow:
+                "inset 0 0 0 1px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.025)",
               WebkitTapHighlightColor: "transparent",
               flex: "none",
             }}
