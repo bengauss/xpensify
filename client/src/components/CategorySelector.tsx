@@ -364,19 +364,20 @@ export function CategorySelector({
                   onPointerDown={(e) => handleCardPress(e.currentTarget as HTMLButtonElement)}
                   onPointerUp={(e) => handleCardRelease(e.currentTarget as HTMLButtonElement)}
                   onPointerCancel={(e) => handleCardRelease(e.currentTarget as HTMLButtonElement)}
-                  class="flex flex-col items-center justify-center gap-2 py-4 rounded-xl cursor-pointer border"
+                  class="flex flex-col items-center justify-center gap-2.5 pt-[18px] pb-4 rounded-[14px] cursor-pointer"
                   style={{
-                    backgroundColor: `${cat.color}0d`,
-                    borderColor: isSelected ? cat.color : `${cat.color}18`,
-                    borderWidth: isSelected ? "1.5px" : "1px",
+                    backgroundColor: isSelected ? `${cat.color}26` : `${cat.color}0c`,
+                    boxShadow: isSelected
+                      ? `inset 0 0 0 1.5px ${cat.color}, inset 0 1px 0 ${cat.color}40`
+                      : `inset 0 0 0 1px ${cat.color}1f, inset 0 1px 0 ${cat.color}22`,
                   }}
                 >
                   {IconComponent && (
                     <IconComponent color={cat.color} size={30} />
                   )}
                   <span
-                    class="text-[13px] leading-none"
-                    style={{ color: cat.color }}
+                    class="text-[12px] font-medium leading-none"
+                    style={{ color: cat.color, letterSpacing: "0.01em" }}
                   >
                     {cat.name}
                   </span>
@@ -391,10 +392,10 @@ export function CategorySelector({
               <button
                 key={sub.id}
                 onClick={() => onSelect(selectedCategory.id, sub.id)}
-                class="rounded-full px-4 py-2 text-sm border cursor-pointer"
+                class="rounded-full px-4 py-[9px] text-sm font-medium cursor-pointer"
                 style={{
-                  backgroundColor: `${selectedCategory.color}0d`,
-                  borderColor: `${selectedCategory.color}18`,
+                  backgroundColor: `${selectedCategory.color}0c`,
+                  boxShadow: `inset 0 0 0 1px ${selectedCategory.color}1f, inset 0 1px 0 ${selectedCategory.color}22`,
                   color: selectedCategory.color,
                 }}
               >
@@ -430,11 +431,12 @@ export function CategorySelector({
                 onPointerDown={(e) => handleCardPress(e.currentTarget as HTMLButtonElement)}
                 onPointerUp={(e) => handleCardRelease(e.currentTarget as HTMLButtonElement)}
                 onPointerCancel={(e) => handleCardRelease(e.currentTarget as HTMLButtonElement)}
-                class="flex flex-col items-center justify-center gap-2 py-4 rounded-xl cursor-pointer border"
+                class="flex flex-col items-center justify-center gap-2.5 pt-[18px] pb-4 rounded-[14px] cursor-pointer"
                 style={{
-                  backgroundColor: isConfirmed ? `${cat.color}25` : `${cat.color}0d`,
-                  borderColor: isConfirmed ? cat.color : `${cat.color}18`,
-                  borderWidth: isConfirmed ? "1.5px" : "1px",
+                  backgroundColor: isConfirmed ? `${cat.color}26` : `${cat.color}0c`,
+                  boxShadow: isConfirmed
+                    ? `inset 0 0 0 1.5px ${cat.color}, inset 0 1px 0 ${cat.color}40`
+                    : `inset 0 0 0 1px ${cat.color}1f, inset 0 1px 0 ${cat.color}22`,
                   opacity: (needsMountReveal.current || pendingBackReveal.current) ? 0 : undefined,
                   transform: (needsMountReveal.current || pendingBackReveal.current) ? "scale(0.85)" : undefined,
                 }}
@@ -491,11 +493,12 @@ export function CategorySelector({
                   key={sub.id}
                   data-pill
                   onClick={() => onSelect(selectedCategory.id, sub.id)}
-                  class="rounded-full px-4 py-2 text-sm border cursor-pointer"
+                  class="rounded-full px-4 py-[9px] text-sm font-medium cursor-pointer"
                   style={{
-                    backgroundColor: isConfirmedPill ? `${selectedCategory.color}25` : `${selectedCategory.color}0d`,
-                    borderColor: isConfirmedPill ? selectedCategory.color : `${selectedCategory.color}18`,
-                    borderWidth: isConfirmedPill ? "1.5px" : "1px",
+                    backgroundColor: isConfirmedPill ? `${selectedCategory.color}25` : `${selectedCategory.color}0c`,
+                    boxShadow: isConfirmedPill
+                      ? `inset 0 0 0 1.5px ${selectedCategory.color}, inset 0 1px 0 ${selectedCategory.color}40`
+                      : `inset 0 0 0 1px ${selectedCategory.color}1f, inset 0 1px 0 ${selectedCategory.color}22`,
                     color: selectedCategory.color,
                     opacity: 0,
                   }}
