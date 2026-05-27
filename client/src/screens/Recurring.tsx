@@ -353,19 +353,21 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
   return (
     <div
       ref={cardRef}
-      class="rounded-2xl border"
+      class="rounded-[18px]"
       style={{
-        padding: "16px 20px",
-        backgroundColor: "rgba(108,156,255,0.06)",
-        borderColor: "rgba(108,156,255,0.12)",
+        padding: "22px 22px 20px",
+        boxShadow:
+          "inset 0 0 0 1px rgba(255,255,255,0.05), inset 0 1px 0 rgba(255,255,255,0.04), 0 0 0 0.5px rgba(108,156,255,0.06)",
         opacity: 0,
         transform: "translateY(10px)",
       }}
     >
       <p
         style={{
-          fontSize: 12,
-          color: "var(--color-text-tertiary)",
+          fontSize: 13,
+          fontWeight: 500,
+          letterSpacing: "0.03em",
+          color: "#909096",
           marginBottom: 2,
         }}
       >
@@ -374,7 +376,8 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
       <p
         style={{
           fontSize: 32,
-          fontWeight: 300,
+          fontWeight: 200,
+          letterSpacing: "-0.025em",
           color: "var(--color-accent)",
           lineHeight: 1.1,
           marginBottom: 4,
@@ -396,11 +399,9 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
           <div
             style={{
               height: 1,
-              transform: "scaleY(0.5)",
-              transformOrigin: "center",
-              backgroundColor: "rgba(108,156,255,0.1)",
-              marginTop: 12,
-              marginBottom: 12,
+              margin: "18px 0 16px",
+              background:
+                "linear-gradient(90deg, rgba(108,156,255,0.22), rgba(108,156,255,0.06) 50%, transparent)",
             }}
           />
           <div ref={listRef} class="flex flex-col">
@@ -422,12 +423,18 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
               onPointerUp={toggleExpandPress.onPointerUp}
               onPointerCancel={toggleExpandPress.onPointerCancel}
               onClick={togglePaid}
-              class="w-full text-left bg-transparent border-0 cursor-pointer"
+              class="inline-flex items-center border-0 cursor-pointer"
               style={{
-                marginTop: 10,
-                padding: 0,
-                fontSize: 12,
-                color: "var(--color-text-hint)",
+                marginTop: 12,
+                gap: 8,
+                padding: "7px 12px 7px 14px",
+                borderRadius: 9999,
+                background: "rgba(108,156,255,0.08)",
+                boxShadow: "inset 0 0 0 1px rgba(108,156,255,0.16)",
+                color: "#a3bdf7",
+                fontSize: 13,
+                fontWeight: 500,
+                letterSpacing: "0.005em",
                 WebkitTapHighlightColor: "transparent",
               }}
               aria-expanded={paidExpanded}
@@ -435,6 +442,22 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
               {paidExpanded
                 ? "hide already paid"
                 : `show ${paidCount} already paid ${paidCount === 1 ? "expense" : "expenses"}`}
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style={{
+                  transform: paidExpanded ? "rotate(90deg)" : "none",
+                  transition: "transform 200ms ease",
+                }}
+              >
+                <path d="M9 6l6 6-6 6" />
+              </svg>
             </button>
           )}
         </>
