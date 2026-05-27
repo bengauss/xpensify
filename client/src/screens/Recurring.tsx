@@ -692,9 +692,11 @@ export default function RecurringScreen() {
           marginRight: 0,
           width: 48,
           height: 48,
-          backgroundColor: "var(--color-accent)",
+          background: "linear-gradient(180deg, #7eabff 0%, #6c9cff 100%)",
           color: "var(--color-bg-primary)",
-          boxShadow: "0 6px 20px rgba(0,0,0,0.5), 0 0 0 1px rgba(108,156,255,0.35)",
+          boxShadow:
+            "inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.18), 0 12px 32px -6px rgba(108,156,255,0.55), 0 0 0 1px rgba(108,156,255,0.2)",
+          transition: "transform 100ms ease, box-shadow 200ms ease",
           WebkitTapHighlightColor: "transparent",
         }}
         aria-label="Add recurring expense"
