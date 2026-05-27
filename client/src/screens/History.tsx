@@ -234,11 +234,16 @@ function ExpenseRow({ expense, category, subcategory, userStyle, onTap }: Expens
       onPointerDown={press.onPointerDown}
       onPointerUp={press.onPointerUp}
       onPointerCancel={press.onPointerCancel}
-      class="w-full text-left flex items-center gap-3 px-1 rounded-xl"
-      style={{ WebkitTapHighlightColor: "transparent", paddingTop: 10, paddingBottom: 10 }}
+      class="w-full text-left flex items-center gap-[13px] px-1 rounded-xl"
+      style={{
+        WebkitTapHighlightColor: "transparent",
+        paddingTop: 12,
+        paddingBottom: 12,
+        borderBottom: "0.5px solid rgba(255,255,255,0.04)",
+      }}
     >
       {/* Icon + text — animated together */}
-      <div data-row-text class="flex items-center gap-3 flex-1 min-w-0">
+      <div data-row-text class="flex items-center gap-[13px] flex-1 min-w-0">
         {/* Category icon + user badge */}
         <div class="flex-shrink-0 relative" style={{ width: 36, height: 36 }}>
           <div
@@ -246,7 +251,8 @@ function ExpenseRow({ expense, category, subcategory, userStyle, onTap }: Expens
             style={{
               width: 36,
               height: 36,
-              backgroundColor: color + "22",
+              backgroundColor: color + "1f",
+              boxShadow: `inset 0 1px 0 ${color}28`,
             }}
           >
             <IconComponent color={color} size={18} />
@@ -273,27 +279,28 @@ function ExpenseRow({ expense, category, subcategory, userStyle, onTap }: Expens
         {/* Labels: category · subcategory */}
         <div class="flex-1 min-w-0">
         <div class="flex items-center gap-1.5 flex-wrap">
-          <span class="text-base">
+          <span class="text-[15.5px]">
             <span style={{ color: "var(--color-text-secondary)" }}>{category?.name ?? "other"}</span>
             {subcategory && subcategory.name.toLowerCase() !== (category?.name ?? "").toLowerCase() && (
               <>
-                <span style={{ color: "var(--color-text-muted)" }}> · </span>
-                <span class="font-medium" style={{ color: "var(--color-text-body)" }}>{subcategory.name}</span>
+                <span style={{ color: "#4d4d56" }}> · </span>
+                <span class="font-medium" style={{ color: "var(--color-text-primary)" }}>{subcategory.name}</span>
               </>
             )}
             {!subcategory && (
               <>
-                <span style={{ color: "var(--color-text-muted)" }}> · </span>
-                <span class="font-medium" style={{ color: "var(--color-text-body)" }}>expense</span>
+                <span style={{ color: "#4d4d56" }}> · </span>
+                <span class="font-medium" style={{ color: "var(--color-text-primary)" }}>expense</span>
               </>
             )}
           </span>
           {isRecurring && (
             <span
-              class="text-xs px-1.5 py-0.5 rounded-full font-medium"
+              class="text-[11px] px-1.5 py-0.5 rounded-full font-medium"
               style={{
                 backgroundColor: "rgba(94,92,230,0.18)",
                 color: "#9775fa",
+                letterSpacing: "0.02em",
               }}
             >
               recurring
@@ -325,7 +332,7 @@ function ExpenseRow({ expense, category, subcategory, userStyle, onTap }: Expens
           )}
         </div>
         {expense.note && (
-          <p class="text-sm truncate mt-0.5" style={{ color: "var(--color-text-secondary)" }}>
+          <p class="text-[12.5px] truncate mt-0.5" style={{ color: "var(--color-text-tertiary)" }}>
             {expense.note}
           </p>
         )}
@@ -333,7 +340,7 @@ function ExpenseRow({ expense, category, subcategory, userStyle, onTap }: Expens
       </div>
 
       {/* Amount — no currency prefix */}
-      <span data-row-amount class="flex-shrink-0 text-base font-medium tabular-nums" style={{ color: "var(--color-text-primary)" }}>
+      <span data-row-amount class="flex-shrink-0 text-[15.5px] font-medium tabular-nums" style={{ color: "var(--color-text-primary)", letterSpacing: "-0.01em" }}>
         {formatMoney(expense.amount)}
       </span>
     </button>
