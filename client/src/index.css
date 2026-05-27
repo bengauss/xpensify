@@ -169,6 +169,9 @@ body {
 [data-row-amount]:not([data-revealed]) {
   opacity: 0;
 }
+[data-row-line]:not([data-revealed]) {
+  opacity: 0;
+}
 
 /* ── Add-screen column entrance ──────────────────────────────────────────
    Wrappers flagged with data-add-reveal stay hidden until the screen's
