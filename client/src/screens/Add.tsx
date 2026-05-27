@@ -396,13 +396,27 @@ export function AddScreen() {
           onClick={() => route("/confirm")}
           class="flex items-center gap-3 cursor-pointer"
           style={{
-            backgroundColor: "rgba(108,156,255,0.08)",
-            border: "0.5px solid rgba(108,156,255,0.2)",
+            background:
+              "radial-gradient(120% 200% at 0% 0%, rgba(108,156,255,0.13), rgba(108,156,255,0.04) 60%)",
+            boxShadow:
+              "inset 0 0 0 1px rgba(108,156,255,0.18), inset 0 1px 0 rgba(255,255,255,0.04)",
             borderRadius: 14,
-            padding: "12px 16px",
+            padding: "13px 16px",
             WebkitTapHighlightColor: "transparent",
           }}
         >
+          {/* Glowing accent dot — draws the eye without shouting. */}
+          <div
+            aria-hidden="true"
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 9999,
+              background: "#6c9cff",
+              boxShadow: "0 0 10px rgba(108,156,255,0.7)",
+              flexShrink: 0,
+            }}
+          />
           <div class="flex-1 min-w-0">
             <div class="text-sm" style={{ fontWeight: 500, color: "var(--color-text-body)" }}>
               {pendingList.length === 1
@@ -410,9 +424,8 @@ export function AddScreen() {
                 : `${pendingList.length} expenses to confirm`}
             </div>
             <div class="text-xs truncate" style={{ color: "var(--color-text-secondary)" }}>
-              {pendingList.length > 1 ? "latest: " : ""}
-              {formatMoney(latestPending.amount)} at {latestPending.note ?? "—"},{" "}
-              {pendingTimeLabel(latestPending.timestamp)}
+              {pendingList.length > 1 ? "latest · " : ""}
+              {formatMoney(latestPending.amount)} at {latestPending.note ?? "—"}
             </div>
           </div>
           <svg
@@ -639,22 +652,6 @@ function formatDateLabel(dateStr: string, today: Date): string {
   }
 
   return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
-}
-
-/** "today, 14:32" / "yesterday, 14:32" / "18 apr, 14:32" — for the banner subline. */
-function pendingTimeLabel(iso: string): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  const tKey = todayKey();
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayKey = dateKey(yesterday.toISOString());
-  const dayKey = dateKey(iso);
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  if (dayKey === tKey) return `today ${hh}:${mm}`;
-  if (dayKey === yesterdayKey) return `yesterday ${hh}:${mm}`;
-  return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${hh}:${mm}`;
 }
 
 /** "today, 14:32 apr 2026" / "18 apr 2026, 14:32" — confirm-mode date row. */
