@@ -178,10 +178,16 @@ export function CategoryBars({
               {item.category_name}
             </span>
 
-            {/* Bar track */}
+            {/* Bar track — faint background + inset hairline so the fill reads
+                as a material layered on top. Height kept at 20px (touch target). */}
             <div
               class="flex-1 overflow-hidden"
-              style={{ height: 20, borderRadius: 6 }}
+              style={{
+                height: 20,
+                borderRadius: 6,
+                backgroundColor: "rgba(255,255,255,0.025)",
+                boxShadow: "inset 0 0 0 0.5px rgba(255,255,255,0.02)",
+              }}
             >
               {/* Bar fill — width is owned by motion; CSS default (data-bar-fill
                   without data-revealed) hides at 0% until the first animation
@@ -192,7 +198,8 @@ export function CategoryBars({
                 class="h-full"
                 style={{
                   borderRadius: 6,
-                  backgroundColor: item.category_color,
+                  background: `linear-gradient(180deg, ${item.category_color} 0%, ${item.category_color}d8 100%)`,
+                  boxShadow: `inset 0 1px 0 ${item.category_color}40, 0 1px 6px -2px ${item.category_color}80`,
                   willChange: "width",
                 }}
               />
@@ -226,13 +233,19 @@ export function CategoryBars({
             marginTop: 10,
             paddingLeft: 108, // align with bar start (100px name + 8px gap)
             fontSize: 12,
-            color: "var(--color-text-hint)",
+            color: "#909096",
+            letterSpacing: "0.01em",
             WebkitTapHighlightColor: "transparent",
           }}
         >
-          {expanded
-            ? "show less"
-            : `${extra} more ${extra === 1 ? "category" : "categories"}`}
+          {expanded ? (
+            "show less"
+          ) : (
+            <>
+              {extra} more {extra === 1 ? "category" : "categories"}
+              <span style={{ marginLeft: 6, opacity: 0.55 }}>›</span>
+            </>
+          )}
         </button>
       )}
     </div>

@@ -177,6 +177,17 @@ function TrendBar({
 }: TrendBarProps) {
   const press = usePressScale<HTMLButtonElement>(0.97);
 
+  // Selected bar gets a glossy gradient + outer glow. When drilled,
+  // selectedColor is a category hex, so derive the glow from it (8-digit
+  // hex alpha); otherwise use the accent gradient + accent glow.
+  const isDefaultAccent = selectedColor.startsWith("var(");
+  const selectedBg = isDefaultAccent
+    ? "linear-gradient(180deg, #7eabff 0%, #6c9cff 100%)"
+    : `linear-gradient(180deg, ${selectedColor} 0%, ${selectedColor} 100%)`;
+  const selectedGlow = isDefaultAccent
+    ? "0 6px 18px -6px rgba(108,156,255,0.55)"
+    : `0 6px 18px -6px ${selectedColor}8c`;
+
   const isYearMode = period === "year";
   const isInProgressYear = isYearMode && item.year === new Date().getFullYear();
   const label = isYearMode
@@ -201,8 +212,13 @@ function TrendBar({
     >
       {/* Value label on top */}
       <span
-        class="text-[10px] tabular-nums mb-1"
-        style={{ color: isSelected ? selectedColor : "var(--color-text-secondary)" }}
+        class="tabular-nums mb-1"
+        style={{
+          fontSize: 12,
+          fontWeight: 500,
+          letterSpacing: "-0.005em",
+          color: isSelected ? selectedColor : "#808086",
+        }}
       >
         {formatTrendLabel(item.total)}
       </span>
@@ -218,20 +234,30 @@ function TrendBar({
         <div
           ref={barRefCallback}
           data-trend-bar
-          class="w-full rounded-t-sm"
+          class="w-full"
           style={{
-            backgroundColor: isSelected ? selectedColor : "#4a4a52",
+            background: isSelected
+              ? selectedBg
+              : "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%)",
             opacity: barOpacity,
             willChange: "height",
             minHeight: item.total > 0 ? 2 : 0,
+            borderRadius: "8px 8px 4px 4px",
+            boxShadow: isSelected
+              ? `inset 0 1px 0 rgba(255,255,255,0.3), ${selectedGlow}`
+              : "inset 0 1px 0 rgba(255,255,255,0.04)",
           }}
         />
       </div>
 
       {/* Period label below */}
       <span
-        class="text-[10px] mt-1"
-        style={{ color: isSelected ? selectedColor : "var(--color-text-tertiary)" }}
+        class="mt-1 tabular-nums"
+        style={{
+          fontSize: 11.5,
+          letterSpacing: "0.01em",
+          color: isSelected ? "#a0a0a6" : "#808086",
+        }}
       >
         {label}
       </span>

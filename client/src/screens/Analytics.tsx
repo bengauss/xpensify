@@ -769,8 +769,8 @@ export default function AnalyticsScreen() {
             }}
           >
             <span
-              class="tracking-wider block mb-3"
-              style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)" }}
+              class="block mb-3"
+              style={{ fontSize: 13, fontWeight: 500, letterSpacing: "0.03em", color: "#909096" }}
             >
               {barsHeader}
             </span>
@@ -797,8 +797,8 @@ export default function AnalyticsScreen() {
             }}
           >
             <span
-              class="tracking-wider block mb-3"
-              style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)" }}
+              class="block mb-3"
+              style={{ fontSize: 13, fontWeight: 500, letterSpacing: "0.03em", color: "#909096" }}
             >
               {trendHeader}
             </span>
