@@ -353,19 +353,21 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
   return (
     <div
       ref={cardRef}
-      class="rounded-2xl border"
+      class="rounded-[18px]"
       style={{
-        padding: "16px 20px",
-        backgroundColor: "rgba(108,156,255,0.06)",
-        borderColor: "rgba(108,156,255,0.12)",
+        padding: "22px 22px 20px",
+        boxShadow:
+          "inset 0 0 0 1px rgba(255,255,255,0.05), inset 0 1px 0 rgba(255,255,255,0.04), 0 0 0 0.5px rgba(108,156,255,0.06)",
         opacity: 0,
         transform: "translateY(10px)",
       }}
     >
       <p
         style={{
-          fontSize: 12,
-          color: "var(--color-text-tertiary)",
+          fontSize: 13,
+          fontWeight: 500,
+          letterSpacing: "0.03em",
+          color: "#909096",
           marginBottom: 2,
         }}
       >
@@ -374,7 +376,8 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
       <p
         style={{
           fontSize: 32,
-          fontWeight: 300,
+          fontWeight: 200,
+          letterSpacing: "-0.025em",
           color: "var(--color-accent)",
           lineHeight: 1.1,
           marginBottom: 4,
@@ -396,11 +399,9 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
           <div
             style={{
               height: 1,
-              transform: "scaleY(0.5)",
-              transformOrigin: "center",
-              backgroundColor: "rgba(108,156,255,0.1)",
-              marginTop: 12,
-              marginBottom: 12,
+              margin: "18px 0 16px",
+              background:
+                "linear-gradient(90deg, rgba(108,156,255,0.22), rgba(108,156,255,0.06) 50%, transparent)",
             }}
           />
           <div ref={listRef} class="flex flex-col">
@@ -422,12 +423,18 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
               onPointerUp={toggleExpandPress.onPointerUp}
               onPointerCancel={toggleExpandPress.onPointerCancel}
               onClick={togglePaid}
-              class="w-full text-left bg-transparent border-0 cursor-pointer"
+              class="inline-flex items-center border-0 cursor-pointer"
               style={{
-                marginTop: 10,
-                padding: 0,
-                fontSize: 12,
-                color: "var(--color-text-hint)",
+                marginTop: 12,
+                gap: 8,
+                padding: "7px 12px 7px 14px",
+                borderRadius: 9999,
+                background: "rgba(108,156,255,0.08)",
+                boxShadow: "inset 0 0 0 1px rgba(108,156,255,0.16)",
+                color: "#a3bdf7",
+                fontSize: 13,
+                fontWeight: 500,
+                letterSpacing: "0.005em",
                 WebkitTapHighlightColor: "transparent",
               }}
               aria-expanded={paidExpanded}
@@ -435,6 +442,22 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
               {paidExpanded
                 ? "hide already paid"
                 : `show ${paidCount} already paid ${paidCount === 1 ? "expense" : "expenses"}`}
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style={{
+                  transform: paidExpanded ? "rotate(90deg)" : "none",
+                  transition: "transform 200ms ease",
+                }}
+              >
+                <path d="M9 6l6 6-6 6" />
+              </svg>
             </button>
           )}
         </>
@@ -468,9 +491,11 @@ function ForecastRow({ item, dimmed }: { item: ForecastItem; dimmed: boolean }) 
 function TemplateRow({
   template,
   onTap,
+  isLast,
 }: {
   template: RecurringTemplate;
   onTap: () => void;
+  isLast: boolean;
 }) {
   const IconComponent = categoryIcons[template.category_icon ?? ""] ?? null;
   const color = template.category_color ?? "var(--color-accent)";
@@ -485,23 +510,31 @@ function TemplateRow({
       onPointerCancel={press.onPointerCancel}
       data-row
       onClick={onTap}
-      class="flex items-center gap-3 w-full text-left px-1 py-2.5 cursor-pointer bg-transparent border-0"
-      style={{ WebkitTapHighlightColor: "transparent" }}
+      class="flex items-center gap-3 w-full text-left px-1 py-3 cursor-pointer bg-transparent border-0"
+      style={{
+        WebkitTapHighlightColor: "transparent",
+        borderBottom: isLast ? "none" : "0.5px solid rgba(255,255,255,0.04)",
+      }}
     >
       {/* Icon + text — animated together */}
       <div data-row-text class="flex items-center gap-3 flex-1 min-w-0">
-        {/* Category icon */}
+        {/* Category icon — glass-edge tile (inset ring + top highlight in hue) */}
         <div
           class="flex-shrink-0 flex items-center justify-center rounded-xl"
-          style={{ width: 36, height: 36, backgroundColor: `${color}1a` }}
+          style={{
+            width: 36,
+            height: 36,
+            backgroundColor: `${color}1c`,
+            boxShadow: `inset 0 0 0 1px ${color}22, inset 0 1px 0 ${color}40`,
+          }}
         >
           {IconComponent && <IconComponent color={color} size={20} />}
         </div>
 
         {/* Labels */}
         <div class="flex-1 min-w-0">
-          <p class="text-base text-text-primary truncate">{label}</p>
-          <p class="text-sm text-text-secondary">{scheduleText(template)}</p>
+          <p class="text-base text-text-primary truncate" style={{ letterSpacing: "-0.005em" }}>{label}</p>
+          <p class="text-sm" style={{ color: "var(--color-text-tertiary)", letterSpacing: "0.005em" }}>{scheduleText(template)}</p>
         </div>
       </div>
 
@@ -509,7 +542,7 @@ function TemplateRow({
       <span
         data-row-amount
         class="flex-shrink-0 text-base font-medium tabular-nums"
-        style={{ color: "var(--color-text-primary)" }}
+        style={{ color: "var(--color-text-primary)", letterSpacing: "-0.015em" }}
       >
         {formatMoney(template.amount)}
       </span>
@@ -597,28 +630,41 @@ export default function RecurringScreen() {
             const total = byFrequency[freq].reduce((s, t) => s + t.amount, 0);
             return (
               <div key={freq} class="flex flex-col gap-1">
-                <div class="flex flex-col gap-1 pb-1">
+                <div class="flex flex-col pb-1">
                   <div class="flex items-center justify-between px-1">
                     <span
-                      class="text-sm font-semibold tracking-wider"
-                      style={{ color: "var(--color-text-tertiary)" }}
+                      style={{
+                        fontSize: 12.5,
+                        fontWeight: 600,
+                        letterSpacing: "0.05em",
+                        color: "#909096",
+                      }}
                     >
                       {freq}
                     </span>
                     <span
-                      class="text-sm tabular-nums"
-                      style={{ color: "var(--color-text-tertiary)" }}
+                      class="tabular-nums"
+                      style={{ fontSize: 13, color: "#909096", letterSpacing: "-0.005em" }}
                     >
                       {formatEur(total)}
                     </span>
                   </div>
-                  <div class="h-px w-full bg-accent opacity-30" />
+                  {/* Gradient hairline — accent on the left, dissolving to nothing. */}
+                  <div
+                    class="h-px w-full"
+                    style={{
+                      marginTop: 10,
+                      background:
+                        "linear-gradient(90deg, rgba(108,156,255,0.28) 0%, rgba(108,156,255,0.08) 38%, rgba(255,255,255,0.02) 100%)",
+                    }}
+                  />
                 </div>
-                {byFrequency[freq].map((t) => (
+                {byFrequency[freq].map((t, i, arr) => (
                   <TemplateRow
                     key={t.id}
                     template={t}
                     onTap={() => route(`/recurring/edit/${t.id}`)}
+                    isLast={i === arr.length - 1}
                   />
                 ))}
               </div>
@@ -646,9 +692,11 @@ export default function RecurringScreen() {
           marginRight: 0,
           width: 48,
           height: 48,
-          backgroundColor: "var(--color-accent)",
+          background: "linear-gradient(180deg, #7eabff 0%, #6c9cff 100%)",
           color: "var(--color-bg-primary)",
-          boxShadow: "0 6px 20px rgba(0,0,0,0.5), 0 0 0 1px rgba(108,156,255,0.35)",
+          boxShadow:
+            "inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.18), 0 12px 32px -6px rgba(108,156,255,0.55), 0 0 0 1px rgba(108,156,255,0.2)",
+          transition: "transform 100ms ease, box-shadow 200ms ease",
           WebkitTapHighlightColor: "transparent",
         }}
         aria-label="Add recurring expense"

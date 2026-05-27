@@ -25,11 +25,12 @@ export function SegmentedPill<T extends string>({
       aria-label={ariaLabel}
       class="inline-flex items-center"
       style={{
-        height: 32,
+        height: 30,
         padding: 2,
         borderRadius: 9999,
-        backgroundColor: "var(--color-bg-surface)",
-        border: "1px solid rgba(42,42,50,0.8)",
+        backgroundColor: "#15161c",
+        boxShadow:
+          "inset 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.02)",
       }}
     >
       {options.map((opt) => (
@@ -63,13 +64,14 @@ function Segment<T extends string>({ opt, selected, onSelect }: SegmentProps<T>)
       class="bg-transparent border-0 cursor-pointer tabular-nums"
       style={{
         height: 26,
-        padding: "0 10px",
+        padding: "0 12px",
         borderRadius: 9999,
-        fontSize: 12,
+        fontSize: 12.5,
         fontWeight: 500,
         color: selected ? "var(--color-text-primary)" : "var(--color-text-tertiary)",
-        backgroundColor: selected ? "rgba(108,156,255,0.18)" : "transparent",
-        transition: "background-color 180ms ease, color 180ms ease",
+        backgroundColor: selected ? "rgba(108,156,255,0.13)" : "transparent",
+        boxShadow: selected ? "inset 0 0 0 0.5px rgba(108,156,255,0.32)" : "none",
+        transition: "background-color 220ms ease, color 220ms ease, box-shadow 220ms ease",
         WebkitTapHighlightColor: "transparent",
       }}
     >
