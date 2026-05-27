@@ -129,16 +129,19 @@ export default function LoginScreen() {
             onPointerCancel={submitPress.onPointerCancel}
             style={{
               marginTop: 24,
-              height: 48,
-              borderRadius: 12,
-              backgroundColor: "#6c9cff",
-              color: "white",
+              height: 50,
+              borderRadius: 14,
+              background: "linear-gradient(180deg, #7eabff 0%, #6c9cff 100%)",
+              color: "#0c0d12",
               fontSize: 14,
-              fontWeight: 500,
+              fontWeight: 600,
+              letterSpacing: "0.01em",
               border: 0,
               cursor: loading ? "default" : "pointer",
               opacity: loading ? 0.7 : 1,
-              transition: "opacity 150ms ease",
+              boxShadow:
+                "inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(0,0,0,0.12), 0 6px 18px -8px rgba(108,156,255,0.6)",
+              transition: "transform 100ms ease, opacity 150ms ease, box-shadow 200ms ease",
               WebkitTapHighlightColor: "transparent",
             }}
           >
