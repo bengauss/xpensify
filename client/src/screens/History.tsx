@@ -349,16 +349,35 @@ interface DayHeaderProps {
 
 function DayHeader({ dateKey, total }: DayHeaderProps) {
   return (
-    <div data-row class="flex flex-col gap-1 pt-5 pb-1">
+    <div data-row class="flex flex-col gap-1.5 pt-5 pb-1">
       <div data-row-text class="flex items-center justify-between px-1">
-        <span class="text-sm font-semibold tracking-wider" style={{ color: "var(--color-text-tertiary)" }}>
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: "0.08em",
+            color: "#909096",
+            textTransform: "uppercase",
+          }}
+        >
           {formatDateLabel(dateKey)}
         </span>
-        <span data-row-amount class="text-sm tabular-nums" style={{ color: "var(--color-text-tertiary)" }}>
+        <span
+          data-row-amount
+          class="tabular-nums"
+          style={{ fontSize: 12.5, color: "#909096", letterSpacing: "-0.01em" }}
+        >
           {formatEur(total)}
         </span>
       </div>
-      <div class="h-px w-full bg-accent opacity-30" />
+      {/* Gradient hairline — accent on the left, dissolving to nothing. */}
+      <div
+        class="h-px w-full"
+        style={{
+          background:
+            "linear-gradient(90deg, rgba(108,156,255,0.32) 0%, rgba(108,156,255,0.10) 35%, rgba(255,255,255,0.025) 100%)",
+        }}
+      />
     </div>
   );
 }
