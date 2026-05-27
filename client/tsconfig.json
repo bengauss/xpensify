@@ -16,8 +16,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "@server/*": ["../server/src/*"]
-    },
-    "baseUrl": "."
+    }
   },
   "include": ["src"]
 }
