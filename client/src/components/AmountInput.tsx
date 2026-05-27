@@ -31,7 +31,7 @@ interface AmountInputProps {
  * Accepts either "." or "," as the decimal separator so users on German iOS
  * keypads (which only expose ",") can enter decimals the same as en-US users.
  */
-function formatAmount(raw: string): string {
+export function formatAmount(raw: string): string {
   if (!raw) return "";
 
   // Keep only digits, dots, commas

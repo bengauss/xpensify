@@ -8,7 +8,7 @@ import { categoryIcons } from "@/icons";
 import { DetailSheet } from "@/components/DetailSheet";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { editingExpense } from "@/lib/editing";
-import { parseCents, formatCents } from "@/components/AmountInput";
+import { parseCents, formatCents, formatAmount } from "@/components/AmountInput";
 import { sync } from "@/sync/engine";
 import { historyFilter } from "@/lib/filters";
 import { markHistoryVisited } from "@/lib/pending";
@@ -479,7 +479,7 @@ function ExpenseDetail({ expense, category, subcategory, userStyle, onClose }: E
           inputMode="decimal"
           value={amountText}
           size={Math.max(5, amountText.length)}
-          onInput={(e) => setAmountText((e.target as HTMLInputElement).value)}
+          onInput={(e) => setAmountText(formatAmount((e.target as HTMLInputElement).value))}
           onFocus={(e) => (e.target as HTMLInputElement).select()}
           onBlur={commitAmount}
           onKeyDown={(e) => {

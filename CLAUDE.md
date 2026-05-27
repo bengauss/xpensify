@@ -290,6 +290,7 @@ Three stages in `Dockerfile`:
 
 Vitest in both packages, `*.test.ts` files live next to the file they test.
 
+- **Node version**: tests require Node **≥20.19** (`.nvmrc` pins `22`, `engines` floor enforced by the `pretest` guard in `scripts/check-node.mjs`). On older Node, vitest dies inside jsdom with a cryptic `ERR_REQUIRE_ESM` / "no tests" — the guard turns that into a clear message. Run `nvm use` first; the default shell Node may be an older system Node (e.g. `/usr/bin/node`). **Server tests additionally need a Node matching the compiled `better-sqlite3` native binary** — if you hit `NODE_MODULE_VERSION` mismatch, either switch to the Node the module was built against or run `npm rebuild better-sqlite3` under your current Node.
 - **Server** (`server/vitest.config.ts`, Node env): per-file in-memory SQLite via `DB_PATH=:memory:` set in `src/test/setup.ts` before any module loads. Helpers in `src/test/db.ts` — `ensureMigrated()` runs schema once, `resetDb()` truncates between tests, `seedTestUsers()` / `seedTestSession()` / `seedTestApiToken()` / `insertExpense()` / `insertRecurringTemplate()` populate. `src/test/app.ts` mounts a Hono sub-router under `/api/<prefix>` and wraps `app.request(...)`.
 - **Client** (`client/vitest.config.ts`, jsdom env): `src/test/setup.ts` imports `fake-indexeddb/auto` so Dexie writes go to an in-memory IDB; jest-dom matchers attached via `@testing-library/jest-dom/vitest`. `window.matchMedia` stubbed.
 - **API mocks**: client tests use `vi.mock("@/lib/api", ...)` to stub the Hono RPC client (see `sync/engine.test.ts`).
