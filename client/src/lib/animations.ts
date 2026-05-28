@@ -29,7 +29,7 @@ export const stagger = {
 // choreography. Use these instead of bare ms numbers so phase handoffs across
 // screens share a rhythm and small touch-ups propagate.
 export const tempo = {
-  mount: 80,      // post-mount lead-in before entrance animations start
+  mount: 30,      // post-mount lead-in before entrance animations start
   handoff: 150,   // brief overlap between two animation phases
   settle: 320,    // padding for a typical reveal to land
 };

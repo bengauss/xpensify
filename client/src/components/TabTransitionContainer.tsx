@@ -166,7 +166,7 @@ export function TabTransitionContainer() {
       inLayer.addEventListener("transitionend", onEnd);
 
       // Fallback timer in case transitionend doesn't fire
-      const fallbackTimer = window.setTimeout(cleanup, 400);
+      const fallbackTimer = window.setTimeout(cleanup, 300);
 
       function cleanup() {
         inLayer!.removeEventListener("transitionend", onEnd);
