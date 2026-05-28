@@ -12,6 +12,7 @@ import { useCountUp } from "@/lib/useCountUp";
 import { usePressScale } from "@/lib/usePressScale";
 import { formatMoney, formatEur, MONTHS_SHORT } from "@/lib/format";
 import { categoriesSignal, subcategoriesSignal } from "@/lib/categories";
+import { Toggle } from "@/components/Toggle";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -49,63 +50,6 @@ function ordinal(n: number): string {
     case 3: return "rd";
     default: return "th";
   }
-}
-
-// ── Toggle component ──────────────────────────────────────────────────────────
-
-interface ToggleProps {
-  active: boolean;
-  onToggle: () => void;
-}
-
-function Toggle({ active, onToggle }: ToggleProps) {
-  const knobRef = useRef<HTMLDivElement>(null);
-  const trackRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!knobRef.current) return;
-    const targetX = active ? 16 : 0;
-    // Knob slides on spring (physical motion).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (animate as any)(knobRef.current, { x: targetX }, { ...springs.toggle, ...getReducedMotionOverride() });
-    if (trackRef.current) {
-      // Track color uses duration + ease — color has no mass, springs are
-      // physically meaningless for it and can read as a lagging overshoot.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (animate as any)(
-        trackRef.current,
-        { backgroundColor: active ? "var(--color-accent)" : "var(--color-text-ghost)" },
-        { ...durations.exit, ...getReducedMotionOverride() },
-      );
-    }
-  }, [active]);
-
-  return (
-    <button
-      ref={trackRef}
-      onClick={(e) => { e.stopPropagation(); onToggle(); }}
-      class="relative flex-shrink-0 rounded-full cursor-pointer border-0 p-0"
-      style={{
-        width: 40,
-        height: 24,
-        backgroundColor: active ? "var(--color-accent)" : "var(--color-text-ghost)",
-      }}
-      aria-label={active ? "Disable" : "Enable"}
-    >
-      <div
-        ref={knobRef}
-        style={{
-          position: "absolute",
-          top: 3,
-          left: 3,
-          width: 18,
-          height: 18,
-          borderRadius: "50%",
-          backgroundColor: "white",
-        }}
-      />
-    </button>
-  );
 }
 
 // ── Forecast card ─────────────────────────────────────────────────────────────
