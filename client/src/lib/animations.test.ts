@@ -17,6 +17,10 @@ describe("tempo presets", () => {
     expect(tempo.handoff).toBeLessThan(tempo.settle);
   });
 
+  it("uses a 30ms mount lead-in (tightened from 80ms for snappier tab entrances)", () => {
+    expect(tempo.mount).toBe(30);
+  });
+
   const callSites = [
     "src/lib/entrance.ts",
     "src/components/CategorySelector.tsx",
@@ -31,4 +35,49 @@ describe("tempo presets", () => {
       expect(content).toMatch(/\btempo\b/);
     });
   }
+});
+
+describe("animation easing consistency", () => {
+  const EASE_OUT_QUART = "cubic-bezier(0.22, 1, 0.36, 1)";
+
+  it("entrance.ts amount fade uses the shared easeOutQuart curve at 220ms", () => {
+    const content = readFileSync(
+      resolve(CLIENT_ROOT, "src/lib/entrance.ts"),
+      "utf-8",
+    );
+    // The amount-fade transition line — must use the shared curve, not bare `ease`.
+    expect(content).toContain(
+      `amountEl.style.transition = "opacity 220ms ${EASE_OUT_QUART}"`,
+    );
+  });
+
+  it("entrance.ts hairline reveal uses the shared easeOutQuart curve", () => {
+    const content = readFileSync(
+      resolve(CLIENT_ROOT, "src/lib/entrance.ts"),
+      "utf-8",
+    );
+    expect(content).toContain(
+      `lineEl.style.transition = "opacity 320ms ${EASE_OUT_QUART}"`,
+    );
+  });
+
+  it(".transition-layer in index.css uses easeOutQuart on opacity + transform", () => {
+    const content = readFileSync(
+      resolve(CLIENT_ROOT, "src/index.css"),
+      "utf-8",
+    );
+    expect(content).toContain(
+      `transition: opacity 250ms ${EASE_OUT_QUART}, transform 250ms ${EASE_OUT_QUART};`,
+    );
+  });
+});
+
+describe("tab transition fallback timer", () => {
+  it("uses a 300ms fallback (50ms cushion over the 250ms CSS transition)", () => {
+    const content = readFileSync(
+      resolve(CLIENT_ROOT, "src/components/TabTransitionContainer.tsx"),
+      "utf-8",
+    );
+    expect(content).toContain("window.setTimeout(cleanup, 300)");
+  });
 });

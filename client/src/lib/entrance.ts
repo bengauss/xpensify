@@ -128,7 +128,7 @@ export function animateRowEntrance(container: HTMLElement): () => void {
       lineEl.setAttribute("data-revealed", "1");
       animatedLineEls.push(lineEl);
       const lt = window.setTimeout(() => {
-        lineEl.style.transition = "opacity 320ms ease";
+        lineEl.style.transition = "opacity 320ms cubic-bezier(0.22, 1, 0.36, 1)";
         lineEl.style.opacity = "1";
       }, delay);
       timers.push(lt);
@@ -151,7 +151,7 @@ export function animateRowEntrance(container: HTMLElement): () => void {
     animatedAmountEls.push(amountEl);
     const delay = textSettleTime + i * amountStaggerMs;
     const t = window.setTimeout(() => {
-      amountEl.style.transition = "opacity 100ms ease";
+      amountEl.style.transition = "opacity 220ms cubic-bezier(0.22, 1, 0.36, 1)";
       amountEl.style.opacity = "1";
     }, delay);
     timers.push(t);
