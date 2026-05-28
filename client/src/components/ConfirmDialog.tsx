@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from "preact/hooks";
 import { animate } from "motion";
-import { springs, durations, getReducedMotionOverride, shouldReduceMotion } from "@/lib/animations";
+import { springs, getReducedMotionOverride, shouldReduceMotion } from "@/lib/animations";
 
 interface ConfirmDialogProps {
   onConfirm: () => void;
@@ -36,11 +36,13 @@ export function ConfirmDialog({
       action();
       return;
     }
+    // Symmetric spring on exit — matches the entrance so the round trip
+    // reads as one motion played forward then back.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const anim = (animate as any)(
       el,
       { opacity: [1, 0], scale: [1, 0.95] },
-      { ...durations.exit, ...getReducedMotionOverride() },
+      { ...springs.snappy, ...getReducedMotionOverride() },
     );
     const fire = () => action();
     if (anim && anim.finished && typeof anim.finished.then === "function") {

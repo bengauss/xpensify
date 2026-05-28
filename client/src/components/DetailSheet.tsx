@@ -2,7 +2,8 @@ import { useRef, useEffect, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
 import { createPortal } from "preact/compat";
 import { animate } from "motion";
-import { springs, durations, getReducedMotionOverride } from "@/lib/animations";
+import { springs, getReducedMotionOverride } from "@/lib/animations";
+import { usePressScale } from "@/lib/usePressScale";
 
 type SheetState = "closed" | "opening" | "open" | "closing";
 
@@ -17,6 +18,7 @@ export function DetailSheet({ open, onClose, children }: DetailSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const dragHandlePress = usePressScale<HTMLButtonElement>(0.85);
 
   useEffect(() => {
     if (open && (state === "closed" || state === "closing")) {
@@ -39,11 +41,13 @@ export function DetailSheet({ open, onClose, children }: DetailSheetProps) {
       anim.then(() => setState("open"));
     } else if (state === "closing" && sheetRef.current) {
       const el = sheetRef.current;
+      // Symmetric spring on exit — the round trip should feel like the same
+      // motion played backwards, not a different curve.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const anim = (animate as any)(
         el,
         { y: ["0%", "100%"] },
-        { ...durations.exit, ...getReducedMotionOverride() },
+        { ...springs.gentle, ...getReducedMotionOverride() },
       );
       anim.then(() => {
         setState("closed");
@@ -74,14 +78,16 @@ export function DetailSheet({ open, onClose, children }: DetailSheetProps) {
 
   const node = (
     <>
-      {/* Overlay — fixed to viewport, covers everything including the tab bar */}
+      {/* Overlay — fixed to viewport, covers everything including the tab bar.
+          Opacity ride matches the sheet spring's ~300ms landing so there's no
+          frame where the overlay is gone but the sheet is still mid-slide. */}
       <div
-        class="transition-opacity duration-200"
         style={{
           position: "fixed",
           inset: 0,
           backgroundColor: "rgba(0,0,0,0.55)",
           opacity: overlayVisible ? 1 : 0,
+          transition: "opacity 300ms cubic-bezier(0.22, 1, 0.36, 1)",
           zIndex: 100,
         }}
         onClick={() => {
@@ -112,14 +118,22 @@ export function DetailSheet({ open, onClose, children }: DetailSheetProps) {
           transform: "translateY(100%)",
         }}
       >
-        {/* Drag handle */}
+        {/* Drag handle — doubles as a dismiss tap target */}
         <div class="flex justify-center pt-3 pb-1 flex-shrink-0">
-          <div
+          <button
+            ref={dragHandlePress.ref}
+            onPointerDown={dragHandlePress.onPointerDown}
+            onPointerUp={dragHandlePress.onPointerUp}
+            onPointerCancel={dragHandlePress.onPointerCancel}
+            onClick={() => { if (state === "open") setState("closing"); }}
+            aria-label="dismiss"
+            class="bg-transparent border-0 cursor-pointer p-0"
             style={{
               width: 40,
               height: 4,
               borderRadius: 9999,
               backgroundColor: "#4a4a52",
+              WebkitTapHighlightColor: "transparent",
             }}
           />
         </div>
