@@ -1,6 +1,6 @@
 import { useState, useRef, useLayoutEffect } from "preact/hooks";
 import { animate } from "motion";
-import { springs, stagger, getReducedMotionOverride } from "@/lib/animations";
+import { springs, stagger, tempo, getReducedMotionOverride } from "@/lib/animations";
 import { categoryIcons } from "@/icons";
 import { useEntrance } from "@/lib/entrance";
 import type { Category, Subcategory } from "@/db/local";
@@ -224,7 +224,7 @@ export function CategorySelector({
             { ...springs.gentle, delay: i * stagger.pill, ...getReducedMotionOverride() },
           );
         });
-      }, 150);
+      }, tempo.handoff);
 
       pendingCleanupRef.current = () => {
         cancelled = true;
