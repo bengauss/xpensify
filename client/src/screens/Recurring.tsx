@@ -228,7 +228,9 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
 
     // 3. Row stagger — begins after the count-up has visually landed, with a
     //    brief handoff so the rows feel like a follow-on phase rather than
-    //    racing the final count-up frame.
+    //    racing the final count-up frame. Shares durations.soft with the
+    //    card's own fade+rise so the whole sequence inherits one easing
+    //    rhythm instead of stacking distinct cubic-bezier literals (#23).
     const ROW_START = durations.count.duration + tempo.handoff / 1000;
     let rowCount = 0;
     if (listRef.current) {
@@ -241,9 +243,8 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
           row,
           { opacity: [0, 1], y: [6, 0] },
           {
-            duration: 0.35,
+            ...durations.soft,
             delay: ROW_START + i * stagger.pill,
-            ease: [0.22, 1, 0.36, 1],
             ...getReducedMotionOverride(),
           },
         );

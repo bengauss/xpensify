@@ -7,7 +7,7 @@ export interface AmountInputCelebrateApi {
   /**
    * Plays a one-shot "saved" celebration over the input:
    *  - green flash over the pill background
-   *  - checkmark fades in/out to the left of "EUR"
+   *  - underline seam fades out
    *  - number rolls from `fromCents` down to 0.00
    * Resolves when the roll has landed so the parent can clear state next.
    * No-op (resolves immediately) under prefers-reduced-motion.
@@ -132,8 +132,8 @@ export function AmountInput({ value, onChange, inputRef, celebrateRef }: AmountI
         // Hold a soft green halo on the pill for the duration of the roll.
         // Fade-in, hold, fade-out all run on a single CSS transition so the
         // background doesn't pulse — it simply turns green and stays green
-        // until the number lands at 0.00. The check chip + underline fade are
-        // driven by the `celebrating` flag.
+        // until the number lands at 0.00. The underline-seam fade is driven by
+        // the `celebrating` flag.
         setCelebrating(true);
         if (pillRef.current) {
           pillRef.current.style.transition = "background-color 240ms ease, box-shadow 240ms ease";
@@ -237,39 +237,6 @@ export function AmountInput({ value, onChange, inputRef, celebrateRef }: AmountI
         >
           {displayText}
         </span>
-
-        {/* Celebrate check chip — fades in over the pill's top-right corner. */}
-        {celebrating && (
-          <span
-            aria-hidden="true"
-            style={{
-              position: "absolute",
-              right: 10,
-              top: 12,
-              width: 16,
-              height: 16,
-              borderRadius: 9999,
-              backgroundColor: "rgba(52, 199, 89, 0.9)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#0c0d12",
-            }}
-          >
-            <svg
-              width="9"
-              height="9"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="3.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M5 12l5 5L20 7" />
-            </svg>
-          </span>
-        )}
       </div>
 
       {/* Screen-reader-only status — announces "saved" without stealing focus. */}

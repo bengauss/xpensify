@@ -244,3 +244,99 @@ describe("modal spring symmetry (#17)", () => {
     expect(exitFragment![0]).not.toMatch(/durations\.exit/);
   });
 });
+
+describe("TrendChart bar color crossfade (#18)", () => {
+  const TREND = readFileSync(
+    resolve(CLIENT_ROOT, "src/components/TrendChart.tsx"),
+    "utf-8",
+  );
+
+  it("does not swap the bar background instantly via an isSelected ternary on `background:`", () => {
+    // The previous code did `background: isSelected ? selectedBg : idleBg` on
+    // a single element, which CSS can't interpolate between two linear-gradients
+    // — the color snapped on every month tap. Two stacked layers + opacity
+    // crossfade replaces it.
+    expect(TREND).not.toMatch(/background:\s*isSelected\s*\?/);
+  });
+
+  it("CSS-transitions opacity for the selected/idle bar crossfade", () => {
+    // The crossfade is a CSS opacity transition on the selected overlay.
+    expect(TREND).toMatch(/transition:\s*["'`][^"'`]*opacity[^"'`]*["'`]/);
+  });
+
+  it("CSS-transitions box-shadow so the selected-glow eases in on the same beat", () => {
+    // The selected-glow used to snap with the color. It must now CSS-transition.
+    expect(TREND).toMatch(/transition:\s*["'`][^"'`]*box-shadow[^"'`]*["'`]/);
+  });
+});
+
+describe("transient will-change on bar elements (#19)", () => {
+  const TREND = readFileSync(
+    resolve(CLIENT_ROOT, "src/components/TrendChart.tsx"),
+    "utf-8",
+  );
+  const BARS = readFileSync(
+    resolve(CLIENT_ROOT, "src/components/CategoryBars.tsx"),
+    "utf-8",
+  );
+
+  it("TrendChart.tsx does not set willChange permanently in JSX", () => {
+    // Persistent will-change on every bar keeps a GPU layer reserved for the
+    // lifetime of the element. Toggle it imperatively around the animation
+    // instead. The literal "willChange: \"height\"" was the offender.
+    expect(TREND).not.toMatch(/willChange:\s*["']height["']/);
+  });
+
+  it("CategoryBars.tsx does not set willChange permanently in JSX", () => {
+    expect(BARS).not.toMatch(/willChange:\s*["']width["']/);
+  });
+
+  it("TrendChart.tsx still sets will-change imperatively for the height animation", () => {
+    // Sanity check: we removed the persistent JSX prop but kept transient
+    // promotion just before the animate() call.
+    expect(TREND).toMatch(/style\.willChange\s*=/);
+  });
+
+  it("CategoryBars.tsx still sets will-change imperatively for the width animation", () => {
+    expect(BARS).toMatch(/style\.willChange\s*=/);
+  });
+});
+
+describe("Recurring forecast cadence consolidation (#23)", () => {
+  const RECURRING = readFileSync(
+    resolve(CLIENT_ROOT, "src/screens/Recurring.tsx"),
+    "utf-8",
+  );
+
+  it("forecast row stagger sources its easing from durations.soft, not a bare easeOutQuart literal", () => {
+    // The forecast card mixed five cadences. The row stagger used a bare
+    // `[0.22, 1, 0.36, 1]` + duration: 0.35 — exactly the easeOutQuart curve
+    // that lives in `durations.soft`. Reuse the shared preset so the whole
+    // sequence inherits one rhythm. The count-up keeps its own (tonally
+    // distinct) easing; the toggle keeps springs.data.
+    expect(RECURRING).not.toMatch(/\[\s*0\.22\s*,\s*1\s*,\s*0\.36\s*,\s*1\s*\]/);
+  });
+
+  it("forecast row stagger spreads durations.soft for duration + ease", () => {
+    // The row-stagger ANIM call (identified by `y: [6, 0]` + stagger.pill on
+    // the delay) must spread durations.soft instead of a bare duration/ease pair.
+    const rowBlock = RECURRING.match(
+      /y:\s*\[\s*6\s*,\s*0\s*\][\s\S]{0,400}stagger\.pill/,
+    );
+    expect(rowBlock).not.toBeNull();
+    expect(rowBlock![0]).toMatch(/durations\.soft/);
+  });
+});
+
+describe("AmountInput celebrate strips redundant check chip", () => {
+  const AMOUNT = readFileSync(
+    resolve(CLIENT_ROOT, "src/components/AmountInput.tsx"),
+    "utf-8",
+  );
+
+  it("no longer renders the green check SVG chip", () => {
+    // The green halo + count-down already convey "saved". The check chip was
+    // redundant. Identified by its SVG path data.
+    expect(AMOUNT).not.toContain("M5 12l5 5L20 7");
+  });
+});

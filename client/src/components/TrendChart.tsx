@@ -98,11 +98,20 @@ export function TrendChart({
       if (isFirstRender) {
         barEl.setAttribute("data-revealed", "1");
         if (isVisible) {
+          // Promote to a GPU layer only for the duration of this animation —
+          // setting will-change in JSX kept the layer alive for every bar's
+          // lifetime (#19).
+          barEl.style.willChange = "height";
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (animate as any)(
             barEl,
             { height: ["0px", `${targetPx}px`] },
-            { ...springs.data, delay: visibleIdx * stagger.bar, ...getReducedMotionOverride() },
+            {
+              ...springs.data,
+              delay: visibleIdx * stagger.bar,
+              onComplete: () => { barEl.style.willChange = ""; },
+              ...getReducedMotionOverride(),
+            },
           );
           visibleIdx++;
         } else {
@@ -116,11 +125,16 @@ export function TrendChart({
         // `height: 0 !important` rule keeps the new bars invisible.
         const justMounted = !barEl.hasAttribute("data-revealed");
         barEl.setAttribute("data-revealed", "1");
+        barEl.style.willChange = "height";
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (animate as any)(
           barEl,
           justMounted ? { height: ["0px", `${targetPx}px`] } : { height: `${targetPx}px` },
-          { ...springs.data, ...getReducedMotionOverride() },
+          {
+            ...springs.data,
+            onComplete: () => { barEl.style.willChange = ""; },
+            ...getReducedMotionOverride(),
+          },
         );
       }
     });
@@ -238,24 +252,40 @@ function TrendBar({
       >
         {/* Bar height is owned by motion; CSS default (data-trend-bar
             without data-revealed) hides at 0 so the first paint doesn't
-            flash the full target before motion kicks in. */}
+            flash the full target before motion kicks in.
+            Idle gradient is the bar's own background; the selected gradient
+            lives in an absolutely-positioned overlay that crossfades on
+            isSelected change (#18). Box-shadow CSS-transitions on the parent
+            so the selected glow eases in on the same beat. */}
         <div
           ref={barRefCallback}
           data-trend-bar
-          class="w-full"
+          class="relative w-full"
           style={{
-            background: isSelected
-              ? selectedBg
-              : "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%)",
+            background:
+              "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%)",
             opacity: barOpacity,
-            willChange: "height",
             minHeight: item.total > 0 ? 2 : 0,
             borderRadius: "8px 8px 4px 4px",
             boxShadow: isSelected
               ? `inset 0 1px 0 rgba(255,255,255,0.3), ${selectedGlow}`
               : "inset 0 1px 0 rgba(255,255,255,0.04)",
+            transition: "box-shadow 200ms ease",
           }}
-        />
+        >
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: selectedBg,
+              borderRadius: "inherit",
+              opacity: isSelected ? 1 : 0,
+              transition: "opacity 200ms ease",
+              pointerEvents: "none",
+            }}
+          />
+        </div>
       </div>
 
       {/* Period label below */}
