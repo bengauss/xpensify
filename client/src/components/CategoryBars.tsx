@@ -3,6 +3,7 @@ import { animate } from "motion";
 import type { CategoryBreakdownItem } from "@/lib/analytics";
 import { formatMoney } from "@/lib/format";
 import { springs, stagger, tempo, getReducedMotionOverride } from "@/lib/animations";
+import { usePressScale } from "@/lib/usePressScale";
 
 interface CategoryBarsProps {
   breakdown: CategoryBreakdownItem[];
@@ -22,6 +23,7 @@ export function CategoryBars({
   const [expanded, setExpanded] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const prevHeightRef = useRef<number | null>(null);
+  const toggleBtnPress = usePressScale<HTMLButtonElement>(0.97);
 
   const barRefs = useRef<(HTMLDivElement | null)[]>([]);
   const amountRefs = useRef<(HTMLSpanElement | null)[]>([]);
@@ -227,6 +229,10 @@ export function CategoryBars({
 
       {canCollapse && (
         <button
+          ref={toggleBtnPress.ref}
+          onPointerDown={toggleBtnPress.onPointerDown}
+          onPointerUp={toggleBtnPress.onPointerUp}
+          onPointerCancel={toggleBtnPress.onPointerCancel}
           onClick={toggle}
           class="w-full text-left bg-transparent border-0 cursor-pointer"
           style={{
@@ -236,6 +242,7 @@ export function CategoryBars({
             color: "#909096",
             letterSpacing: "0.01em",
             WebkitTapHighlightColor: "transparent",
+            transformOrigin: "left center",
           }}
         >
           {expanded ? (

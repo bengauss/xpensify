@@ -12,6 +12,7 @@ import { DetailSheet } from "@/components/DetailSheet";
 import { api } from "@/lib/api";
 import { MONTHS_SHORT } from "@/lib/format";
 import { usePressScale } from "@/lib/usePressScale";
+import { Toggle } from "@/components/Toggle";
 
 // ── Shared primitives ────────────────────────────────────────────────────────
 
@@ -94,36 +95,6 @@ function Chevron() {
     >
       <path d="M9 6l6 6-6 6" />
     </svg>
-  );
-}
-
-function Toggle({ active, onToggle }: { active: boolean; onToggle: () => void }) {
-  return (
-    <button
-      onClick={(e) => { e.stopPropagation(); onToggle(); }}
-      class="relative flex-shrink-0 rounded-full border-0 p-0 cursor-pointer"
-      style={{
-        width: 40,
-        height: 24,
-        backgroundColor: active ? "var(--color-accent)" : "var(--color-text-ghost)",
-        transition: "background-color 150ms ease",
-      }}
-      aria-label={active ? "disable" : "enable"}
-    >
-      <div
-        style={{
-          position: "absolute",
-          top: 3,
-          left: 3,
-          width: 18,
-          height: 18,
-          borderRadius: "50%",
-          backgroundColor: "white",
-          transform: active ? "translateX(16px)" : "translateX(0)",
-          transition: "transform 150ms ease",
-        }}
-      />
-    </button>
   );
 }
 
@@ -1071,7 +1042,7 @@ function AboutSection() {
     <Section title="about">
       <Row>
         <span class="flex-1 text-sm">version</span>
-        <span class="text-sm" style={{ color: "var(--color-text-secondary)" }}>v3.13</span>
+        <span class="text-sm" style={{ color: "var(--color-text-secondary)" }}>v3.14</span>
       </Row>
       {confirmLogout ? (
         <div class="px-4 py-2">

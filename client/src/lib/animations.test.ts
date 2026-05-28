@@ -112,3 +112,135 @@ describe("pending-expenses banner entrance (#21)", () => {
     expect(ADD).toMatch(/opacity:\s*\[\s*0\s*,\s*1\s*\][\s\S]{0,80}y:\s*\[\s*-6\s*,\s*0\s*\]/);
   });
 });
+
+describe("shared Toggle component (#15)", () => {
+  it("client/src/components/Toggle.tsx exists and exports a Toggle function/component", () => {
+    const TOGGLE = readFileSync(
+      resolve(CLIENT_ROOT, "src/components/Toggle.tsx"),
+      "utf-8",
+    );
+    expect(TOGGLE).toMatch(/export\s+function\s+Toggle\b/);
+  });
+
+  it("Toggle.tsx animates the knob on springs.toggle (physical motion)", () => {
+    const TOGGLE = readFileSync(
+      resolve(CLIENT_ROOT, "src/components/Toggle.tsx"),
+      "utf-8",
+    );
+    expect(TOGGLE).toMatch(/springs\.toggle/);
+  });
+
+  it("Toggle.tsx animates the track colour with a duration (no spring on colour)", () => {
+    const TOGGLE = readFileSync(
+      resolve(CLIENT_ROOT, "src/components/Toggle.tsx"),
+      "utf-8",
+    );
+    // The track-colour animate() call uses durations.* (not springs.*) — colour
+    // has no mass so a spring on it reads as a lagging overshoot.
+    expect(TOGGLE).toMatch(/backgroundColor[\s\S]{0,200}durations\./);
+  });
+
+  it("Toggle.tsx respects prefers-reduced-motion via getReducedMotionOverride", () => {
+    const TOGGLE = readFileSync(
+      resolve(CLIENT_ROOT, "src/components/Toggle.tsx"),
+      "utf-8",
+    );
+    expect(TOGGLE).toMatch(/getReducedMotionOverride/);
+  });
+
+  it("Recurring.tsx no longer declares its own Toggle and imports the shared one", () => {
+    const RECURRING = readFileSync(
+      resolve(CLIENT_ROOT, "src/screens/Recurring.tsx"),
+      "utf-8",
+    );
+    expect(RECURRING).not.toMatch(/function\s+Toggle\s*\(/);
+    expect(RECURRING).toMatch(/from\s+["']@\/components\/Toggle["']/);
+  });
+
+  it("Settings.tsx no longer declares its own Toggle and imports the shared one", () => {
+    const SETTINGS = readFileSync(
+      resolve(CLIENT_ROOT, "src/screens/Settings.tsx"),
+      "utf-8",
+    );
+    expect(SETTINGS).not.toMatch(/function\s+Toggle\s*\(/);
+    expect(SETTINGS).toMatch(/from\s+["']@\/components\/Toggle["']/);
+  });
+});
+
+describe("usePressScale coverage (#16)", () => {
+  it("CategoryBars.tsx wires usePressScale on the show-more/show-less toggle button", () => {
+    const BARS = readFileSync(
+      resolve(CLIENT_ROOT, "src/components/CategoryBars.tsx"),
+      "utf-8",
+    );
+    expect(BARS).toMatch(/from\s+["']@\/lib\/usePressScale["']/);
+    expect(BARS).toMatch(/usePressScale/);
+  });
+
+  it("DetailSheet.tsx wires usePressScale on the drag handle (dismiss tap target)", () => {
+    const SHEET = readFileSync(
+      resolve(CLIENT_ROOT, "src/components/DetailSheet.tsx"),
+      "utf-8",
+    );
+    expect(SHEET).toMatch(/from\s+["']@\/lib\/usePressScale["']/);
+    expect(SHEET).toMatch(/usePressScale/);
+  });
+
+  it("Settings.tsx Row component still wires usePressScale handlers (regression guard)", () => {
+    const SETTINGS = readFileSync(
+      resolve(CLIENT_ROOT, "src/screens/Settings.tsx"),
+      "utf-8",
+    );
+    expect(SETTINGS).toMatch(/usePressScale/);
+    expect(SETTINGS).toMatch(/onPointerDown/);
+  });
+
+  it("Add.tsx does NOT wrap the date <label> with usePressScale (iOS user-activation chain)", () => {
+    const ADD = readFileSync(
+      resolve(CLIENT_ROOT, "src/screens/Add.tsx"),
+      "utf-8",
+    );
+    // The `<label>` wrapping `<input type="date">` must not have a transform
+    // animation on its click target — iOS Safari requires an unbroken
+    // user-activation chain to invoke the native date picker.
+    expect(ADD).not.toMatch(/<label[^>]*ref=\{[^}]*usePressScale/);
+  });
+});
+
+describe("modal spring symmetry (#17)", () => {
+  const SHEET = readFileSync(
+    resolve(CLIENT_ROOT, "src/components/DetailSheet.tsx"),
+    "utf-8",
+  );
+  const DIALOG = readFileSync(
+    resolve(CLIENT_ROOT, "src/components/ConfirmDialog.tsx"),
+    "utf-8",
+  );
+
+  it("DetailSheet.tsx exit uses a spring, not durations.exit", () => {
+    // Find the closing-branch animate() call. The simplest invariant: the file
+    // must not pair "y: ["0%", "100%"]" with durations.exit anywhere.
+    const closingFragment = SHEET.match(/y:\s*\[\s*["']0%["']\s*,\s*["']100%["']\s*\][\s\S]{0,200}/);
+    expect(closingFragment).not.toBeNull();
+    expect(closingFragment![0]).toMatch(/springs\./);
+    expect(closingFragment![0]).not.toMatch(/durations\.exit/);
+  });
+
+  it("DetailSheet.tsx overlay opacity uses easeOutQuart at 300ms (matches sheet spring landing)", () => {
+    // The hard 200ms ease finished before the spring landed at ~280–320ms,
+    // leaving a frame where the overlay was gone but the sheet still slid.
+    expect(SHEET).toMatch(
+      /opacity\s+300ms\s+cubic-bezier\(0\.22,\s*1,\s*0\.36,\s*1\)/,
+    );
+    expect(SHEET).not.toMatch(/transition-opacity\s+duration-200/);
+  });
+
+  it("ConfirmDialog.tsx exit uses a spring, not durations.exit", () => {
+    // Locate the dismiss animate() — the keyframes "opacity: [1, 0]" identify
+    // the exit branch. It must use a spring on the round trip.
+    const exitFragment = DIALOG.match(/opacity:\s*\[\s*1\s*,\s*0\s*\][\s\S]{0,200}/);
+    expect(exitFragment).not.toBeNull();
+    expect(exitFragment![0]).toMatch(/springs\./);
+    expect(exitFragment![0]).not.toMatch(/durations\.exit/);
+  });
+});
