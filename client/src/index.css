@@ -205,6 +205,14 @@ body {
   transform: translateY(10px);
 }
 
+/* ── Pending-expenses banner entrance ───────────────────────────────────
+   Banner fades + rises in each time it transitions from hidden → visible.
+   CSS-pinned so Preact re-renders can't clobber back to opacity:0. */
+[data-banner-reveal]:not([data-revealed]) {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
 /* ── Sync indicator state fade ─────────────────────────────────────────── */
 @keyframes syncIndicatorEnter {
   from {

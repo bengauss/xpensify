@@ -128,6 +128,7 @@ export function AddScreen() {
     refreshPendingExpenses().catch(() => {});
   }, []);
 
+
   // Chained column entrance: amount → date line → note. The CategorySelector
   // runs its own cascade, which kicks in roughly where the static rows settle.
   useEntrance(() => {
@@ -375,6 +376,24 @@ export function AddScreen() {
     ? [...pendingList].sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]
     : null;
 
+  // Banner entrance — fade + rise each time the banner transitions from
+  // hidden to visible. Hidden state lives in CSS on
+  // [data-banner-reveal]:not([data-revealed]) so Preact re-renders driven by
+  // list updates don't clobber motion's animated values back to 0.
+  const bannerVisible = showBanner && !!latestPending;
+  useEffect(() => {
+    if (!bannerVisible) return;
+    const el = bannerPress.ref.current;
+    if (!el || el.hasAttribute("data-revealed")) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (animate as any)(
+      el,
+      { opacity: [0, 1], y: [-6, 0] },
+      { ...durations.soft, ...getReducedMotionOverride() },
+    );
+    el.setAttribute("data-revealed", "1");
+  }, [bannerVisible]);
+
   return (
     <div class={`flex flex-col gap-4 px-4 pt-2 ${isEditing ? "pb-40" : "safe-pb"}`}>
       <div ref={amountWrapRef} data-add-reveal>
@@ -390,6 +409,7 @@ export function AddScreen() {
       {showBanner && latestPending && (
         <div
           ref={bannerPress.ref}
+          data-banner-reveal
           onPointerDown={bannerPress.onPointerDown}
           onPointerUp={bannerPress.onPointerUp}
           onPointerCancel={bannerPress.onPointerCancel}
