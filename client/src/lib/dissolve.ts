@@ -22,12 +22,25 @@ export function fadeRemoveRow(el: HTMLElement): Promise<void> {
   el.style.paddingBottom = "0px";
 
   return new Promise((resolve) => {
+    let settled = false;
     const finish = () => {
-      // Remove from layout before the liveQuery-driven unmount so there is
-      // no sub-pixel snap when the DOM node disappears.
-      el.style.display = "none";
+      if (settled) return;
+      settled = true;
+      el.removeEventListener("transitionend", onEnd);
+      // Leave the row in flow at height:0/padding:0/opacity:0 — the caller's
+      // follow-up Dexie unmount carries it away on the next render. Removing
+      // the row from flow here (display) would shrink the parent layout in a
+      // separate step from the height transition and snap siblings upward.
       resolve();
     };
-    setTimeout(finish, duration + 20);
+    const onEnd = (e: TransitionEvent) => {
+      if (e.target !== el) return;
+      if (e.propertyName !== "height") return;
+      finish();
+    };
+    el.addEventListener("transitionend", onEnd);
+    // Fallback in case transitionend is suppressed (reduced motion, tab
+    // backgrounded mid-animation).
+    setTimeout(finish, duration + 60);
   });
 }

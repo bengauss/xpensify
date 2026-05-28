@@ -81,3 +81,34 @@ describe("tab transition fallback timer", () => {
     expect(content).toContain("window.setTimeout(cleanup, 300)");
   });
 });
+
+describe("pending-expenses banner entrance (#21)", () => {
+  const CSS = readFileSync(resolve(CLIENT_ROOT, "src/index.css"), "utf-8");
+  const ADD = readFileSync(resolve(CLIENT_ROOT, "src/screens/Add.tsx"), "utf-8");
+
+  it("pins the hidden state in index.css on [data-banner-reveal]:not([data-revealed])", () => {
+    // Following the established pattern (data-add-reveal, data-login-card) —
+    // JSX inline opacity:0 gets clobbered by Preact re-renders, so the
+    // default hidden state must live in CSS gated on a data-attribute.
+    expect(CSS).toMatch(
+      /\[data-banner-reveal\]:not\(\[data-revealed\]\)\s*\{[^}]*opacity:\s*0[^}]*\}/,
+    );
+  });
+
+  it("hidden state also offsets the banner upward so the animation rises into place", () => {
+    expect(CSS).toMatch(
+      /\[data-banner-reveal\]:not\(\[data-revealed\]\)\s*\{[^}]*transform:\s*translateY\(-6px\)/,
+    );
+  });
+
+  it("Add.tsx renders the banner with the data-banner-reveal attribute", () => {
+    expect(ADD).toMatch(/data-banner-reveal/);
+  });
+
+  it("Add.tsx animates the banner with opacity 0→1 and y -6→0 on appearance", () => {
+    // The entrance keyframes pin the start values explicitly (motion's
+    // getComputedStyle fallback would otherwise read whatever the element
+    // currently shows).
+    expect(ADD).toMatch(/opacity:\s*\[\s*0\s*,\s*1\s*\][\s\S]{0,80}y:\s*\[\s*-6\s*,\s*0\s*\]/);
+  });
+});

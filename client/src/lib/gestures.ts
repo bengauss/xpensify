@@ -57,6 +57,7 @@ export function useTabGestures(
     let intent: Intent = "none";
     let pullDistance = 0;
     let startInScrollableX = false;
+    let pulledLayer: HTMLElement | null = null;
 
     const resetIndicator = () => {
       const el = indicatorRef.current;
@@ -66,11 +67,27 @@ export function useTabGestures(
       el.style.opacity = "0";
     };
 
+    const resetLayer = () => {
+      const layer = pulledLayer;
+      if (!layer) return;
+      layer.style.transition = "transform 200ms cubic-bezier(0.22, 1, 0.36, 1)";
+      layer.style.transform = "translateY(0)";
+      pulledLayer = null;
+    };
+
     const updateIndicator = (dy: number) => {
-      const el = indicatorRef.current;
-      if (!el) return;
       const pull = Math.min(dy * PTR_RESISTANCE, PTR_MAX_PULL);
       pullDistance = pull;
+
+      const layer = getActiveLayer();
+      if (layer) {
+        pulledLayer = layer;
+        layer.style.transition = "none";
+        layer.style.transform = `translateY(${pull}px)`;
+      }
+
+      const el = indicatorRef.current;
+      if (!el) return;
       el.style.transition = "none";
       el.style.transform = `translateY(${pull - 40}px)`;
       el.style.opacity = `${Math.min(pull / PTR_THRESHOLD, 1)}`;
@@ -136,6 +153,7 @@ export function useTabGestures(
       if (intent === "vertical") {
         if (dy <= 0) {
           resetIndicator();
+          resetLayer();
           intent = "scroll";
           return;
         }
@@ -170,6 +188,7 @@ export function useTabGestures(
           sync().catch(console.error);
         }
         resetIndicator();
+        resetLayer();
       }
 
       intent = "none";
@@ -177,7 +196,10 @@ export function useTabGestures(
     };
 
     const handleCancel = () => {
-      if (intent === "vertical") resetIndicator();
+      if (intent === "vertical") {
+        resetIndicator();
+        resetLayer();
+      }
       intent = "none";
       pullDistance = 0;
     };
