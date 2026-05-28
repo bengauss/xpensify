@@ -113,11 +113,21 @@ export function CategoryBars({
 
       if (bar) {
         bar.setAttribute("data-revealed", "1");
+        // Promote to a GPU layer only for the duration of this entrance —
+        // setting will-change in JSX kept the layer alive for every bar's
+        // lifetime (#19).
+        bar.style.willChange = "width";
+        const barEl = bar;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const anim = (animate as any)(
           bar,
           { width: ["0%", `${targetPct}%`] },
-          { ...springs.data, delay: index * stagger.bar, ...getReducedMotionOverride() },
+          {
+            ...springs.data,
+            delay: index * stagger.bar,
+            onComplete: () => { barEl.style.willChange = ""; },
+            ...getReducedMotionOverride(),
+          },
         );
         activeAnims.current.push(anim);
       }
@@ -202,7 +212,6 @@ export function CategoryBars({
                   borderRadius: 6,
                   background: `linear-gradient(180deg, ${item.category_color} 0%, ${item.category_color}d8 100%)`,
                   boxShadow: `inset 0 1px 0 ${item.category_color}40, 0 1px 6px -2px ${item.category_color}80`,
-                  willChange: "width",
                 }}
               />
             </div>

@@ -318,9 +318,11 @@ describe("Recurring forecast cadence consolidation (#23)", () => {
   });
 
   it("forecast row stagger spreads durations.soft for duration + ease", () => {
-    // Within the row-stagger block (identified by stagger.pill + y: [6, 0]),
-    // we expect durations.soft to be spread in.
-    const rowBlock = RECURRING.match(/stagger\.pill[\s\S]{0,400}/);
+    // The row-stagger ANIM call (identified by `y: [6, 0]` + stagger.pill on
+    // the delay) must spread durations.soft instead of a bare duration/ease pair.
+    const rowBlock = RECURRING.match(
+      /y:\s*\[\s*6\s*,\s*0\s*\][\s\S]{0,400}stagger\.pill/,
+    );
     expect(rowBlock).not.toBeNull();
     expect(rowBlock![0]).toMatch(/durations\.soft/);
   });
