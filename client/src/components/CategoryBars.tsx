@@ -2,7 +2,7 @@ import { useRef, useState, useLayoutEffect } from "preact/hooks";
 import { animate } from "motion";
 import type { CategoryBreakdownItem } from "@/lib/analytics";
 import { formatMoney } from "@/lib/format";
-import { springs, stagger, getReducedMotionOverride } from "@/lib/animations";
+import { springs, stagger, tempo, getReducedMotionOverride } from "@/lib/animations";
 
 interface CategoryBarsProps {
   breakdown: CategoryBreakdownItem[];
@@ -100,7 +100,7 @@ export function CategoryBars({
     }
 
     // First render with data on this mount: staggered entrance animation.
-    const barsSettleBase = items.length * 30 + 350;
+    const barsSettleBase = items.length * stagger.bar * 1000 + tempo.settle;
     const amountStaggerMs = 40;
 
     for (let index = 0; index < items.length; index++) {

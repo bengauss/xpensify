@@ -25,8 +25,14 @@ export const stagger = {
   card: 0.05,
 };
 
-// Mount delay (ms) — how long to wait after mount before entrance animations start.
-export const MOUNT_DELAY_MS = 80;
+// Tempo presets (ms) — shared timing vocabulary for setTimeout-driven entrance
+// choreography. Use these instead of bare ms numbers so phase handoffs across
+// screens share a rhythm and small touch-ups propagate.
+export const tempo = {
+  mount: 80,      // post-mount lead-in before entrance animations start
+  handoff: 150,   // brief overlap between two animation phases
+  settle: 320,    // padding for a typical reveal to land
+};
 
 // Returns an options-spread override that collapses any animation to near-instant
 // when the user has `prefers-reduced-motion: reduce`. Spread at the END of an

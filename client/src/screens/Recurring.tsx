@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useLayoutEffect } from "preact/hooks";
 import { useLocation } from "preact-iso";
 import { animate } from "motion";
-import { springs, durations, stagger, getReducedMotionOverride } from "@/lib/animations";
+import { springs, durations, stagger, tempo, getReducedMotionOverride } from "@/lib/animations";
 import { db } from "@/db/local";
 import type { RecurringTemplate, Expense } from "@/db/local";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -282,8 +282,10 @@ function ForecastCard({ forecast }: { forecast: ForecastData }) {
     //    0.15s delay baked in).
     setEntranceReady(true);
 
-    // 3. Row stagger — begins after the count-up has visually landed.
-    const ROW_START = 0.6;
+    // 3. Row stagger — begins after the count-up has visually landed, with a
+    //    brief handoff so the rows feel like a follow-on phase rather than
+    //    racing the final count-up frame.
+    const ROW_START = durations.count.duration + tempo.handoff / 1000;
     let rowCount = 0;
     if (listRef.current) {
       const rows = Array.from(

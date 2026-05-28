@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "preact/hooks";
-import { stagger, MOUNT_DELAY_MS, shouldReduceMotion } from "@/lib/animations";
+import { stagger, tempo, shouldReduceMotion } from "@/lib/animations";
 import { transitionDone } from "@/lib/transitions";
 
 const MAX_ANIMATED_ROWS = 15; // only animate above-the-fold
@@ -23,7 +23,7 @@ export function useEntrance(
       if (cleanup) cancelRef.current = cleanup;
     }
 
-    const mountDelay = shouldReduceMotion() ? 0 : MOUNT_DELAY_MS;
+    const mountDelay = shouldReduceMotion() ? 0 : tempo.mount;
     const pending = transitionDone.value;
     if (pending) {
       pending.then(() => {
@@ -142,7 +142,7 @@ export function animateRowEntrance(container: HTMLElement): () => void {
   }
 
   // Phase 2: amounts fade in after text settles.
-  const textSettleTime = count * textStaggerMs + 200; // ms
+  const textSettleTime = count * textStaggerMs + tempo.handoff;
   for (let i = 0; i < count; i++) {
     const amountEl = unrevealed[i].querySelector<HTMLElement>("[data-row-amount]");
     if (!amountEl) continue;
