@@ -80,9 +80,9 @@ function computeNextDue(
 const recurring = new Hono<{ Variables: Variables }>()
   // Apply auth to all routes
   .use("*", authMiddleware)
-  // GET / — list all recurring templates for the user with joined names
+  // GET / — list all household recurring templates with joined names.
+  // Templates are household-shared (like expense history), so no user_id filter.
   .get("/", (c) => {
-    const userId = c.get("userId");
     const templates = db
       .prepare(
         `SELECT rt.*,
@@ -91,18 +91,15 @@ const recurring = new Hono<{ Variables: Variables }>()
          FROM recurring_templates rt
          LEFT JOIN categories c ON c.id = rt.category_id
          LEFT JOIN subcategories s ON s.id = rt.subcategory_id
-         WHERE rt.user_id = ?
          ORDER BY rt.amount DESC`
       )
-      .all(userId) as RecurringTemplateRow[];
+      .all() as RecurringTemplateRow[];
 
     return c.json(templates);
   })
-  // GET /forecast — remaining recurring expenses for the current month
+  // GET /forecast — remaining household recurring expenses for the current month
   .get("/forecast", (c) => {
-    const userId = c.get("userId");
-
-    // Active templates with next_due in current month
+    // Active templates with next_due in current month (household-shared, no user_id filter)
     const upcoming = db
       .prepare(
         `SELECT rt.id, rt.amount, rt.note, rt.next_due, rt.frequency,
@@ -111,11 +108,10 @@ const recurring = new Hono<{ Variables: Variables }>()
          FROM recurring_templates rt
          LEFT JOIN categories c ON c.id = rt.category_id
          LEFT JOIN subcategories s ON s.id = rt.subcategory_id
-         WHERE rt.user_id = ?
-           AND rt.active = 1
+         WHERE rt.active = 1
            AND strftime('%Y-%m', rt.next_due) = strftime('%Y-%m', 'now')`
       )
-      .all(userId) as Array<{
+      .all() as Array<{
         id: string;
         amount: number;
         note: string | null;
@@ -127,17 +123,17 @@ const recurring = new Hono<{ Variables: Variables }>()
         subcategory_name: string;
       }>;
 
-    // Already-generated this month
+    // Already-generated this month — counted household-wide regardless of which
+    // user the generated expense was stamped under.
     const generated = db
       .prepare(
         `SELECT recurring_template_id, timestamp
          FROM expenses
-         WHERE user_id = ?
-           AND source = 'recurring'
+         WHERE source = 'recurring'
            AND strftime('%Y-%m', timestamp) = strftime('%Y-%m', 'now')
            AND deleted = 0`
       )
-      .all(userId) as Array<{ recurring_template_id: string; timestamp: string }>;
+      .all() as Array<{ recurring_template_id: string; timestamp: string }>;
 
     const generatedSet = new Set(generated.map((g) => g.recurring_template_id));
 
@@ -221,14 +217,13 @@ const recurring = new Hono<{ Variables: Variables }>()
 
     return c.json(created, 201);
   })
-  // PATCH /:id — update template fields
+  // PATCH /:id — update template fields. Household-shared: any member can edit.
   .patch("/:id", async (c) => {
-    const userId = c.get("userId");
     const id = c.req.param("id");
 
     const existing = db
-      .prepare(`SELECT * FROM recurring_templates WHERE id = ? AND user_id = ?`)
-      .get(id, userId) as RecurringTemplateRow | undefined;
+      .prepare(`SELECT * FROM recurring_templates WHERE id = ?`)
+      .get(id) as RecurringTemplateRow | undefined;
 
     if (!existing) {
       return c.json({ error: "Not found" }, 404);
@@ -281,10 +276,10 @@ const recurring = new Hono<{ Variables: Variables }>()
 
     fields.push("updated_at = ?");
     values.push(new Date().toISOString());
-    values.push(id, userId);
+    values.push(id);
 
     db.prepare(
-      `UPDATE recurring_templates SET ${fields.join(", ")} WHERE id = ? AND user_id = ?`
+      `UPDATE recurring_templates SET ${fields.join(", ")} WHERE id = ?`
     ).run(...values);
 
     const updated = db
@@ -301,20 +296,19 @@ const recurring = new Hono<{ Variables: Variables }>()
 
     return c.json(updated);
   })
-  // DELETE /:id
+  // DELETE /:id — household-shared: any member can delete.
   .delete("/:id", (c) => {
-    const userId = c.get("userId");
     const id = c.req.param("id");
 
     const existing = db
-      .prepare(`SELECT id FROM recurring_templates WHERE id = ? AND user_id = ?`)
-      .get(id, userId);
+      .prepare(`SELECT id FROM recurring_templates WHERE id = ?`)
+      .get(id);
 
     if (!existing) {
       return c.json({ error: "Not found" }, 404);
     }
 
-    db.prepare(`DELETE FROM recurring_templates WHERE id = ? AND user_id = ?`).run(id, userId);
+    db.prepare(`DELETE FROM recurring_templates WHERE id = ?`).run(id);
 
     return c.json({ ok: true });
   });
