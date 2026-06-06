@@ -15,6 +15,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     pool: "forks",
+    // Only discover source tests — never any compiled copies under dist/
+    // (vitest 4 no longer excludes dist/ by default).
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     coverage: {
       reporter: ["text", "html"],
       include: ["src/**/*.ts", "src/**/*.tsx"],
