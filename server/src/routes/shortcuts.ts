@@ -218,16 +218,22 @@ function ingestExpense(
   // from Apple Wallet and is deterministic per real transaction, so two
   // legit twin purchases will differ by at least a second. Within a 5-min
   // window we treat an exact match as a retry and short-circuit.
+  // `created_at` is stored ISO (...T...Z); compare against a JS-computed ISO
+  // threshold so the string comparison is like-for-like. SQLite's
+  // datetime('now','-300 seconds') yields space-separated format, which sorts
+  // below any same-day ISO value ('T' > ' '), collapsing the 5-min window into
+  // a same-UTC-day window.
+  const dedupeThreshold = new Date(Date.now() - 300_000).toISOString();
   const existingDupe = db
     .prepare(
       `SELECT id, status, category_id, subcategory_id
        FROM expenses
        WHERE user_id = ? AND amount = ? AND note = ? AND source = 'apple-pay'
          AND timestamp = ?
-         AND created_at > datetime('now', '-300 seconds')
+         AND created_at > ?
        LIMIT 1`,
     )
-    .get(tokenRow.user_id, amountCents, note, timestamp) as
+    .get(tokenRow.user_id, amountCents, note, timestamp, dedupeThreshold) as
     | { id: string; status: string; category_id: string | null; subcategoryId: string | null }
     | undefined;
   if (existingDupe) {
