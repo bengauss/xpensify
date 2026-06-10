@@ -2,6 +2,16 @@ import { Hono } from "hono";
 import db from "../db/connection.js";
 import { authMiddleware, type Variables } from "../middleware/auth.js";
 
+/**
+ * better-sqlite3 throws this code when a DELETE violates a foreign-key
+ * constraint (foreign_keys = ON). We translate it to a 409 so a still-referenced
+ * row — including refs the explicit COUNT guards don't enumerate, e.g. a
+ * soft-deleted expense or a future FK — never surfaces as an uncaught 500.
+ */
+function isForeignKeyError(err: unknown): boolean {
+  return err instanceof Error && (err as { code?: string }).code === "SQLITE_CONSTRAINT_FOREIGNKEY";
+}
+
 const categories = new Hono<{ Variables: Variables }>()
   // All routes require auth
   .use("/*", authMiddleware)
@@ -94,7 +104,7 @@ const categories = new Hono<{ Variables: Variables }>()
     const updated = db.prepare(`SELECT * FROM categories WHERE id = ?`).get(id);
     return c.json(updated);
   })
-  // DELETE /:id — delete category (only if no expenses reference it)
+  // DELETE /:id — delete category (only if nothing references it)
   .delete("/:id", (c) => {
     const id = c.req.param("id");
 
@@ -114,7 +124,36 @@ const categories = new Hono<{ Variables: Variables }>()
       );
     }
 
-    db.prepare(`DELETE FROM categories WHERE id = ?`).run(id);
+    const recurringCount = db
+      .prepare(`SELECT COUNT(*) as count FROM recurring_templates WHERE category_id = ?`)
+      .get(id) as { count: number };
+
+    if (recurringCount.count > 0) {
+      return c.json(
+        { error: `Cannot delete category: ${recurringCount.count} recurring template(s) still reference it` },
+        409
+      );
+    }
+
+    const merchantCount = db
+      .prepare(`SELECT COUNT(*) as count FROM merchant_categories WHERE category_id = ?`)
+      .get(id) as { count: number };
+
+    if (merchantCount.count > 0) {
+      return c.json(
+        { error: `Cannot delete category: ${merchantCount.count} merchant mapping(s) still reference it` },
+        409
+      );
+    }
+
+    try {
+      db.prepare(`DELETE FROM categories WHERE id = ?`).run(id);
+    } catch (err) {
+      if (isForeignKeyError(err)) {
+        return c.json({ error: "Cannot delete category: still referenced by other records" }, 409);
+      }
+      throw err;
+    }
     return c.json({ ok: true });
   })
   // POST /:id/subcategories — add subcategory to a category
@@ -178,7 +217,7 @@ const categories = new Hono<{ Variables: Variables }>()
     const updated = db.prepare(`SELECT * FROM subcategories WHERE id = ?`).get(id);
     return c.json(updated);
   })
-  // DELETE /subcategories/:id — delete subcategory
+  // DELETE /subcategories/:id — delete subcategory (only if nothing references it)
   .delete("/subcategories/:id", (c) => {
     const id = c.req.param("id");
 
@@ -187,7 +226,47 @@ const categories = new Hono<{ Variables: Variables }>()
       return c.json({ error: "Subcategory not found" }, 404);
     }
 
-    db.prepare(`DELETE FROM subcategories WHERE id = ?`).run(id);
+    const expenseCount = db
+      .prepare(`SELECT COUNT(*) as count FROM expenses WHERE subcategory_id = ? AND deleted = 0`)
+      .get(id) as { count: number };
+
+    if (expenseCount.count > 0) {
+      return c.json(
+        { error: `Cannot delete subcategory: ${expenseCount.count} expense(s) still reference it` },
+        409
+      );
+    }
+
+    const recurringCount = db
+      .prepare(`SELECT COUNT(*) as count FROM recurring_templates WHERE subcategory_id = ?`)
+      .get(id) as { count: number };
+
+    if (recurringCount.count > 0) {
+      return c.json(
+        { error: `Cannot delete subcategory: ${recurringCount.count} recurring template(s) still reference it` },
+        409
+      );
+    }
+
+    const merchantCount = db
+      .prepare(`SELECT COUNT(*) as count FROM merchant_categories WHERE subcategory_id = ?`)
+      .get(id) as { count: number };
+
+    if (merchantCount.count > 0) {
+      return c.json(
+        { error: `Cannot delete subcategory: ${merchantCount.count} merchant mapping(s) still reference it` },
+        409
+      );
+    }
+
+    try {
+      db.prepare(`DELETE FROM subcategories WHERE id = ?`).run(id);
+    } catch (err) {
+      if (isForeignKeyError(err)) {
+        return c.json({ error: "Cannot delete subcategory: still referenced by other records" }, 409);
+      }
+      throw err;
+    }
     return c.json({ ok: true });
   });
 
