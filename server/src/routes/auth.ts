@@ -6,10 +6,23 @@ import { authMiddleware, type Variables } from "../middleware/auth.js";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 90; // 90 days in seconds
 const MIN_PASSWORD_LENGTH = 8;
 
-// Simple in-memory per-IP rate limit for login.
+// Simple in-memory per-IP rate limit for login, plus an IP-independent
+// per-username backstop so a distributed attack rotating source IPs is still
+// bounded (the household has only a handful of usernames). The username
+// backstop is a deliberate self-healing lockout: once tripped it blocks every
+// attempt for that username — including the correct password — until the
+// 15-min window expires. That is an accepted DoS tradeoff (an attacker who
+// knows a username can deny that user's *logins* for up to 15 min), justified
+// here because (a) bounding distributed guessing is the whole point — letting a
+// correct password through during the window would let an attacker keep
+// guessing until they hit it; (b) this is an offline-first PWA, so blocked
+// login ≠ blocked app; (c) the threshold is 2× the per-IP limit and recovers
+// on its own.
 const LOGIN_MAX_ATTEMPTS = 10;
+const LOGIN_MAX_USERNAME_ATTEMPTS = 20;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const usernameAttempts = new Map<string, { count: number; resetAt: number }>();
 
 // Periodically prune expired rate-limit entries to prevent memory leaks
 const loginAttemptsPruneTimer = setInterval(() => {
@@ -19,6 +32,11 @@ const loginAttemptsPruneTimer = setInterval(() => {
       loginAttempts.delete(ip);
     }
   }
+  for (const [name, entry] of usernameAttempts.entries()) {
+    if (entry.resetAt < now) {
+      usernameAttempts.delete(name);
+    }
+  }
 }, 15 * 60 * 1000);
 if (loginAttemptsPruneTimer.unref) {
   loginAttemptsPruneTimer.unref();
@@ -26,28 +44,59 @@ if (loginAttemptsPruneTimer.unref) {
 
 function clientIp(header: string | undefined): string {
   if (!header) return "unknown";
-  // x-forwarded-for may contain a comma-separated list — first entry is the client
-  return header.split(",")[0]?.trim() || "unknown";
+  // x-forwarded-for is a comma-separated chain "client, proxy1, proxy2…".
+  // We sit behind Caddy, which APPENDS the real client IP, so only the
+  // rightmost entry is trustworthy — earlier entries are attacker-controlled
+  // and must not be used as the rate-limit key (else a rotating spoofed prefix
+  // defeats the limiter). Take the last non-empty entry. This trusts that the
+  // last hop was added by Caddy; that holds because the container is only
+  // reachable through Caddy (no published port — see docker-compose `web`
+  // network), so there is no direct ingress that could forge the rightmost
+  // entry.
+  const parts = header.split(",").map((s) => s.trim()).filter(Boolean);
+  return parts.length ? parts[parts.length - 1]! : "unknown";
 }
 
-function registerFailedLogin(ip: string): void {
+function bumpCounter(map: Map<string, { count: number; resetAt: number }>, key: string): void {
   const now = Date.now();
-  const current = loginAttempts.get(ip);
+  const current = map.get(key);
   if (!current || current.resetAt < now) {
-    loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    map.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
   } else {
     current.count += 1;
   }
 }
 
-function isLoginBlocked(ip: string): boolean {
-  const current = loginAttempts.get(ip);
+function counterTripped(
+  map: Map<string, { count: number; resetAt: number }>,
+  key: string,
+  limit: number,
+): boolean {
+  const current = map.get(key);
   if (!current) return false;
   if (current.resetAt < Date.now()) {
-    loginAttempts.delete(ip);
+    map.delete(key);
     return false;
   }
-  return current.count >= LOGIN_MAX_ATTEMPTS;
+  return current.count >= limit;
+}
+
+function registerFailedLogin(ip: string, username?: string): void {
+  bumpCounter(loginAttempts, ip);
+  if (username) bumpCounter(usernameAttempts, username);
+}
+
+function isLoginBlocked(ip: string, username?: string): boolean {
+  if (counterTripped(loginAttempts, ip, LOGIN_MAX_ATTEMPTS)) return true;
+  if (username && counterTripped(usernameAttempts, username, LOGIN_MAX_USERNAME_ATTEMPTS)) return true;
+  return false;
+}
+
+// Test-only: clear the in-memory rate-limit state so cases don't bleed into
+// each other through the module-level counters.
+export function __resetLoginRateLimits(): void {
+  loginAttempts.clear();
+  usernameAttempts.clear();
 }
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -81,6 +130,13 @@ const auth = new Hono<{ Variables: Variables }>()
       return c.json({ error: "username and password are required" }, 400);
     }
 
+    // Re-check with the username in hand: a distributed attack that rotates
+    // source IPs is caught by the per-username backstop even when no single IP
+    // has tripped its own limit.
+    if (isLoginBlocked(ip, username)) {
+      return c.json({ error: "Too many attempts, try again later" }, 429);
+    }
+
     const user = db
       .prepare(
         `SELECT id, username, display_name, password_hash, avatar_color FROM users WHERE username = ?`
@@ -90,18 +146,19 @@ const auth = new Hono<{ Variables: Variables }>()
       | undefined;
 
     if (!user) {
-      registerFailedLogin(ip);
+      registerFailedLogin(ip, username);
       return c.json({ error: "Invalid credentials" }, 401);
     }
 
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
-      registerFailedLogin(ip);
+      registerFailedLogin(ip, username);
       return c.json({ error: "Invalid credentials" }, 401);
     }
 
-    // Success — clear any accumulated failures for this IP
+    // Success — clear any accumulated failures for this IP and username
     loginAttempts.delete(ip);
+    usernameAttempts.delete(username);
 
     const sessionId = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + SESSION_MAX_AGE * 1000).toISOString();
