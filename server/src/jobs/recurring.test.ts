@@ -46,6 +46,68 @@ describe("advanceDate — weekly UTC correctness (H2)", () => {
   });
 });
 
+describe("advanceDate — monthly re-anchors on day_of_month (F10)", () => {
+  it("a day-31 template returns to 31 in long months instead of sticking at the Feb clamp", () => {
+    // Jan 31 → Feb (clamp 28) → Mar must re-anchor to 31, NOT stay at 28.
+    expect(advanceDate("2026-01-31", "monthly", 31)).toBe("2026-02-28");
+    expect(advanceDate("2026-02-28", "monthly", 31)).toBe("2026-03-31");
+    expect(advanceDate("2026-03-31", "monthly", 31)).toBe("2026-04-30");
+    expect(advanceDate("2026-04-30", "monthly", 31)).toBe("2026-05-31");
+  });
+
+  it("clamps the anchor (not the prior clamped value) to each month's length across a full year", () => {
+    const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let d = "2026-01-31";
+    for (let m = 1; m < 12; m++) {
+      d = advanceDate(d, "monthly", 31);
+      const [, mm, dd] = d.split("-").map(Number);
+      expect(mm).toBe(m + 1);
+      expect(dd).toBe(daysInMonth[m]); // min(31, days-in-month)
+    }
+  });
+
+  it("falls back to the day parsed from `current` when no anchor is supplied (back-compat)", () => {
+    expect(advanceDate("2026-01-15", "monthly")).toBe("2026-02-15");
+    expect(advanceDate("2026-01-31", "monthly")).toBe("2026-02-28");
+  });
+});
+
+describe("advanceDate — yearly re-anchors on the original day (F10)", () => {
+  it("Feb 29 clamps to Feb 28 in non-leap years, then recovers to 29 in the next leap year", () => {
+    expect(advanceDate("2028-02-29", "yearly", 29)).toBe("2029-02-28");
+    expect(advanceDate("2029-02-28", "yearly", 29)).toBe("2030-02-28");
+    expect(advanceDate("2030-02-28", "yearly", 29)).toBe("2031-02-28");
+    expect(advanceDate("2031-02-28", "yearly", 29)).toBe("2032-02-29");
+  });
+});
+
+describe("processRecurringTemplates — monthly drift (F10)", () => {
+  it("re-anchors a day-31 monthly template on day_of_month through a catch-up across February", () => {
+    // start fully in the past so `today` (always > 2025-05-31) doesn't change the assertions
+    insertRecurringTemplate({
+      user_id: userAId,
+      category_id: "cat-living",
+      subcategory_id: "sub-rent",
+      amount: 80000,
+      frequency: "monthly",
+      day_of_month: 31,
+      next_due: "2025-01-31",
+    });
+
+    processRecurringTemplates();
+
+    const timestamps = (
+      db.prepare(`SELECT timestamp FROM expenses WHERE source = 'recurring' ORDER BY timestamp`).all() as { timestamp: string }[]
+    ).map((r) => r.timestamp);
+
+    // After the Feb-28 clamp, March must re-anchor to the 31st (buggy code produced 03-28).
+    expect(timestamps).toContain("2025-03-31T12:00:00.000Z");
+    expect(timestamps).toContain("2025-05-31T12:00:00.000Z");
+    // And the Feb occurrence itself is the clamped 28th.
+    expect(timestamps).toContain("2025-02-28T12:00:00.000Z");
+  });
+});
+
 describe("processRecurringTemplates — idempotency", () => {
   it("does not create duplicates when run twice on the same day", async () => {
     insertRecurringTemplate({
