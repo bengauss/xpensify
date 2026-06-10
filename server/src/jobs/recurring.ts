@@ -13,7 +13,7 @@ interface RecurringTemplate {
   next_due: string;
 }
 
-function advanceDate(current: string, frequency: "weekly" | "monthly" | "yearly"): string {
+export function advanceDate(current: string, frequency: "weekly" | "monthly" | "yearly"): string {
   const [year, month, day] = current.split("-").map(Number);
 
   if (frequency === "weekly") {

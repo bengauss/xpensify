@@ -10,6 +10,9 @@
 
 process.env.DB_PATH = ":memory:";
 process.env.NODE_ENV = "test";
+// Pin a non-UTC, east-of-UTC timezone so local-time date bugs (e.g. the weekly
+// recurring advance off-by-one) surface here instead of hiding on a UTC CI box.
+process.env.TZ = "Europe/Vienna";
 // Clear DOMAIN so the CSRF middleware lets POST/PUT/PATCH/DELETE through
 // without an Origin header.
 delete process.env.DOMAIN;
