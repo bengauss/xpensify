@@ -13,14 +13,21 @@ interface RecurringTemplate {
   next_due: string;
 }
 
-export function advanceDate(current: string, frequency: "weekly" | "monthly" | "yearly"): string {
+export function advanceDate(
+  current: string,
+  frequency: "weekly" | "monthly" | "yearly",
+  anchorDay?: number,
+): string {
   const [year, month, day] = current.split("-").map(Number);
+  // Re-anchor on the template's original day-of-month, not the previously-clamped
+  // value — otherwise a day-31 template clamped to Feb 28 stays at 28 forever.
+  const anchor = anchorDay ?? day;
 
   if (frequency === "weekly") {
     const d = new Date(Date.UTC(year, month - 1, day + 7));
     return d.toISOString().split("T")[0];
   } else if (frequency === "monthly") {
-    // Same day next month; clamp to last day if needed
+    // Same anchor day next month; clamp to last day if needed
     let newMonth = month; // stays in 1-12 space after adding
     let newYear = year;
     newMonth += 1;
@@ -29,14 +36,14 @@ export function advanceDate(current: string, frequency: "weekly" | "monthly" | "
       newYear += 1;
     }
     const maxDay = new Date(newYear, newMonth, 0).getDate(); // last day of newMonth
-    const clampedDay = Math.min(day, maxDay);
+    const clampedDay = Math.min(anchor, maxDay);
     return `${String(newYear).padStart(4, "0")}-${String(newMonth).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`;
   } else {
     // yearly
     let newYear = year + 1;
-    // handle leap year edge case (Feb 29 → Feb 28)
+    // handle leap year edge case (Feb 29 → Feb 28, and back to 29 in the next leap year)
     const maxDay = new Date(newYear, month, 0).getDate();
-    const clampedDay = Math.min(day, maxDay);
+    const clampedDay = Math.min(anchor, maxDay);
     return `${String(newYear).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`;
   }
 }
@@ -69,6 +76,10 @@ export function processRecurringTemplates(): void {
   const process = db.transaction(() => {
     for (const template of templates) {
       let nextDue = template.next_due;
+      // Anchor each advance on the template's day_of_month so short-month clamps
+      // (e.g. Feb) don't permanently drift a day-31 template earlier. Fallback to
+      // the day parsed from the original next_due (yearly templates have no day_of_month).
+      const anchorDay = template.day_of_month ?? Number(template.next_due.split("-")[2]);
 
       // Catch-up loop: generate all missed entries while next_due <= today
       while (nextDue <= today) {
@@ -92,7 +103,7 @@ export function processRecurringTemplates(): void {
           );
         }
 
-        nextDue = advanceDate(nextDue, template.frequency);
+        nextDue = advanceDate(nextDue, template.frequency, anchorDay);
       }
 
       // Persist the advanced next_due
