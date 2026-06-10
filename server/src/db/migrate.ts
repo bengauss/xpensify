@@ -15,7 +15,9 @@ function addColumnIfMissing(table: string, column: string, definition: string): 
 
 // Apple Pay shortcut pending expenses store category_id/subcategory_id as NULL
 // until confirmed. Older DBs declared those columns NOT NULL — relax them.
-function relaxExpensesNullability(): void {
+// Exported so migrate-rebuild.test.ts can drive the rebuild branch directly —
+// it never runs against the test schema, which already ships the relaxed shape.
+export function relaxExpensesNullability(): void {
   const cols = db.prepare(`PRAGMA table_info(expenses)`).all() as Array<{
     name: string;
     notnull: number;
@@ -75,7 +77,9 @@ function relaxExpensesNullability(): void {
 // twice. Migration picks the row with the highest confirmation_count per
 // merchant (ties broken by most recent last_confirmed_at) so we don't lose
 // training when both users had memorized the same merchant.
-function migrateMerchantCategoriesToShared(): void {
+// Exported so migrate-rebuild.test.ts can drive the rebuild branch directly —
+// it never runs against the test schema, which already ships the shared shape.
+export function migrateMerchantCategoriesToShared(): void {
   const cols = db.prepare(`PRAGMA table_info(merchant_categories)`).all() as Array<{ name: string }>;
   if (!cols.some((c) => c.name === "user_id")) return;
 
