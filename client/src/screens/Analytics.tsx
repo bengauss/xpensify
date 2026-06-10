@@ -14,7 +14,7 @@ import {
 import { CategoryBars } from "@/components/CategoryBars";
 import { TrendChart } from "@/components/TrendChart";
 import { SegmentedPill } from "@/components/SegmentedPill";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, dateKey, todayKey } from "@/lib/format";
 import { categoriesSignal, subcategoriesSignal } from "@/lib/categories";
 
 type Period = "month" | "year";
@@ -220,8 +220,8 @@ export default function AnalyticsScreen() {
     const ymPrev = `${prevYear}-${String(prevMonth).padStart(2, "0")}`;
 
     const inCurrentPeriod = period === "year"
-      ? (e: typeof scoped[number]) => e.timestamp.startsWith(yr)
-      : (e: typeof scoped[number]) => e.timestamp.startsWith(ym);
+      ? (e: typeof scoped[number]) => dateKey(e.timestamp).startsWith(yr)
+      : (e: typeof scoped[number]) => dateKey(e.timestamp).startsWith(ym);
 
     // Comparison totals. In month mode: this month vs the previous month.
     // In year mode: this year vs the prior year, both clamped to the same
@@ -232,18 +232,19 @@ export default function AnalyticsScreen() {
 
     if (period === "month") {
       for (const e of scoped) {
-        if (e.timestamp.startsWith(ym)) currentTotal += e.amount;
-        else if (e.timestamp.startsWith(ymPrev)) prevTotal += e.amount;
+        const ek = dateKey(e.timestamp);
+        if (ek.startsWith(ym)) currentTotal += e.amount;
+        else if (ek.startsWith(ymPrev)) prevTotal += e.amount;
       }
     } else {
       const isCurrentYear = selectedYear === localNow.getFullYear();
       const cutoffMd = isCurrentYear
-        ? localNow.toISOString().slice(5, 10) // "MM-DD"
+        ? todayKey().slice(5, 10) // "MM-DD" (local)
         : "12-31";
       const cutoffYmd = `${selectedYear}-${cutoffMd}`;
       const prevCutoffYmd = `${selectedYear - 1}-${cutoffMd}`;
       for (const e of scoped) {
-        const ymd = e.timestamp.slice(0, 10);
+        const ymd = dateKey(e.timestamp);
         const y = ymd.slice(0, 4);
         if (y === yr && ymd <= cutoffYmd) currentTotal += e.amount;
         else if (y === String(selectedYear - 1) && ymd <= prevCutoffYmd) prevTotal += e.amount;
@@ -306,7 +307,7 @@ export default function AnalyticsScreen() {
     if (period === "month") {
       const trendTotals = new Map<string, number>();
       for (const e of scoped) {
-        const key = e.timestamp.slice(0, 7);
+        const key = dateKey(e.timestamp).slice(0, 7);
         trendTotals.set(key, (trendTotals.get(key) ?? 0) + e.amount);
       }
       for (const [key, total] of trendTotals) {
@@ -321,7 +322,7 @@ export default function AnalyticsScreen() {
     } else {
       const yearTotals = new Map<number, number>();
       for (const e of scoped) {
-        const y = parseInt(e.timestamp.slice(0, 4), 10);
+        const y = parseInt(dateKey(e.timestamp).slice(0, 4), 10);
         yearTotals.set(y, (yearTotals.get(y) ?? 0) + e.amount);
       }
       for (const [y, total] of yearTotals) {
@@ -338,13 +339,13 @@ export default function AnalyticsScreen() {
         selectedYear === localNow.getFullYear() &&
         selectedMonth === localNow.getMonth() + 1;
       const cutoffYmd = isCurrentCalendarMonth
-        ? localNow.toISOString().slice(0, 10)
+        ? todayKey()
         : `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(
             new Date(selectedYear, selectedMonth, 0).getDate()
           ).padStart(2, "0")}`;
       const prevCutoffYmd = `${selectedYear - 1}${cutoffYmd.slice(4)}`;
       for (const e of scoped) {
-        const ymd = e.timestamp.slice(0, 10);
+        const ymd = dateKey(e.timestamp);
         const y = ymd.slice(0, 4);
         if (y === yr && ymd <= cutoffYmd) ytd += e.amount;
         else if (y === String(selectedYear - 1) && ymd <= prevCutoffYmd) prevYtd += e.amount;

@@ -1,5 +1,5 @@
 import type { Expense } from "@/db/local";
-import { monthKey } from "@/lib/format";
+import { dateKey, monthKey } from "@/lib/format";
 
 export function prevMonth(year: number, month: number): { year: number; month: number } {
   return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
@@ -28,7 +28,7 @@ export function computeDiscretionary(
   const curKey = monthKey(curYear, curMonth);
 
   const currentTotal = expenses
-    .filter((e) => e.timestamp.startsWith(curKey) && e.deleted === 0 && e.source !== "recurring")
+    .filter((e) => dateKey(e.timestamp).startsWith(curKey) && e.deleted === 0 && e.source !== "recurring")
     .reduce((s, e) => s + e.amount, 0);
 
   let y = curYear;
@@ -38,7 +38,7 @@ export function computeDiscretionary(
     ({ year: y, month: m } = prevMonth(y, m));
     const key = monthKey(y, m);
     const total = expenses
-      .filter((e) => e.timestamp.startsWith(key) && e.deleted === 0 && e.source !== "recurring")
+      .filter((e) => dateKey(e.timestamp).startsWith(key) && e.deleted === 0 && e.source !== "recurring")
       .reduce((s, e) => s + e.amount, 0);
     monthTotals.push(total);
   }
