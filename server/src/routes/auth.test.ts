@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
-import auth from "./auth.js";
+import auth, { __resetLoginRateLimits } from "./auth.js";
 import { db, ensureMigrated, resetDb, seedTestUsers, seedTestSession, sessionCookie } from "../test/db.js";
 import { mountRouter, jsonInit } from "../test/app.js";
 
@@ -11,6 +11,7 @@ const app = mountRouter("auth", auth);
 beforeEach(() => {
   resetDb();
   users = seedTestUsers();
+  __resetLoginRateLimits();
 });
 
 describe("POST /api/auth/login", () => {
