@@ -8,7 +8,16 @@ const MIN_PASSWORD_LENGTH = 8;
 
 // Simple in-memory per-IP rate limit for login, plus an IP-independent
 // per-username backstop so a distributed attack rotating source IPs is still
-// bounded (the household has only a handful of usernames).
+// bounded (the household has only a handful of usernames). The username
+// backstop is a deliberate self-healing lockout: once tripped it blocks every
+// attempt for that username — including the correct password — until the
+// 15-min window expires. That is an accepted DoS tradeoff (an attacker who
+// knows a username can deny that user's *logins* for up to 15 min), justified
+// here because (a) bounding distributed guessing is the whole point — letting a
+// correct password through during the window would let an attacker keep
+// guessing until they hit it; (b) this is an offline-first PWA, so blocked
+// login ≠ blocked app; (c) the threshold is 2× the per-IP limit and recovers
+// on its own.
 const LOGIN_MAX_ATTEMPTS = 10;
 const LOGIN_MAX_USERNAME_ATTEMPTS = 20;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
@@ -39,7 +48,11 @@ function clientIp(header: string | undefined): string {
   // We sit behind Caddy, which APPENDS the real client IP, so only the
   // rightmost entry is trustworthy — earlier entries are attacker-controlled
   // and must not be used as the rate-limit key (else a rotating spoofed prefix
-  // defeats the limiter). Take the last non-empty entry.
+  // defeats the limiter). Take the last non-empty entry. This trusts that the
+  // last hop was added by Caddy; that holds because the container is only
+  // reachable through Caddy (no published port — see docker-compose `web`
+  // network), so there is no direct ingress that could forge the rightmost
+  // entry.
   const parts = header.split(",").map((s) => s.trim()).filter(Boolean);
   return parts.length ? parts[parts.length - 1]! : "unknown";
 }
