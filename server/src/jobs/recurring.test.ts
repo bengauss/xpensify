@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
-import { processRecurringTemplates } from "./recurring.js";
+import { processRecurringTemplates, advanceDate } from "./recurring.js";
 import { db, ensureMigrated, resetDb, seedTestUsers, insertRecurringTemplate } from "../test/db.js";
 
 beforeAll(() => ensureMigrated());
@@ -20,6 +20,31 @@ function dateOffset(days: number): string {
   // Returns YYYY-MM-DD `days` days from server today
   return (db.prepare("SELECT date('now', ? || ' days') as d").get(String(days)) as { d: string }).d;
 }
+
+describe("advanceDate — weekly UTC correctness (H2)", () => {
+  function utcWeekday(date: string): number {
+    return new Date(`${date}T00:00:00.000Z`).getUTCDay();
+  }
+
+  it("advances weekly by exactly 7 calendar days, independent of host timezone", () => {
+    expect(advanceDate("2026-01-01", "weekly")).toBe("2026-01-08");
+    expect(advanceDate("2026-06-10", "weekly")).toBe("2026-06-17");
+  });
+
+  it("rolls over month and year boundaries", () => {
+    expect(advanceDate("2026-01-29", "weekly")).toBe("2026-02-05");
+    expect(advanceDate("2026-12-29", "weekly")).toBe("2027-01-05");
+  });
+
+  it("preserves day-of-week across a full year of weekly advances", () => {
+    let d = "2026-01-01";
+    const weekday = utcWeekday(d);
+    for (let i = 0; i < 52; i++) {
+      d = advanceDate(d, "weekly");
+      expect(utcWeekday(d)).toBe(weekday);
+    }
+  });
+});
 
 describe("processRecurringTemplates — idempotency", () => {
   it("does not create duplicates when run twice on the same day", async () => {

@@ -13,11 +13,11 @@ interface RecurringTemplate {
   next_due: string;
 }
 
-function advanceDate(current: string, frequency: "weekly" | "monthly" | "yearly"): string {
+export function advanceDate(current: string, frequency: "weekly" | "monthly" | "yearly"): string {
   const [year, month, day] = current.split("-").map(Number);
 
   if (frequency === "weekly") {
-    const d = new Date(year, month - 1, day + 7);
+    const d = new Date(Date.UTC(year, month - 1, day + 7));
     return d.toISOString().split("T")[0];
   } else if (frequency === "monthly") {
     // Same day next month; clamp to last day if needed
