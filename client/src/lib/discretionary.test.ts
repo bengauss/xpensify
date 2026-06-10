@@ -148,4 +148,16 @@ describe("computeDiscretionary", () => {
     const result = computeDiscretionary(expenses, APRIL_30);
     expect(result?.current).toBe(1000);
   });
+
+  it("buckets a month-boundary timestamp by LOCAL month, not UTC (Theme A)", () => {
+    // 2026-04-30T23:30Z is still April in UTC, but in Europe/Vienna (UTC+2 in
+    // summer) it is 2026-05-01T01:30 local — i.e. May. History buckets it in May
+    // via dateKey, so discretionary's current-month total must agree.
+    const MAY_15 = new Date("2026-05-15T12:00:00.000Z");
+    const expenses = [
+      makeExpense({ amount: 1000, timestamp: "2026-04-30T23:30:00.000Z" }),
+    ];
+    // Old UTC-prefix logic (timestamp.startsWith("2026-05")) would miss this → 0.
+    expect(computeDiscretionary(expenses, MAY_15)?.current).toBe(1000);
+  });
 });
