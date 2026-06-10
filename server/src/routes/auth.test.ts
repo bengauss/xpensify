@@ -131,6 +131,56 @@ describe("POST /api/auth/login", () => {
     );
     expect(blocked.status).toBe(429);
   });
+
+  it("still rate-limits when the spoofable X-Forwarded-For prefix rotates (uses proxy-appended rightmost IP)", async () => {
+    // Production sits behind Caddy, which APPENDS the real client IP to XFF.
+    // An attacker controls the prefix but not the rightmost (proxy-added) entry.
+    // Rotating the prefix must not reset the per-IP counter.
+    const realIp = "198.51.100.7"; // constant: what the proxy appended
+    for (let i = 0; i < 10; i++) {
+      await app.request(
+        "/api/auth/login",
+        jsonInit("POST", {
+          body: { username: "alice", password: "wrong" },
+          // attacker-controlled spoof prefix changes every request
+          headers: { "x-forwarded-for": `10.0.0.${i}, ${realIp}` },
+        }),
+      );
+    }
+    const res = await app.request(
+      "/api/auth/login",
+      jsonInit("POST", {
+        body: { username: "alice", password: users.userA.password },
+        headers: { "x-forwarded-for": `10.9.9.9, ${realIp}` },
+      }),
+    );
+    expect(res.status).toBe(429);
+  });
+
+  it("per-username backstop blocks sustained guessing even across many distinct IPs", async () => {
+    // Distributed attack: every request comes from a fresh source IP, so the
+    // per-IP limiter never trips. The IP-independent per-username counter must.
+    for (let i = 0; i < 20; i++) {
+      const res = await app.request(
+        "/api/auth/login",
+        jsonInit("POST", {
+          body: { username: "bob", password: "wrong" },
+          headers: { "x-forwarded-for": `192.0.2.${i}` }, // unique IP each time
+        }),
+      );
+      expect(res.status).toBe(401);
+    }
+    // Next attempt for the same username is blocked regardless of (new) IP,
+    // even with the correct password.
+    const blocked = await app.request(
+      "/api/auth/login",
+      jsonInit("POST", {
+        body: { username: "bob", password: users.userB.password },
+        headers: { "x-forwarded-for": "192.0.2.250" },
+      }),
+    );
+    expect(blocked.status).toBe(429);
+  });
 });
 
 describe("POST /api/auth/logout", () => {
