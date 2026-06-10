@@ -186,10 +186,9 @@ function SubcategoryDrawer({
     const target = el.scrollHeight;
     el.style.overflow = "hidden";
     el.style.height = "0px";
-    requestAnimationFrame(() => {
-      el.style.transition = "height 200ms ease";
-      el.style.height = `${target}px`;
-    });
+    void el.offsetHeight; // force reflow so 0px is the transition's start value
+    el.style.transition = "height 200ms ease";
+    el.style.height = `${target}px`;
     el.addEventListener(
       "transitionend",
       () => {
@@ -204,6 +203,7 @@ function SubcategoryDrawer({
   async function handleAdd() {
     const name = addName.trim();
     if (!name) return;
+    setError("");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const res = await api.api.categories[":id"].subcategories.$post({ param: { id: category.id }, json: { name } } as any);
     if (!res.ok) { setError("Failed to add subcategory"); return; }
@@ -214,6 +214,7 @@ function SubcategoryDrawer({
   }
 
   async function handleRename(id: string, newName: string) {
+    setError("");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const res = await (api.api.categories as any).subcategories[":id"].$patch({ param: { id }, json: { name: newName } } as any);
     if (!res.ok) { setError("Failed to rename subcategory"); return; }
@@ -222,6 +223,7 @@ function SubcategoryDrawer({
   }
 
   async function handleDeleteConfirmed(id: string) {
+    setError("");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const res = await (api.api.categories as any).subcategories[":id"].$delete({ param: { id } } as any);
     if (!res.ok) {
