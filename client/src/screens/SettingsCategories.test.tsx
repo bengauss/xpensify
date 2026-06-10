@@ -4,6 +4,7 @@ import SettingsCategoriesScreen from "./SettingsCategories.js";
 import { db } from "@/db/local.js";
 import type { Category, Subcategory } from "@/db/local.js";
 import { api } from "@/lib/api.js";
+import { subcategoriesSignal } from "@/lib/categories.js";
 
 vi.mock("preact-iso", () => ({
   useLocation: () => ({ route: vi.fn() }),
@@ -116,6 +117,13 @@ describe("SettingsCategoriesScreen — subcategory management", () => {
       ),
     );
     await waitFor(() => expect(screen.getByText("dining")).toBeTruthy());
+    // The shared signal that Add/History/Analytics read must refresh too —
+    // not just Dexie — so the new subcategory shows up without a full sync.
+    await waitFor(() =>
+      expect(
+        subcategoriesSignal.value.some((s) => s.id === "sub-dining"),
+      ).toBe(true),
+    );
   });
 
   it("renames a subcategory via PATCH", async () => {

@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { api } from "@/lib/api";
 import { usePressScale } from "@/lib/usePressScale";
 import { shouldReduceMotion } from "@/lib/animations";
+import { refreshCategories } from "@/lib/categories";
 
 function CategoryRow({
   category,
@@ -209,6 +210,7 @@ function SubcategoryDrawer({
     if (!res.ok) { setError("Failed to add subcategory"); return; }
     const created = await res.json() as unknown as Subcategory;
     await db.subcategories.put(created);
+    await refreshCategories();
     setAddName("");
     setAdding(false);
   }
@@ -220,6 +222,7 @@ function SubcategoryDrawer({
     if (!res.ok) { setError("Failed to rename subcategory"); return; }
     const updated = await res.json() as unknown as Subcategory;
     await db.subcategories.put(updated);
+    await refreshCategories();
   }
 
   async function handleDeleteConfirmed(id: string) {
@@ -233,6 +236,7 @@ function SubcategoryDrawer({
       return;
     }
     await db.subcategories.delete(id);
+    await refreshCategories();
     setDeletingSub(null);
   }
 
@@ -303,6 +307,7 @@ export default function SettingsCategoriesScreen() {
     if (!res.ok) throw new Error("Failed to update category");
     const updated = await res.json() as unknown as Category;
     await db.categories.put(updated);
+    await refreshCategories();
   }
 
   async function handleMoveUp(idx: number) {
@@ -334,6 +339,7 @@ export default function SettingsCategoriesScreen() {
       return;
     }
     await db.categories.delete(id);
+    await refreshCategories();
     setDeletingCategory(null);
   }
 
@@ -345,6 +351,7 @@ export default function SettingsCategoriesScreen() {
     if (!res.ok) { setError("Failed to add category"); return; }
     const created = await res.json() as unknown as Category;
     await db.categories.put(created);
+    await refreshCategories();
     setAddName("");
     setAdding(false);
   }
