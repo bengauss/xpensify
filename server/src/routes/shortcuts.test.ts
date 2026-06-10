@@ -382,6 +382,27 @@ describe("POST /api/shortcuts/expense — idempotency", () => {
     const count = db.prepare(`SELECT COUNT(*) as c FROM expenses WHERE note = 'lidl'`).get() as { c: number };
     expect(count.c).toBe(2);
   });
+
+  it("an identical tuple created more than 5 minutes ago is NOT deduped (window is time-based, not same-UTC-day)", async () => {
+    const tx = { amount: 9.9, merchant: "hofer", currency: "EUR", timestamp: "2026-04-30T09:00:00Z" };
+    const r1 = await postExpense(userAToken, tx);
+    const b1 = await r1.json() as any;
+
+    // Backdate the original row 10 minutes into the past — past the 5-min dedup
+    // window but still the same UTC day. The broken `datetime('now','-300 seconds')`
+    // (space format) comparison against the ISO `created_at` would still match it.
+    const tenMinAgo = new Date(Date.now() - 600_000).toISOString();
+    db.prepare(`UPDATE expenses SET created_at = ? WHERE id = ?`).run(tenMinAgo, b1.id);
+
+    const r2 = await postExpense(userAToken, tx);
+    const b2 = await r2.json() as any;
+
+    expect(b2.deduped).toBeUndefined();
+    expect(b2.id).not.toBe(b1.id);
+
+    const count = db.prepare(`SELECT COUNT(*) as c FROM expenses WHERE note = 'hofer'`).get() as { c: number };
+    expect(count.c).toBe(2);
+  });
 });
 
 describe("POST /api/shortcuts/expense — auto_saved column", () => {
