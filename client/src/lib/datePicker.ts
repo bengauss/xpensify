@@ -10,6 +10,11 @@
  * must never break (it has regressed before).
  */
 export function openDatePicker(el: HTMLInputElement | null): void {
-  // stub — implemented in Phase 3
-  void el;
+  if (!el || typeof el.showPicker !== "function") return;
+  try {
+    el.showPicker();
+  } catch {
+    // showPicker can throw on some Safari versions / outside a user gesture;
+    // the native click-through is the fallback there.
+  }
 }
