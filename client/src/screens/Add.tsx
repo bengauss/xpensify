@@ -15,6 +15,7 @@ import { categoriesSignal, subcategoriesSignal } from "@/lib/categories";
 import { editingExpense } from "@/lib/editing";
 import { useEntrance } from "@/lib/entrance";
 import { usePressScale } from "@/lib/usePressScale";
+import { openDatePicker } from "@/lib/datePicker";
 import { api } from "@/lib/api";
 import {
   pendingExpenses,
@@ -471,12 +472,15 @@ export function AddScreen() {
         class="flex items-center justify-between px-1"
       >
         {/* Date — tappable to open native picker. Uses <label> wrapping the
-            input so the tap lands on the input itself: iOS Safari opens the
-            date picker natively on input click, avoiding the fragile JS
-            `showPicker()` + user-activation chain that has regressed twice. */}
+            input so iOS Safari opens the picker on the native click-through.
+            Desktop Firefox won't open on a field click (the calendar indicator
+            is hidden at opacity:0), so onClick also calls showPicker() via
+            openDatePicker — which restricts that call to desktop-pointer envs,
+            leaving iOS strictly on the native path it has always used. */}
         <label
           class="relative inline-block text-xs cursor-pointer"
           style={{ color: (isEditing || isConfirming) ? "var(--color-text-secondary)" : "var(--color-text-tertiary)" }}
+          onClick={() => openDatePicker(dateInputRef.current)}
         >
           {isEditing
             ? `editing · ${dateLabel}`

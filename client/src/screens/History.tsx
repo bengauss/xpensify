@@ -15,6 +15,7 @@ import { markHistoryVisited } from "@/lib/pending";
 import { useEntrance, animateRowEntrance } from "@/lib/entrance";
 import { fadeRemoveRow } from "@/lib/dissolve";
 import { usePressScale } from "@/lib/usePressScale";
+import { openDatePicker } from "@/lib/datePicker";
 import { formatMoney, formatEur, dateKey as toDateKey, todayKey, MONTHS_SHORT } from "@/lib/format";
 import { categoriesSignal, subcategoriesSignal } from "@/lib/categories";
 
@@ -421,6 +422,7 @@ function ExpenseDetail({ expense, category, subcategory, userStyle, onClose }: E
   const [note, setNote] = useState(expense.note ?? "");
   const [committedNote, setCommittedNote] = useState<string | null>(expense.note ?? null);
   const [expenseDateKey, setExpenseDateKey] = useState(toDateKey(expense.timestamp));
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   async function persist(partial: Partial<Expense>) {
     await db.expenses.update(expense.id, {
@@ -532,17 +534,22 @@ function ExpenseDetail({ expense, category, subcategory, userStyle, onClose }: E
         class="flex flex-col gap-0 rounded-xl overflow-hidden"
         style={{ backgroundColor: "rgba(255,255,255,0.04)" }}
       >
-        {/* Date — <label>-wraps-input so the tap lands on the real input and
-            iOS Safari opens the native picker without a JS showPicker() chain. */}
+        {/* Date — <label>-wraps-input so iOS Safari opens the native picker on
+            the click-through. onClick also calls showPicker() via openDatePicker
+            so desktop Firefox opens it too (its calendar indicator is hidden at
+            opacity:0); the helper restricts showPicker to desktop-pointer envs,
+            leaving iOS on its native path. */}
         <label
           class="relative flex items-center justify-between px-4 py-3 cursor-pointer"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", WebkitTapHighlightColor: "transparent" }}
+          onClick={() => openDatePicker(dateInputRef.current)}
         >
           <span class="text-sm" style={{ color: "var(--color-text-secondary)" }}>date</span>
           <span class="text-sm" style={{ color: "var(--color-text-primary)" }}>
             {formatFullDate(expenseDateKey)}
           </span>
           <input
+            ref={dateInputRef}
             type="date"
             value={expenseDateKey}
             onInput={(e) => commitDate((e.target as HTMLInputElement).value)}
