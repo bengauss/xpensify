@@ -474,9 +474,9 @@ export function AddScreen() {
         {/* Date — tappable to open native picker. Uses <label> wrapping the
             input so iOS Safari opens the picker on the native click-through.
             Desktop Firefox won't open on a field click (the calendar indicator
-            is hidden at opacity:0), so onClick also calls showPicker() via the
-            guarded openDatePicker helper — a no-op where showPicker is absent,
-            keeping the iOS path intact. */}
+            is hidden at opacity:0), so onClick also calls showPicker() via
+            openDatePicker — which restricts that call to desktop-pointer envs,
+            leaving iOS strictly on the native path it has always used. */}
         <label
           class="relative inline-block text-xs cursor-pointer"
           style={{ color: (isEditing || isConfirming) ? "var(--color-text-secondary)" : "var(--color-text-tertiary)" }}

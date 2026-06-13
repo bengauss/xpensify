@@ -535,9 +535,10 @@ function ExpenseDetail({ expense, category, subcategory, userStyle, onClose }: E
         style={{ backgroundColor: "rgba(255,255,255,0.04)" }}
       >
         {/* Date — <label>-wraps-input so iOS Safari opens the native picker on
-            the click-through. onClick also calls showPicker() via the guarded
-            openDatePicker helper so desktop Firefox opens it too (its calendar
-            indicator is hidden at opacity:0); a no-op where showPicker is absent. */}
+            the click-through. onClick also calls showPicker() via openDatePicker
+            so desktop Firefox opens it too (its calendar indicator is hidden at
+            opacity:0); the helper restricts showPicker to desktop-pointer envs,
+            leaving iOS on its native path. */}
         <label
           class="relative flex items-center justify-between px-4 py-3 cursor-pointer"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", WebkitTapHighlightColor: "transparent" }}
