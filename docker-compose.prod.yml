@@ -1,0 +1,20 @@
+# Production compose — lives in the repo, scp'd to the VPS on each deploy.
+# Image is PULLED from GHCR (built by CI); no build section here.
+# Public VITE_* build args are baked into the image at CI build time.
+# Runtime secrets/config come from the .env on the VPS next to this file.
+# Mirrors docker-compose.yml exactly (service `app` -> container xpensify-app-1,
+# joins the shared `web` network so edge/Caddy can reach it at xpensify-app-1:3000),
+# but swaps build -> image. No published ports: edge terminates 80/443.
+services:
+  app:
+    image: ghcr.io/bengauss/xpensify:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    networks:
+      - web
+
+networks:
+  web:
+    external: true
