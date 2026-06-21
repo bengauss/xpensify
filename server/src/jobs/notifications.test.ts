@@ -103,7 +103,7 @@ describe("sendDailyReminders", () => {
 });
 
 describe("sendWeeklySummaries", () => {
-  it("sends weekly summary at matching hour/weekday and calculates summary only from individual user's expenses", async () => {
+  it("sends weekly summary at matching hour/weekday with the combined household total", async () => {
     // Seed preferences: weekly_summary = 1, weekly_summary_day = 2 (Tuesday), weekly_summary_time = "09:00"
     db.prepare(
       `INSERT OR REPLACE INTO notification_preferences (user_id, daily_reminder, daily_reminder_time, weekly_summary, weekly_summary_day, weekly_summary_time)
@@ -119,7 +119,7 @@ describe("sendWeeklySummaries", () => {
        VALUES ('exp-a', ?, 3550, '2026-05-19T08:00:00.000Z', 'manual', '2026-05-19T08:00:00.000Z', '2026-05-19T08:00:00.000Z')`
     ).run(userAId);
 
-    // Add userB expense for this week (to ensure isolation)
+    // Add userB expense for this week — the ledger is shared, so this counts too
     db.prepare(
       `INSERT INTO expenses (id, user_id, amount, timestamp, source, created_at, updated_at)
        VALUES ('exp-b', ?, 8000, '2026-05-19T08:00:00.000Z', 'manual', '2026-05-19T08:00:00.000Z', '2026-05-19T08:00:00.000Z')`
@@ -131,8 +131,75 @@ describe("sendWeeklySummaries", () => {
     const [, payloadStr] = (webpush.sendNotification as any).mock.calls[0];
     const payload = JSON.parse(payloadStr);
     expect(payload.title).toBe("Weekly summary");
-    // Should show €35.50 (User A's spending) and NOT €115.50 (combined)
-    expect(payload.body).toContain("€35.50 spent");
+    // Combined household total: €35.50 (userA) + €80.00 (userB) = €115.50
+    expect(payload.body).toContain("€115.50 spent");
+  });
+
+  it("sends the same combined total to every opted-in user", async () => {
+    // Both users opt in for the same day/time.
+    db.prepare(
+      `INSERT OR REPLACE INTO notification_preferences (user_id, daily_reminder, daily_reminder_time, weekly_summary, weekly_summary_day, weekly_summary_time)
+       VALUES (?, 0, '21:00', 1, 2, '09:00')`
+    ).run(userAId);
+    db.prepare(
+      `INSERT OR REPLACE INTO notification_preferences (user_id, daily_reminder, daily_reminder_time, weekly_summary, weekly_summary_day, weekly_summary_time)
+       VALUES (?, 0, '21:00', 1, 2, '09:00')`
+    ).run(userBId);
+
+    // Tuesday May 19, 2026, 09:00 Vienna local (07:00 UTC)
+    vi.setSystemTime(new Date("2026-05-19T07:00:00Z"));
+
+    db.prepare(
+      `INSERT INTO expenses (id, user_id, amount, timestamp, source, created_at, updated_at)
+       VALUES ('exp-a', ?, 3550, '2026-05-19T08:00:00.000Z', 'manual', '2026-05-19T08:00:00.000Z', '2026-05-19T08:00:00.000Z')`
+    ).run(userAId);
+    db.prepare(
+      `INSERT INTO expenses (id, user_id, amount, timestamp, source, created_at, updated_at)
+       VALUES ('exp-b', ?, 8000, '2026-05-19T08:00:00.000Z', 'manual', '2026-05-19T08:00:00.000Z', '2026-05-19T08:00:00.000Z')`
+    ).run(userBId);
+
+    sendWeeklySummaries();
+
+    // One push per opted-in user (each user has one subscription), same number.
+    expect(webpush.sendNotification).toHaveBeenCalledTimes(2);
+    const bodies = (webpush.sendNotification as any).mock.calls.map(
+      ([, payloadStr]: [unknown, string]) => JSON.parse(payloadStr).body
+    );
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0]).toContain("€115.50 spent");
+    expect(bodies[0]).toBe(bodies[1]);
+  });
+
+  it("excludes recurring expenses and respects the week-start boundary", async () => {
+    db.prepare(
+      `INSERT OR REPLACE INTO notification_preferences (user_id, daily_reminder, daily_reminder_time, weekly_summary, weekly_summary_day, weekly_summary_time)
+       VALUES (?, 0, '21:00', 1, 2, '09:00')`
+    ).run(userAId);
+
+    // Tuesday May 19, 2026, 09:00 Vienna local (07:00 UTC); week starts Mon May 18.
+    vi.setSystemTime(new Date("2026-05-19T07:00:00Z"));
+
+    // Counts: in-week, non-recurring.
+    db.prepare(
+      `INSERT INTO expenses (id, user_id, amount, timestamp, source, created_at, updated_at)
+       VALUES ('in-week', ?, 5000, '2026-05-18T10:00:00.000Z', 'manual', '2026-05-18T10:00:00.000Z', '2026-05-18T10:00:00.000Z')`
+    ).run(userAId);
+    // Excluded: recurring source.
+    db.prepare(
+      `INSERT INTO expenses (id, user_id, amount, timestamp, source, created_at, updated_at)
+       VALUES ('recur', ?, 9900, '2026-05-18T10:00:00.000Z', 'recurring', '2026-05-18T10:00:00.000Z', '2026-05-18T10:00:00.000Z')`
+    ).run(userBId);
+    // Excluded: before this week's Monday.
+    db.prepare(
+      `INSERT INTO expenses (id, user_id, amount, timestamp, source, created_at, updated_at)
+       VALUES ('last-week', ?, 4200, '2026-05-17T10:00:00.000Z', 'manual', '2026-05-17T10:00:00.000Z', '2026-05-17T10:00:00.000Z')`
+    ).run(userBId);
+
+    sendWeeklySummaries();
+
+    expect(webpush.sendNotification).toHaveBeenCalledTimes(1);
+    const [, payloadStr] = (webpush.sendNotification as any).mock.calls[0];
+    expect(JSON.parse(payloadStr).body).toContain("€50.00 spent");
   });
 
   it("does not send weekly summary at non-matching weekday or hour", async () => {
