@@ -161,16 +161,20 @@ export function sendWeeklySummaries(): void {
   start.setUTCDate(now.getUTCDate() - daysSinceMonday);
   const weekStart = start.toISOString().split("T")[0];
 
-  const totalStmt = db.prepare(
-    `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses
-     WHERE user_id = ? AND deleted = 0
-       AND source != 'recurring'
-       AND date(timestamp) >= ?`
-  );
+  // The ledger is shared, so the weekly summary is a household total — every
+  // opted-in user sees the same number: the combined non-recurring spend across
+  // all users. Compute it once (no user_id filter) rather than per user.
+  const { total } = db
+    .prepare(
+      `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses
+       WHERE deleted = 0
+         AND source != 'recurring'
+         AND date(timestamp) >= ?`
+    )
+    .get(weekStart) as { total: number };
+  const totalFormatted = (total / 100).toFixed(2);
 
   for (const { user_id } of users) {
-    const row = totalStmt.get(user_id, weekStart) as { total: number };
-    const totalFormatted = (row.total / 100).toFixed(2);
     sendToUser(user_id, {
       title: "Weekly summary",
       body: `€${totalFormatted} spent on discretionary expenses this week.`,
