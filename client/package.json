@@ -15,19 +15,19 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@preact/signals": "^2.9.1",
-    "dexie": "^4.4.3",
-    "hono": "^4.12.23",
+    "@preact/signals": "^2.9.2",
+    "dexie": "^4.4.4",
+    "hono": "^4.12.26",
     "motion": "^12.40.0",
     "preact": "^10.29.2",
     "preact-iso": "^2.12.0"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.9.0",
-    "@tailwindcss/vite": "^4.3.0",
+    "@tailwindcss/vite": "^4.3.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/preact": "^3.2.4",
-    "@vitest/coverage-v8": "^4.1.8",
+    "@vitest/coverage-v8": "^4.1.9",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^29.1.1",
     "rollup-plugin-visualizer": "^7.0.1",
