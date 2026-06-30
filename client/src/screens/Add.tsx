@@ -396,7 +396,7 @@ export function AddScreen() {
   }, [bannerVisible]);
 
   return (
-    <div class={`flex flex-col gap-4 px-4 pt-2 ${isEditing ? "pb-40" : "safe-pb"}`}>
+    <div class="flex flex-col gap-4 px-4 pt-2 safe-pb">
       <div ref={amountWrapRef} data-add-reveal>
         <AmountInput
           value={amount}
@@ -608,50 +608,45 @@ export function AddScreen() {
         </div>
       )}
 
-      {/* Edit-mode save bar — fixed above the tab bar */}
+      {/* Edit-mode save bar — inline, right below the note (same as confirm).
+          A fixed-bottom bar gets trapped by the transition-layer's transform
+          containing block on iOS, landing mid-screen after a sync; inline
+          keeps it predictably under "add a note" and easy to tap. */}
       {isEditing && (
-        <div
-          class="fixed left-0 right-0 mx-auto max-w-[560px] z-40 px-4"
-          style={{
-            bottom: "calc(68px + env(safe-area-inset-bottom))",
-            backgroundColor: "var(--color-bg-primary)",
-          }}
-        >
-          <div class="grid grid-cols-2 pt-2 pb-3" style={{ gap: 10 }}>
-            <button
-              ref={saveEditPress.ref}
-              onPointerDown={saveEditPress.onPointerDown}
-              onPointerUp={saveEditPress.onPointerUp}
-              onPointerCancel={saveEditPress.onPointerCancel}
-              onClick={handleSaveEdit}
-              class="flex items-center justify-center text-sm font-medium text-white cursor-pointer border-0"
-              style={{
-                height: 48,
-                borderRadius: 14,
-                backgroundColor: "var(--color-accent)",
-                WebkitTapHighlightColor: "transparent",
-              }}
-            >
-              save
-            </button>
-            <button
-              ref={cancelEditPress.ref}
-              onPointerDown={cancelEditPress.onPointerDown}
-              onPointerUp={cancelEditPress.onPointerUp}
-              onPointerCancel={cancelEditPress.onPointerCancel}
-              onClick={handleCancelEdit}
-              class="flex items-center justify-center text-sm font-medium cursor-pointer border-0"
-              style={{
-                height: 48,
-                borderRadius: 14,
-                backgroundColor: "rgba(255,255,255,0.06)",
-                color: "var(--color-text-secondary)",
-                WebkitTapHighlightColor: "transparent",
-              }}
-            >
-              cancel
-            </button>
-          </div>
+        <div class="grid grid-cols-2" style={{ gap: 10 }}>
+          <button
+            ref={saveEditPress.ref}
+            onPointerDown={saveEditPress.onPointerDown}
+            onPointerUp={saveEditPress.onPointerUp}
+            onPointerCancel={saveEditPress.onPointerCancel}
+            onClick={handleSaveEdit}
+            class="flex items-center justify-center text-sm font-medium text-white cursor-pointer border-0"
+            style={{
+              height: 48,
+              borderRadius: 14,
+              backgroundColor: "var(--color-accent)",
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            save
+          </button>
+          <button
+            ref={cancelEditPress.ref}
+            onPointerDown={cancelEditPress.onPointerDown}
+            onPointerUp={cancelEditPress.onPointerUp}
+            onPointerCancel={cancelEditPress.onPointerCancel}
+            onClick={handleCancelEdit}
+            class="flex items-center justify-center text-sm font-medium cursor-pointer border-0"
+            style={{
+              height: 48,
+              borderRadius: 14,
+              backgroundColor: "rgba(255,255,255,0.06)",
+              color: "var(--color-text-secondary)",
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            cancel
+          </button>
         </div>
       )}
 
